@@ -67,11 +67,6 @@ func main() {
 		emitted = append(emitted, bc.Name)
 	}
 
-	if err := emitAliases(emitted, engineClassRoots, godotDir); err != nil {
-		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit aliases: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Engine-class sweep. Register all class names first so cross-class
 	// type references resolve (a method on Node returning Node3D won't
 	// otherwise know that Node3D is a known class).
@@ -84,6 +79,13 @@ func main() {
 			os.Exit(1)
 		}
 		classCount++
+	}
+
+	// Aliases run last so they can reference any of the freshly-emitted
+	// class files in core/ and editor/.
+	if err := emitAliases(api, emitted, godotDir); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit aliases: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes + %d engine classes against %s (precision=%s, build_config=%s)\n",
