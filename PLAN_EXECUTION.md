@@ -176,12 +176,16 @@ a/b/c rhythm and keep every commit landable.
 
 #### 3c — facade aliases + cross-package edges
 
-- [ ] Resolve cross-package references. Default rule: `editor` may
+- [x] Resolve cross-package references. Default rule: `editor` may
       import `core`, never the reverse. A `core` method that references
-      an `editor` type falls back to an interface or is skipped.
-- [ ] Re-export the root types (`Object`, `Node`, `Node2D`, `Node3D`,
+      an `editor` type falls back to an interface or is skipped. Audit
+      against extension_api.json: zero core methods reference editor
+      types, so the resolveType skip is purely defensive — no fallback
+      needed.
+- [x] Re-export the root types (`Object`, `Node`, `Node2D`, `Node3D`,
       `Resource`, `RefCounted`, `Control`, `CanvasItem`, …) onto the
-      `godot/` package via `godot/aliases.gen.go`.
+      `godot/` package via `godot/aliases.gen.go`. Singleton accessors
+      (`EngineSingleton`, etc.) are also re-exported.
 
 #### 3d — lazy method-pointer caching; retrofit Phase 2
 

@@ -67,7 +67,7 @@ func main() {
 		emitted = append(emitted, bc.Name)
 	}
 
-	if err := emitAliases(emitted, godotDir); err != nil {
+	if err := emitAliases(emitted, engineClassRoots, godotDir); err != nil {
 		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit aliases: %v\n", err)
 		os.Exit(1)
 	}
