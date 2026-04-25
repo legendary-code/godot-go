@@ -23,9 +23,14 @@ tasks:
       - go test ./...
 
   generate:types:
-    desc: Regenerate framework bindings from extension_api.json. (stub until cmd/godot-go-bindgen lands.)
+    desc: Regenerate framework bindings from godot/extension_api.json into variant/, core/, etc.
     cmds:
-      - echo "TODO Phase 2+ — implement cmd/godot-go-bindgen"
+      - go run ./cmd/godot-go-bindgen -api godot/extension_api.json -out . -build-config float_32
+    sources:
+      - godot/extension_api.json
+      - cmd/godot-go-bindgen/**/*.go
+    generates:
+      - variant/*.gen.go
 
   build:example:
     desc: Build the Phase 0 smoke extension as a c-shared library.

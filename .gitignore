@@ -8,3 +8,10 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Stray go build artifacts at module root (e.g. when someone runs
+# `go build ./cmd/godot-go-bindgen` instead of `go run`). The toolchain
+# emits the binary into the cwd; under cmd/<x>/ they belong to the
+# tool source dir, not the repo.
+/godot-go-bindgen
+/godot-go-bindgen.exe
