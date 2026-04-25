@@ -17,6 +17,21 @@ type API struct {
 	Classes                   []Class                    `json:"classes"`
 	Singletons                []Singleton                `json:"singletons"`
 	UtilityFunctions          []UtilityFunction          `json:"utility_functions"`
+	GlobalEnums               []GlobalEnum               `json:"global_enums"`
+}
+
+// GlobalEnum is a top-level enum (or bitfield) from extension_api.json#global_enums.
+// Names with a dot (e.g. "Variant.Type") collapse to a single Pascal identifier
+// in the emitter (VariantType).
+type GlobalEnum struct {
+	Name       string           `json:"name"`
+	IsBitfield bool             `json:"is_bitfield"`
+	Values     []GlobalEnumValue `json:"values"`
+}
+
+type GlobalEnumValue struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
 }
 
 // UtilityFunction is a top-level free function from extension_api.json

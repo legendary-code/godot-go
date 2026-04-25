@@ -218,8 +218,13 @@ a/b/c rhythm and keep every commit landable.
       API). Each fn pointer is a `sync.OnceValue` resolved on first call.
       Smoke gains a `util.Lerpf(0, 10, 0.5) == 5` check for the
       multi-float ptrcall path.
-- [ ] `global_enums` + `global_constants` → `enums/` (e.g. `enums.Error`,
-      `enums.Key`). 22 enums; `global_constants` is empty in 4.6.2.
+- [x] `global_enums` + `global_constants` → `enums/enums.gen.go`. 22 typed
+      `int64` enums (Side, Corner, Key, Error, PropertyHint, MouseButton,
+      Variant.Type → VariantType, …) + 512 constants. Bitfields share the
+      shape; users compose with `|`. Value names go SCREAMING_SNAKE →
+      PascalCase verbatim — no prefix stripping (fragile against shapes
+      like Error.OK or KeyModifierMask.KEY_*). `global_constants` is empty
+      in 4.6.2 so nothing to emit there.
 - [ ] `native_structures` → `native/` plain Go structs (used in a handful
       of low-level callbacks; layout strings parsed from the json). 14 entries.
 

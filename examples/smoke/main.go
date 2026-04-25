@@ -17,10 +17,13 @@
 //     ABI: classdb singleton lookup + method bind + Dictionary return)
 //   - util.Lerpf(0, 10, 0.5) must equal 5 (utility-function ABI: a free
 //     ptrcall via variant_get_ptr_utility_function with three float args)
+//   - enums.SideRight must equal 2 and enums.Ok must equal 0 (typed
+//     global enums import cleanly from downstream packages)
 package main
 
 import (
 	"github.com/legendary-code/godot-go/core"
+	"github.com/legendary-code/godot-go/enums"
 	"github.com/legendary-code/godot-go/internal/gdextension"
 	"github.com/legendary-code/godot-go/internal/runtime"
 	"github.com/legendary-code/godot-go/util"
@@ -134,6 +137,11 @@ func runSmokeChecks() {
 	// 8-byte slots at the boundary.
 	gotLerp := util.Lerpf(0, 10, 0.5)
 	check("util.Lerpf(0, 10, 0.5)", gotLerp == 5, gotLerp, float32(5))
+
+	// Typed global enums: pure constants, no ABI surface — the only thing
+	// to confirm is that the package imports and the values are sane.
+	check("enums.SideRight == 2", int64(enums.SideRight) == 2, int64(enums.SideRight), int64(2))
+	check("enums.Ok == 0", int64(enums.Ok) == 0, int64(enums.Ok), int64(0))
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
