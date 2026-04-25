@@ -7,7 +7,10 @@ package gdextension
 */
 import "C"
 
-import "unsafe"
+import (
+	"runtime"
+	"unsafe"
+)
 
 // VariantNewCopy clones src into dst. dst must point to an uninitialized
 // Variant slot of size variant_size (16 bytes in 32-bit float builds, 24 in
@@ -113,6 +116,8 @@ func GetVariantToTypeConstructor(t VariantType) VariantToTypeFunc {
 // point to an uninitialized buffer of the constructed type's size; args may
 // be nil for nullary constructors.
 func CallPtrConstructor(fn PtrConstructor, base TypePtr, args []TypePtr) {
+	pinner := pinArgs(args)
+	defer pinner.Unpin()
 	C.godot_go_call_ptr_constructor(C.godot_go_anyfn(unsafe.Pointer(fn)),
 		C.GDExtensionUninitializedTypePtr(base), typeArgArray(args))
 }
@@ -131,6 +136,8 @@ func CallPtrDestructor(fn PtrDestructor, base TypePtr) {
 // `base` is the receiver, `args` are the typed argument pointers, `ret`
 // receives the return value (pass nil for `void` returns).
 func CallPtrBuiltinMethod(fn PtrBuiltInMethod, base TypePtr, args []TypePtr, ret TypePtr) {
+	pinner := pinArgs(args)
+	defer pinner.Unpin()
 	C.godot_go_call_ptr_builtin_method(C.godot_go_anyfn(unsafe.Pointer(fn)),
 		C.GDExtensionTypePtr(base), typeArgArray(args), C.GDExtensionTypePtr(ret), C.int32_t(len(args)))
 }
@@ -167,6 +174,8 @@ func CallPtrKeyedGetter(fn PtrKeyedGetter, base TypePtr, key, value TypePtr) {
 
 // CallPtrUtilityFunction invokes a free utility function. ret may be nil.
 func CallPtrUtilityFunction(fn PtrUtilityFunction, ret TypePtr, args []TypePtr) {
+	pinner := pinArgs(args)
+	defer pinner.Unpin()
 	C.godot_go_call_ptr_utility_function(C.godot_go_anyfn(unsafe.Pointer(fn)),
 		C.GDExtensionTypePtr(ret), typeArgArray(args), C.int32_t(len(args)))
 }
@@ -243,4 +252,17 @@ func typeArgArray(args []TypePtr) *C.GDExtensionConstTypePtr {
 		return nil
 	}
 	return (*C.GDExtensionConstTypePtr)(unsafe.Pointer(&args[0]))
+}
+
+// pinArgs pins each non-nil argument target so the cgo runtime check accepts
+// the args slice — passing a Go-allocated array of Go pointers would otherwise
+// trip the "Go pointer to unpinned Go pointer" guard. Caller must Unpin().
+func pinArgs(args []TypePtr) *runtime.Pinner {
+	var pinner runtime.Pinner
+	for _, a := range args {
+		if a != nil {
+			pinner.Pin(a)
+		}
+	}
+	return &pinner
 }
