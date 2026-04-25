@@ -123,9 +123,13 @@ example or test gate so we never have a long unverified stretch.
       - operators via `variant_get_ptr_operator_evaluator`,
       - to/from-Variant conversions.
 - [ ] Map primitive Godot types to Go primitives where idiomatic:
-      `bool`→`bool`, `int`→`int64`, `float`→`float64`, `String`/`StringName`
-      → wrappers with `String()`/`FromString()` helpers (NOT Go `string`,
-      since Godot strings are ref-counted UTF-32).
+      `bool`→`bool`, `int`→`int64`, `float`→`float64`. `String` and
+      `StringName` are **transparent**: the user-facing API always takes
+      and returns Go `string`. The opaque `variant.String` /
+      `variant.StringName` types exist internally (they are how Variant
+      slots and engine ABI calls are stored), but conversion happens at
+      the framework boundary — users never see, import, or construct
+      them. NodePath follows the same rule.
 - [ ] Generate `godot/*_aliases.go` re-exports for the high-traffic types
       (Vector2/3/4, Color, Rect2, Transform2D/3D, Variant, String,
       StringName, NodePath, Callable, Signal, Dictionary, Array, Packed*).
@@ -246,9 +250,9 @@ This is the headline feature. Steps:
 1. Builtin-class storage strategy — opaque `[N]byte` + host pointer ops
    (godot-cpp style) vs. Go-side mirrored layout. Opaque is safer across
    build configs; mirrored is faster. **Tentative: opaque for MVP.**
-2. `String` mapping — wrapper type vs. transparent `string` with implicit
-   conversion at the boundary. Wrapper is honest about ref-counting cost;
-   transparent is friendlier. **Tentative: transparent for ease of use**
+2. `String` mapping — **Resolved: transparent.** User-facing API uses Go
+   `string`; the `variant.String` opaque type exists only for Variant slot
+   storage and engine internals. Same for `StringName` and `NodePath`.
 3. Virtual-method detection — does the framework need the user to tag
    overrides explicitly, or can it match against the base class's known
    virtual list? **Tentative: implicit match; tag with `@virtual` only
