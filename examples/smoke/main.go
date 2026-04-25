@@ -15,12 +15,15 @@
 //   - Array.Append three Variants → Size() must agree (Variant arg path)
 //   - Engine.Singleton().GetVersionInfo()["major"] must equal 4 (engine-class
 //     ABI: classdb singleton lookup + method bind + Dictionary return)
+//   - util.Lerpf(0, 10, 0.5) must equal 5 (utility-function ABI: a free
+//     ptrcall via variant_get_ptr_utility_function with three float args)
 package main
 
 import (
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/internal/gdextension"
 	"github.com/legendary-code/godot-go/internal/runtime"
+	"github.com/legendary-code/godot-go/util"
 	"github.com/legendary-code/godot-go/variant"
 )
 
@@ -124,6 +127,13 @@ func runSmokeChecks() {
 		major := got.AsInt()
 		check("Engine.GetVersionInfo()[\"major\"]", major == 4, major, int64(4))
 	}
+
+	// Utility-function ABI: a free ptrcall through variant_get_ptr_utility_function
+	// rather than the builtin-method or method-bind dispatchers. Lerpf(0, 10, 0.5)
+	// pushes three float args and pulls one float back, all widened to/from
+	// 8-byte slots at the boundary.
+	gotLerp := util.Lerpf(0, 10, 0.5)
+	check("util.Lerpf(0, 10, 0.5)", gotLerp == 5, gotLerp, float32(5))
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)

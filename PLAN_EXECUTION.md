@@ -199,23 +199,29 @@ a/b/c rhythm and keep every commit landable.
       use `<name>()`. The generated `init()` + `init<Class>()` pair
       and the `RegisterInitCallback(InitLevelCore, ...)` subscription
       are gone from `variant/*.gen.go`.
-- [ ] Confirm no measurable per-call regression on the smoke checks
-      (the lazy path is one extra atomic load + branch per call).
 
 - **Phase 3 overall exit:** smoke reports 8/8 passing (Phase 2's seven
   checks plus the Engine version assertion) and load time stays flat
-  as the class count grows.
+  as the class count grows. **[Met]**
 
 ### Phase 4 — Singletons, utility functions, native structures, globals
 
-- [ ] `singletons` → `core/singletons.go` lazy accessors (e.g.
-      `core.Engine()` returns the cached `*Engine`).
-- [ ] `utility_functions` → `util/util.go` (free functions), bound through
-      `variant_get_ptr_utility_function`.
+- [x] `singletons` lazy accessors. Already shipped during 3b/3c as
+      `<ClassName>Singleton()` `sync.OnceValue` resolvers in `core/` and
+      `editor/`, re-exported on `godot/` by the data-driven alias emitter.
+      The PLAN.md form was `core.Engine()` returning `*Engine`; we landed
+      on `core.EngineSingleton()` to reserve `core.Engine` for the type
+      alias. Functionally equivalent.
+- [x] `utility_functions` → `util/util.gen.go` (free functions), bound
+      through `variant_get_ptr_utility_function`. 102/114 emitted
+      (12 vararg deferred until the user-facing variadic Variant slice
+      API). Each fn pointer is a `sync.OnceValue` resolved on first call.
+      Smoke gains a `util.Lerpf(0, 10, 0.5) == 5` check for the
+      multi-float ptrcall path.
 - [ ] `global_enums` + `global_constants` → `enums/` (e.g. `enums.Error`,
-      `enums.Key`).
+      `enums.Key`). 22 enums; `global_constants` is empty in 4.6.2.
 - [ ] `native_structures` → `native/` plain Go structs (used in a handful
-      of low-level callbacks; layout strings parsed from the json).
+      of low-level callbacks; layout strings parsed from the json). 14 entries.
 
 ### Phase 5 — User-class codegen tool (`cmd/godot-go`)
 

@@ -81,6 +81,15 @@ func main() {
 		classCount++
 	}
 
+	// Utility functions land in util/. They depend on the resolved-type
+	// machinery being primed (so engine-class refs resolve), so run after
+	// registerEngineClasses but before aliases — we don't currently re-export
+	// these on godot/, but if a future pass does, the order is right.
+	if err := emitUtilityFunctions(api, *outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit utility: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Aliases run last so they can reference any of the freshly-emitted
 	// class files in core/ and editor/.
 	if err := emitAliases(api, emitted, godotDir); err != nil {

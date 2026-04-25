@@ -16,6 +16,19 @@ type API struct {
 	BuiltinClasses            []BuiltinClass             `json:"builtin_classes"`
 	Classes                   []Class                    `json:"classes"`
 	Singletons                []Singleton                `json:"singletons"`
+	UtilityFunctions          []UtilityFunction          `json:"utility_functions"`
+}
+
+// UtilityFunction is a top-level free function from extension_api.json
+// (math, random, general). Bound via variant_get_ptr_utility_function and
+// dispatched as a plain ptrcall — no `self` slot.
+type UtilityFunction struct {
+	Name       string     `json:"name"`
+	ReturnType string     `json:"return_type"`
+	Category   string     `json:"category"`
+	IsVararg   bool       `json:"is_vararg"`
+	Hash       int64      `json:"hash"`
+	Arguments  []Argument `json:"arguments"`
 }
 
 type Header struct {
