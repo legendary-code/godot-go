@@ -729,7 +729,7 @@ func (self *StringName) Bigrams() PackedStringArray {
 
 // Similarity mirrors the Godot StringName.similarity method.
 func (self *StringName) Similarity(text string) float32 {
-	var ret float32
+	var raw float64
 	var tmp_text String
 	stringFromGo(&tmp_text, text)
 	defer stringDestroy(&tmp_text)
@@ -737,8 +737,8 @@ func (self *StringName) Similarity(text string) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSimilarity, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSimilarity, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Format mirrors the Godot StringName.format method.
@@ -1424,9 +1424,9 @@ func (self *StringName) ToInt() int64 {
 
 // ToFloat mirrors the Godot StringName.to_float method.
 func (self *StringName) ToFloat() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HexToInt mirrors the Godot StringName.hex_to_int method.

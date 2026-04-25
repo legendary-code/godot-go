@@ -244,10 +244,16 @@ func NewVector3FromVector3i(from Vector3i) Vector3 {
 // NewVector3XYZ constructs a Vector3 via the host (constructor index 3).
 func NewVector3XYZ(x float32, y float32, z float32) Vector3 {
 	var v Vector3
+	tmp_x := float64(x)
+
+	tmp_y := float64(y)
+
+	tmp_z := float64(z)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&x)),
-		gdextension.TypePtr(unsafe.Pointer(&y)),
-		gdextension.TypePtr(unsafe.Pointer(&z)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_x)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_y)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z)),
 	}
 	gdextension.CallPtrConstructor(vector3Ctor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -269,23 +275,23 @@ func (self *Vector3) MaxAxisIndex() int64 {
 
 // AngleTo mirrors the Godot Vector3.angle_to method.
 func (self *Vector3) AngleTo(to Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3MethodAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3MethodAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SignedAngleTo mirrors the Godot Vector3.signed_angle_to method.
 func (self *Vector3) SignedAngleTo(to Vector3, axis Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3MethodSignedAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3MethodSignedAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DirectionTo mirrors the Godot Vector3.direction_to method.
@@ -300,43 +306,45 @@ func (self *Vector3) DirectionTo(to Vector3) Vector3 {
 
 // DistanceTo mirrors the Godot Vector3.distance_to method.
 func (self *Vector3) DistanceTo(to Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3MethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3MethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DistanceSquaredTo mirrors the Godot Vector3.distance_squared_to method.
 func (self *Vector3) DistanceSquaredTo(to Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3MethodDistanceSquaredTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3MethodDistanceSquaredTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Length mirrors the Godot Vector3.length method.
 func (self *Vector3) Length() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector3MethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector3MethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Vector3.length_squared method.
 func (self *Vector3) LengthSquared() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector3MethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector3MethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LimitLength mirrors the Godot Vector3.limit_length method.
 func (self *Vector3) LimitLength(length float32) Vector3 {
 	var ret Vector3
+	tmp_length := float64(length)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&length)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_length)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodLimitLength, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -401,9 +409,13 @@ func (self *Vector3) Clamp(min Vector3, max Vector3) Vector3 {
 // Clampf mirrors the Godot Vector3.clampf method.
 func (self *Vector3) Clampf(min float32, max float32) Vector3 {
 	var ret Vector3
+	tmp_min := float64(min)
+
+	tmp_max := float64(max)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&min)),
-		gdextension.TypePtr(unsafe.Pointer(&max)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_min)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_max)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodClampf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -422,8 +434,10 @@ func (self *Vector3) Snapped(step Vector3) Vector3 {
 // Snappedf mirrors the Godot Vector3.snappedf method.
 func (self *Vector3) Snappedf(step float32) Vector3 {
 	var ret Vector3
+	tmp_step := float64(step)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&step)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_step)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodSnappedf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -432,9 +446,11 @@ func (self *Vector3) Snappedf(step float32) Vector3 {
 // Rotated mirrors the Godot Vector3.rotated method.
 func (self *Vector3) Rotated(axis Vector3, angle float32) Vector3 {
 	var ret Vector3
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -443,9 +459,11 @@ func (self *Vector3) Rotated(axis Vector3, angle float32) Vector3 {
 // Lerp mirrors the Godot Vector3.lerp method.
 func (self *Vector3) Lerp(to Vector3, weight float32) Vector3 {
 	var ret Vector3
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodLerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -454,9 +472,11 @@ func (self *Vector3) Lerp(to Vector3, weight float32) Vector3 {
 // Slerp mirrors the Godot Vector3.slerp method.
 func (self *Vector3) Slerp(to Vector3, weight float32) Vector3 {
 	var ret Vector3
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodSlerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -465,11 +485,13 @@ func (self *Vector3) Slerp(to Vector3, weight float32) Vector3 {
 // CubicInterpolate mirrors the Godot Vector3.cubic_interpolate method.
 func (self *Vector3) CubicInterpolate(b Vector3, pre_a Vector3, post_b Vector3, weight float32) Vector3 {
 	var ret Vector3
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodCubicInterpolate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -478,14 +500,22 @@ func (self *Vector3) CubicInterpolate(b Vector3, pre_a Vector3, post_b Vector3, 
 // CubicInterpolateInTime mirrors the Godot Vector3.cubic_interpolate_in_time method.
 func (self *Vector3) CubicInterpolateInTime(b Vector3, pre_a Vector3, post_b Vector3, weight float32, b_t float32, pre_a_t float32, post_b_t float32) Vector3 {
 	var ret Vector3
+	tmp_weight := float64(weight)
+
+	tmp_b_t := float64(b_t)
+
+	tmp_pre_a_t := float64(pre_a_t)
+
+	tmp_post_b_t := float64(post_b_t)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
-		gdextension.TypePtr(unsafe.Pointer(&b_t)),
-		gdextension.TypePtr(unsafe.Pointer(&pre_a_t)),
-		gdextension.TypePtr(unsafe.Pointer(&post_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_pre_a_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_post_b_t)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodCubicInterpolateInTime, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -494,11 +524,13 @@ func (self *Vector3) CubicInterpolateInTime(b Vector3, pre_a Vector3, post_b Vec
 // BezierInterpolate mirrors the Godot Vector3.bezier_interpolate method.
 func (self *Vector3) BezierInterpolate(control_1 Vector3, control_2 Vector3, end Vector3, t float32) Vector3 {
 	var ret Vector3
+	tmp_t := float64(t)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&control_1)),
 		gdextension.TypePtr(unsafe.Pointer(&control_2)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
-		gdextension.TypePtr(unsafe.Pointer(&t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_t)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodBezierInterpolate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -507,11 +539,13 @@ func (self *Vector3) BezierInterpolate(control_1 Vector3, control_2 Vector3, end
 // BezierDerivative mirrors the Godot Vector3.bezier_derivative method.
 func (self *Vector3) BezierDerivative(control_1 Vector3, control_2 Vector3, end Vector3, t float32) Vector3 {
 	var ret Vector3
+	tmp_t := float64(t)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&control_1)),
 		gdextension.TypePtr(unsafe.Pointer(&control_2)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
-		gdextension.TypePtr(unsafe.Pointer(&t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_t)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodBezierDerivative, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -520,9 +554,11 @@ func (self *Vector3) BezierDerivative(control_1 Vector3, control_2 Vector3, end 
 // MoveToward mirrors the Godot Vector3.move_toward method.
 func (self *Vector3) MoveToward(to Vector3, delta float32) Vector3 {
 	var ret Vector3
+	tmp_delta := float64(delta)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&delta)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_delta)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodMoveToward, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -530,12 +566,12 @@ func (self *Vector3) MoveToward(to Vector3, delta float32) Vector3 {
 
 // Dot mirrors the Godot Vector3.dot method.
 func (self *Vector3) Dot(with Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3MethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3MethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Cross mirrors the Godot Vector3.cross method.
@@ -589,8 +625,10 @@ func (self *Vector3) Round() Vector3 {
 // Posmod mirrors the Godot Vector3.posmod method.
 func (self *Vector3) Posmod(mod float32) Vector3 {
 	var ret Vector3
+	tmp_mod := float64(mod)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&mod)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_mod)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodPosmod, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -673,8 +711,10 @@ func (self *Vector3) Min(with Vector3) Vector3 {
 // Minf mirrors the Godot Vector3.minf method.
 func (self *Vector3) Minf(with float32) Vector3 {
 	var ret Vector3
+	tmp_with := float64(with)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&with)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_with)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodMinf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -693,8 +733,10 @@ func (self *Vector3) Max(with Vector3) Vector3 {
 // Maxf mirrors the Godot Vector3.maxf method.
 func (self *Vector3) Maxf(with float32) Vector3 {
 	var ret Vector3
+	tmp_with := float64(with)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&with)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_with)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector3MethodMaxf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -873,9 +915,9 @@ func (self *Vector3) InPackedVector3Array(rhs PackedVector3Array) bool {
 
 // Index reads element [index] from the receiver.
 func (self *Vector3) Index(index int64) float32 {
-	var ret float32
-	gdextension.CallPtrIndexedGetter(vector3IndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrIndexedGetter(vector3IndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.

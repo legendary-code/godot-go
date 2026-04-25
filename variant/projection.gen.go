@@ -211,11 +211,19 @@ func ProjectionCreateLightAtlasRect(rect Rect2) Projection {
 // CreatePerspective mirrors the Godot Projection.create_perspective method.
 func ProjectionCreatePerspective(fovy float32, aspect float32, z_near float32, z_far float32, flip_fov bool) Projection {
 	var ret Projection
+	tmp_fovy := float64(fovy)
+
+	tmp_aspect := float64(aspect)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&fovy)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_fovy)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspective, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -225,15 +233,27 @@ func ProjectionCreatePerspective(fovy float32, aspect float32, z_near float32, z
 // CreatePerspectiveHmd mirrors the Godot Projection.create_perspective_hmd method.
 func ProjectionCreatePerspectiveHmd(fovy float32, aspect float32, z_near float32, z_far float32, flip_fov bool, eye int64, intraocular_dist float32, convergence_dist float32) Projection {
 	var ret Projection
+	tmp_fovy := float64(fovy)
+
+	tmp_aspect := float64(aspect)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
+	tmp_intraocular_dist := float64(intraocular_dist)
+
+	tmp_convergence_dist := float64(convergence_dist)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&fovy)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_fovy)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 		gdextension.TypePtr(unsafe.Pointer(&eye)),
-		gdextension.TypePtr(unsafe.Pointer(&intraocular_dist)),
-		gdextension.TypePtr(unsafe.Pointer(&convergence_dist)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_intraocular_dist)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_convergence_dist)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspectiveHmd, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -242,15 +262,29 @@ func ProjectionCreatePerspectiveHmd(fovy float32, aspect float32, z_near float32
 // CreateForHmd mirrors the Godot Projection.create_for_hmd method.
 func ProjectionCreateForHmd(eye int64, aspect float32, intraocular_dist float32, display_width float32, display_to_lens float32, oversample float32, z_near float32, z_far float32) Projection {
 	var ret Projection
+	tmp_aspect := float64(aspect)
+
+	tmp_intraocular_dist := float64(intraocular_dist)
+
+	tmp_display_width := float64(display_width)
+
+	tmp_display_to_lens := float64(display_to_lens)
+
+	tmp_oversample := float64(oversample)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&eye)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
-		gdextension.TypePtr(unsafe.Pointer(&intraocular_dist)),
-		gdextension.TypePtr(unsafe.Pointer(&display_width)),
-		gdextension.TypePtr(unsafe.Pointer(&display_to_lens)),
-		gdextension.TypePtr(unsafe.Pointer(&oversample)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_intraocular_dist)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_display_width)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_display_to_lens)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_oversample)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreateForHmd, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -259,13 +293,25 @@ func ProjectionCreateForHmd(eye int64, aspect float32, intraocular_dist float32,
 // CreateOrthogonal mirrors the Godot Projection.create_orthogonal method.
 func ProjectionCreateOrthogonal(left float32, right float32, bottom float32, top float32, z_near float32, z_far float32) Projection {
 	var ret Projection
+	tmp_left := float64(left)
+
+	tmp_right := float64(right)
+
+	tmp_bottom := float64(bottom)
+
+	tmp_top := float64(top)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&left)),
-		gdextension.TypePtr(unsafe.Pointer(&right)),
-		gdextension.TypePtr(unsafe.Pointer(&bottom)),
-		gdextension.TypePtr(unsafe.Pointer(&top)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_left)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_right)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_bottom)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_top)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonal, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -274,11 +320,19 @@ func ProjectionCreateOrthogonal(left float32, right float32, bottom float32, top
 // CreateOrthogonalAspect mirrors the Godot Projection.create_orthogonal_aspect method.
 func ProjectionCreateOrthogonalAspect(size float32, aspect float32, z_near float32, z_far float32, flip_fov bool) Projection {
 	var ret Projection
+	tmp_size := float64(size)
+
+	tmp_aspect := float64(aspect)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&size)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_size)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonalAspect, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -288,13 +342,25 @@ func ProjectionCreateOrthogonalAspect(size float32, aspect float32, z_near float
 // CreateFrustum mirrors the Godot Projection.create_frustum method.
 func ProjectionCreateFrustum(left float32, right float32, bottom float32, top float32, z_near float32, z_far float32) Projection {
 	var ret Projection
+	tmp_left := float64(left)
+
+	tmp_right := float64(right)
+
+	tmp_bottom := float64(bottom)
+
+	tmp_top := float64(top)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&left)),
-		gdextension.TypePtr(unsafe.Pointer(&right)),
-		gdextension.TypePtr(unsafe.Pointer(&bottom)),
-		gdextension.TypePtr(unsafe.Pointer(&top)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_left)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_right)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_bottom)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_top)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustum, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -303,12 +369,20 @@ func ProjectionCreateFrustum(left float32, right float32, bottom float32, top fl
 // CreateFrustumAspect mirrors the Godot Projection.create_frustum_aspect method.
 func ProjectionCreateFrustumAspect(size float32, aspect float32, offset Vector2, z_near float32, z_far float32, flip_fov bool) Projection {
 	var ret Projection
+	tmp_size := float64(size)
+
+	tmp_aspect := float64(aspect)
+
+	tmp_z_near := float64(z_near)
+
+	tmp_z_far := float64(z_far)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&size)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_size)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
-		gdextension.TypePtr(unsafe.Pointer(&z_near)),
-		gdextension.TypePtr(unsafe.Pointer(&z_far)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustumAspect, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -327,16 +401,18 @@ func ProjectionCreateFitAabb(aabb AABB) Projection {
 
 // Determinant mirrors the Godot Projection.determinant method.
 func (self *Projection) Determinant() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // PerspectiveZnearAdjusted mirrors the Godot Projection.perspective_znear_adjusted method.
 func (self *Projection) PerspectiveZnearAdjusted(new_znear float32) Projection {
 	var ret Projection
+	tmp_new_znear := float64(new_znear)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&new_znear)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_new_znear)),
 	}
 	gdextension.CallPtrBuiltinMethod(projectionMethodPerspectiveZnearAdjusted, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -371,41 +447,45 @@ func (self *Projection) JitterOffseted(offset Vector2) Projection {
 
 // GetFovy mirrors the Godot Projection.get_fovy method.
 func ProjectionGetFovy(fovx float32, aspect float32) float32 {
-	var ret float32
+	var raw float64
+	tmp_fovx := float64(fovx)
+
+	tmp_aspect := float64(aspect)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&fovx)),
-		gdextension.TypePtr(unsafe.Pointer(&aspect)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_fovx)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetFovy, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetFovy, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetZFar mirrors the Godot Projection.get_z_far method.
 func (self *Projection) GetZFar() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetZFar, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetZFar, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetZNear mirrors the Godot Projection.get_z_near method.
 func (self *Projection) GetZNear() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetZNear, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetZNear, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetAspect mirrors the Godot Projection.get_aspect method.
 func (self *Projection) GetAspect() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetAspect, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetAspect, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetFov mirrors the Godot Projection.get_fov method.
 func (self *Projection) GetFov() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetFov, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetFov, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // IsOrthogonal mirrors the Godot Projection.is_orthogonal method.
@@ -448,9 +528,9 @@ func (self *Projection) GetPixelsPerMeter(for_pixel_width int64) int64 {
 
 // GetLodMultiplier mirrors the Godot Projection.get_lod_multiplier method.
 func (self *Projection) GetLodMultiplier() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetLodMultiplier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetLodMultiplier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Not mirrors the Godot Projection not operator.

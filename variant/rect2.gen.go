@@ -145,11 +145,19 @@ func NewRect2PositionSize(position Vector2, size Vector2) Rect2 {
 // NewRect2XYWidthHeight constructs a Rect2 via the host (constructor index 4).
 func NewRect2XYWidthHeight(x float32, y float32, width float32, height float32) Rect2 {
 	var v Rect2
+	tmp_x := float64(x)
+
+	tmp_y := float64(y)
+
+	tmp_width := float64(width)
+
+	tmp_height := float64(height)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&x)),
-		gdextension.TypePtr(unsafe.Pointer(&y)),
-		gdextension.TypePtr(unsafe.Pointer(&width)),
-		gdextension.TypePtr(unsafe.Pointer(&height)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_x)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_y)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_width)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_height)),
 	}
 	gdextension.CallPtrConstructor(rect2Ctor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -164,9 +172,9 @@ func (self *Rect2) GetCenter() Vector2 {
 
 // GetArea mirrors the Godot Rect2.get_area method.
 func (self *Rect2) GetArea() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(rect2MethodGetArea, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(rect2MethodGetArea, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HasArea mirrors the Godot Rect2.has_area method.
@@ -267,8 +275,10 @@ func (self *Rect2) GetSupport(direction Vector2) Vector2 {
 // Grow mirrors the Godot Rect2.grow method.
 func (self *Rect2) Grow(amount float32) Rect2 {
 	var ret Rect2
+	tmp_amount := float64(amount)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&amount)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
 	gdextension.CallPtrBuiltinMethod(rect2MethodGrow, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -277,9 +287,11 @@ func (self *Rect2) Grow(amount float32) Rect2 {
 // GrowSide mirrors the Godot Rect2.grow_side method.
 func (self *Rect2) GrowSide(side int64, amount float32) Rect2 {
 	var ret Rect2
+	tmp_amount := float64(amount)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&side)),
-		gdextension.TypePtr(unsafe.Pointer(&amount)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
 	gdextension.CallPtrBuiltinMethod(rect2MethodGrowSide, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -288,11 +300,19 @@ func (self *Rect2) GrowSide(side int64, amount float32) Rect2 {
 // GrowIndividual mirrors the Godot Rect2.grow_individual method.
 func (self *Rect2) GrowIndividual(left float32, top float32, right float32, bottom float32) Rect2 {
 	var ret Rect2
+	tmp_left := float64(left)
+
+	tmp_top := float64(top)
+
+	tmp_right := float64(right)
+
+	tmp_bottom := float64(bottom)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&left)),
-		gdextension.TypePtr(unsafe.Pointer(&top)),
-		gdextension.TypePtr(unsafe.Pointer(&right)),
-		gdextension.TypePtr(unsafe.Pointer(&bottom)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_left)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_top)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_right)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_bottom)),
 	}
 	gdextension.CallPtrBuiltinMethod(rect2MethodGrowIndividual, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret

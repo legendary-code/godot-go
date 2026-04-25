@@ -178,9 +178,9 @@ func NewVector2iXY(x int64, y int64) Vector2i {
 
 // Aspect mirrors the Godot Vector2i.aspect method.
 func (self *Vector2i) Aspect() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector2iMethodAspect, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector2iMethodAspect, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // MaxAxisIndex mirrors the Godot Vector2i.max_axis_index method.
@@ -199,12 +199,12 @@ func (self *Vector2i) MinAxisIndex() int64 {
 
 // DistanceTo mirrors the Godot Vector2i.distance_to method.
 func (self *Vector2i) DistanceTo(to Vector2i) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector2iMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector2iMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DistanceSquaredTo mirrors the Godot Vector2i.distance_squared_to method.
@@ -219,9 +219,9 @@ func (self *Vector2i) DistanceSquaredTo(to Vector2i) int64 {
 
 // Length mirrors the Godot Vector2i.length method.
 func (self *Vector2i) Length() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector2iMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector2iMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Vector2i.length_squared method.

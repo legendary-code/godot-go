@@ -218,11 +218,19 @@ func NewVector4FromVector4i(from Vector4i) Vector4 {
 // NewVector4XYZW constructs a Vector4 via the host (constructor index 3).
 func NewVector4XYZW(x float32, y float32, z float32, w float32) Vector4 {
 	var v Vector4
+	tmp_x := float64(x)
+
+	tmp_y := float64(y)
+
+	tmp_z := float64(z)
+
+	tmp_w := float64(w)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&x)),
-		gdextension.TypePtr(unsafe.Pointer(&y)),
-		gdextension.TypePtr(unsafe.Pointer(&z)),
-		gdextension.TypePtr(unsafe.Pointer(&w)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_x)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_y)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_w)),
 	}
 	gdextension.CallPtrConstructor(vector4Ctor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -244,16 +252,16 @@ func (self *Vector4) MaxAxisIndex() int64 {
 
 // Length mirrors the Godot Vector4.length method.
 func (self *Vector4) Length() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector4MethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector4MethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Vector4.length_squared method.
 func (self *Vector4) LengthSquared() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector4MethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector4MethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Abs mirrors the Godot Vector4.abs method.
@@ -294,9 +302,11 @@ func (self *Vector4) Round() Vector4 {
 // Lerp mirrors the Godot Vector4.lerp method.
 func (self *Vector4) Lerp(to Vector4, weight float32) Vector4 {
 	var ret Vector4
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodLerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -305,11 +315,13 @@ func (self *Vector4) Lerp(to Vector4, weight float32) Vector4 {
 // CubicInterpolate mirrors the Godot Vector4.cubic_interpolate method.
 func (self *Vector4) CubicInterpolate(b Vector4, pre_a Vector4, post_b Vector4, weight float32) Vector4 {
 	var ret Vector4
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodCubicInterpolate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -318,14 +330,22 @@ func (self *Vector4) CubicInterpolate(b Vector4, pre_a Vector4, post_b Vector4, 
 // CubicInterpolateInTime mirrors the Godot Vector4.cubic_interpolate_in_time method.
 func (self *Vector4) CubicInterpolateInTime(b Vector4, pre_a Vector4, post_b Vector4, weight float32, b_t float32, pre_a_t float32, post_b_t float32) Vector4 {
 	var ret Vector4
+	tmp_weight := float64(weight)
+
+	tmp_b_t := float64(b_t)
+
+	tmp_pre_a_t := float64(pre_a_t)
+
+	tmp_post_b_t := float64(post_b_t)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
-		gdextension.TypePtr(unsafe.Pointer(&b_t)),
-		gdextension.TypePtr(unsafe.Pointer(&pre_a_t)),
-		gdextension.TypePtr(unsafe.Pointer(&post_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_pre_a_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_post_b_t)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodCubicInterpolateInTime, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -334,8 +354,10 @@ func (self *Vector4) CubicInterpolateInTime(b Vector4, pre_a Vector4, post_b Vec
 // Posmod mirrors the Godot Vector4.posmod method.
 func (self *Vector4) Posmod(mod float32) Vector4 {
 	var ret Vector4
+	tmp_mod := float64(mod)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&mod)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_mod)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodPosmod, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -364,8 +386,10 @@ func (self *Vector4) Snapped(step Vector4) Vector4 {
 // Snappedf mirrors the Godot Vector4.snappedf method.
 func (self *Vector4) Snappedf(step float32) Vector4 {
 	var ret Vector4
+	tmp_step := float64(step)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&step)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_step)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodSnappedf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -385,9 +409,13 @@ func (self *Vector4) Clamp(min Vector4, max Vector4) Vector4 {
 // Clampf mirrors the Godot Vector4.clampf method.
 func (self *Vector4) Clampf(min float32, max float32) Vector4 {
 	var ret Vector4
+	tmp_min := float64(min)
+
+	tmp_max := float64(max)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&min)),
-		gdextension.TypePtr(unsafe.Pointer(&max)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_min)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_max)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodClampf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -419,32 +447,32 @@ func (self *Vector4) DirectionTo(to Vector4) Vector4 {
 
 // DistanceTo mirrors the Godot Vector4.distance_to method.
 func (self *Vector4) DistanceTo(to Vector4) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector4MethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector4MethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DistanceSquaredTo mirrors the Godot Vector4.distance_squared_to method.
 func (self *Vector4) DistanceSquaredTo(to Vector4) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector4MethodDistanceSquaredTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector4MethodDistanceSquaredTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Dot mirrors the Godot Vector4.dot method.
 func (self *Vector4) Dot(with Vector4) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector4MethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector4MethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Inverse mirrors the Godot Vector4.inverse method.
@@ -491,8 +519,10 @@ func (self *Vector4) Min(with Vector4) Vector4 {
 // Minf mirrors the Godot Vector4.minf method.
 func (self *Vector4) Minf(with float32) Vector4 {
 	var ret Vector4
+	tmp_with := float64(with)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&with)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_with)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodMinf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -511,8 +541,10 @@ func (self *Vector4) Max(with Vector4) Vector4 {
 // Maxf mirrors the Godot Vector4.maxf method.
 func (self *Vector4) Maxf(with float32) Vector4 {
 	var ret Vector4
+	tmp_with := float64(with)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&with)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_with)),
 	}
 	gdextension.CallPtrBuiltinMethod(vector4MethodMaxf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -667,9 +699,9 @@ func (self *Vector4) InPackedVector4Array(rhs PackedVector4Array) bool {
 
 // Index reads element [index] from the receiver.
 func (self *Vector4) Index(index int64) float32 {
-	var ret float32
-	gdextension.CallPtrIndexedGetter(vector4IndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrIndexedGetter(vector4IndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.

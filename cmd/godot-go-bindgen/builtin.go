@@ -162,6 +162,13 @@ func addCacheVar(view *builtinView, name, typ string) {
 // argPrep returns the (prep, passExpr) pair for an argument. prep is Go code
 // that declares any temp boundary value and arranges destruction; passExpr
 // is the expression handed to `gdextension.TypePtr(...)`.
+//
+// PtrCall ABI: Godot's GDExtension encodes "float" as double (8 bytes) for
+// binary stability across single/double precision builds — even when the
+// underlying real_t is float32. So float args/returns travel through a
+// float64 slot at the boundary even though the user-facing Go type stays
+// float32. Same trick won't be needed for "int" (already int64) or "bool"
+// (Godot encodes as 1-byte bool).
 func argPrep(godotType, goName string) (prep, passExpr string) {
 	_, kind := goType(godotType)
 	switch kind {
@@ -176,6 +183,10 @@ func argPrep(godotType, goName string) (prep, passExpr string) {
 	case kindNodePath:
 		tmp := "tmp_" + goName
 		prep = fmt.Sprintf("var %s NodePath\n\tnodePathFromGo(&%s, %s)\n\tdefer nodePathDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
+		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
+	case kindFloat:
+		tmp := "tmp_" + goName
+		prep = fmt.Sprintf("%s := float64(%s)\n\t", tmp, goName)
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
 	default:
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
@@ -211,7 +222,12 @@ func returnPrep(godotType string) (retPlan, bool) {
 	case kindInt:
 		return retPlan{GoType: "int64", DeclRet: "var ret int64", RetArg: "gdextension.TypePtr(unsafe.Pointer(&ret))", RetExpr: "ret"}, true
 	case kindFloat:
-		return retPlan{GoType: "float32", DeclRet: "var ret float32", RetArg: "gdextension.TypePtr(unsafe.Pointer(&ret))", RetExpr: "ret"}, true
+		// PtrCall returns a "float" as 8-byte double; widen the buffer and
+		// narrow at the user-facing boundary. See argPrep for the same rule.
+		return retPlan{GoType: "float32",
+			DeclRet: "var raw float64",
+			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&raw))",
+			RetExpr: "float32(raw)"}, true
 	case kindString:
 		return retPlan{GoType: "string",
 			DeclRet:  "var raw String",

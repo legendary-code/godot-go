@@ -189,9 +189,11 @@ func (self *Transform3D) Orthonormalized() Transform3D {
 // Rotated mirrors the Godot Transform3D.rotated method.
 func (self *Transform3D) Rotated(axis Vector3, angle float32) Transform3D {
 	var ret Transform3D
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform3DMethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -200,9 +202,11 @@ func (self *Transform3D) Rotated(axis Vector3, angle float32) Transform3D {
 // RotatedLocal mirrors the Godot Transform3D.rotated_local method.
 func (self *Transform3D) RotatedLocal(axis Vector3, angle float32) Transform3D {
 	var ret Transform3D
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform3DMethodRotatedLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -263,9 +267,11 @@ func (self *Transform3D) LookingAt(target Vector3, up Vector3, use_model_front b
 // InterpolateWith mirrors the Godot Transform3D.interpolate_with method.
 func (self *Transform3D) InterpolateWith(xform Transform3D, weight float32) Transform3D {
 	var ret Transform3D
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&xform)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform3DMethodInterpolateWith, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret

@@ -590,32 +590,32 @@ func (self *PackedByteArray) DecodeS64(byte_offset int64) int64 {
 
 // DecodeHalf mirrors the Godot PackedByteArray.decode_half method.
 func (self *PackedByteArray) DecodeHalf(byte_offset int64) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeHalf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeHalf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DecodeFloat mirrors the Godot PackedByteArray.decode_float method.
 func (self *PackedByteArray) DecodeFloat(byte_offset int64) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeFloat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeFloat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DecodeDouble mirrors the Godot PackedByteArray.decode_double method.
 func (self *PackedByteArray) DecodeDouble(byte_offset int64) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeDouble, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeDouble, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HasEncodedVar mirrors the Godot PackedByteArray.has_encoded_var method.
@@ -808,27 +808,33 @@ func (self *PackedByteArray) EncodeS64(byte_offset int64, value int64) {
 
 // EncodeHalf mirrors the Godot PackedByteArray.encode_half method.
 func (self *PackedByteArray) EncodeHalf(byte_offset int64, value float32) {
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeHalf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeFloat mirrors the Godot PackedByteArray.encode_float method.
 func (self *PackedByteArray) EncodeFloat(byte_offset int64, value float32) {
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeFloat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeDouble mirrors the Godot PackedByteArray.encode_double method.
 func (self *PackedByteArray) EncodeDouble(byte_offset int64, value float32) {
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeDouble, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }

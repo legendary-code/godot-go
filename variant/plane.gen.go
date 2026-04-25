@@ -132,9 +132,11 @@ func NewPlaneFromVector3(normal Vector3) Plane {
 // NewPlaneNormalD constructs a Plane via the host (constructor index 3).
 func NewPlaneNormalD(normal Vector3, d float32) Plane {
 	var v Plane
+	tmp_d := float64(d)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&normal)),
-		gdextension.TypePtr(unsafe.Pointer(&d)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_d)),
 	}
 	gdextension.CallPtrConstructor(planeCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -166,11 +168,19 @@ func NewPlanePoint1Point2Point3(point1 Vector3, point2 Vector3, point3 Vector3) 
 // NewPlaneABCD constructs a Plane via the host (constructor index 6).
 func NewPlaneABCD(a float32, b float32, c float32, d float32) Plane {
 	var v Plane
+	tmp_a := float64(a)
+
+	tmp_b := float64(b)
+
+	tmp_c := float64(c)
+
+	tmp_d := float64(d)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&a)),
-		gdextension.TypePtr(unsafe.Pointer(&b)),
-		gdextension.TypePtr(unsafe.Pointer(&c)),
-		gdextension.TypePtr(unsafe.Pointer(&d)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_a)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_c)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_d)),
 	}
 	gdextension.CallPtrConstructor(planeCtor6, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -219,20 +229,22 @@ func (self *Plane) IsPointOver(point Vector3) bool {
 
 // DistanceTo mirrors the Godot Plane.distance_to method.
 func (self *Plane) DistanceTo(point Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(planeMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HasPoint mirrors the Godot Plane.has_point method.
 func (self *Plane) HasPoint(point Vector3, tolerance float32) bool {
 	var ret bool
+	tmp_tolerance := float64(tolerance)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
-		gdextension.TypePtr(unsafe.Pointer(&tolerance)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_tolerance)),
 	}
 	gdextension.CallPtrBuiltinMethod(planeMethodHasPoint, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret

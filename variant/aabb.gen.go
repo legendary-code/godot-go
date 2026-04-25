@@ -162,9 +162,9 @@ func (self *AABB) GetCenter() Vector3 {
 
 // GetVolume mirrors the Godot AABB.get_volume method.
 func (self *AABB) GetVolume() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetVolume, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetVolume, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HasVolume mirrors the Godot AABB.has_volume method.
@@ -271,8 +271,10 @@ func (self *AABB) Expand(to_point Vector3) AABB {
 // Grow mirrors the Godot AABB.grow method.
 func (self *AABB) Grow(by float32) AABB {
 	var ret AABB
+	tmp_by := float64(by)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&by)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_by)),
 	}
 	gdextension.CallPtrBuiltinMethod(aABBMethodGrow, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -304,9 +306,9 @@ func (self *AABB) GetLongestAxisIndex() int64 {
 
 // GetLongestAxisSize mirrors the Godot AABB.get_longest_axis_size method.
 func (self *AABB) GetLongestAxisSize() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetShortestAxis mirrors the Godot AABB.get_shortest_axis method.
@@ -325,9 +327,9 @@ func (self *AABB) GetShortestAxisIndex() int64 {
 
 // GetShortestAxisSize mirrors the Godot AABB.get_shortest_axis_size method.
 func (self *AABB) GetShortestAxisSize() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetEndpoint mirrors the Godot AABB.get_endpoint method.

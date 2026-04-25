@@ -129,19 +129,21 @@ func NewPackedFloat32ArrayFromArray(from Array) PackedFloat32Array {
 
 // Get mirrors the Godot PackedFloat32Array.get method.
 func (self *PackedFloat32Array) Get(index int64) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Set mirrors the Godot PackedFloat32Array.set method.
 func (self *PackedFloat32Array) Set(index int64, value float32) {
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
@@ -163,8 +165,10 @@ func (self *PackedFloat32Array) IsEmpty() bool {
 // PushBack mirrors the Godot PackedFloat32Array.push_back method.
 func (self *PackedFloat32Array) PushBack(value float32) bool {
 	var ret bool
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -173,8 +177,10 @@ func (self *PackedFloat32Array) PushBack(value float32) bool {
 // Append mirrors the Godot PackedFloat32Array.append method.
 func (self *PackedFloat32Array) Append(value float32) bool {
 	var ret bool
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -199,9 +205,11 @@ func (self *PackedFloat32Array) RemoveAt(index int64) {
 // Insert mirrors the Godot PackedFloat32Array.insert method.
 func (self *PackedFloat32Array) Insert(at_index int64, value float32) int64 {
 	var ret int64
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&at_index)),
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -209,8 +217,10 @@ func (self *PackedFloat32Array) Insert(at_index int64, value float32) int64 {
 
 // Fill mirrors the Godot PackedFloat32Array.fill method.
 func (self *PackedFloat32Array) Fill(value float32) {
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
@@ -233,8 +243,10 @@ func (self *PackedFloat32Array) Clear() {
 // Has mirrors the Godot PackedFloat32Array.has method.
 func (self *PackedFloat32Array) Has(value float32) bool {
 	var ret bool
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -271,8 +283,10 @@ func (self *PackedFloat32Array) Sort() {
 // Bsearch mirrors the Godot PackedFloat32Array.bsearch method.
 func (self *PackedFloat32Array) Bsearch(value float32, before bool) int64 {
 	var ret int64
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -289,8 +303,10 @@ func (self *PackedFloat32Array) Duplicate() PackedFloat32Array {
 // Find mirrors the Godot PackedFloat32Array.find method.
 func (self *PackedFloat32Array) Find(value float32, from int64) int64 {
 	var ret int64
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -300,8 +316,10 @@ func (self *PackedFloat32Array) Find(value float32, from int64) int64 {
 // Rfind mirrors the Godot PackedFloat32Array.rfind method.
 func (self *PackedFloat32Array) Rfind(value float32, from int64) int64 {
 	var ret int64
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
@@ -311,8 +329,10 @@ func (self *PackedFloat32Array) Rfind(value float32, from int64) int64 {
 // Count mirrors the Godot PackedFloat32Array.count method.
 func (self *PackedFloat32Array) Count(value float32) int64 {
 	var ret int64
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -321,8 +341,10 @@ func (self *PackedFloat32Array) Count(value float32) int64 {
 // Erase mirrors the Godot PackedFloat32Array.erase method.
 func (self *PackedFloat32Array) Erase(value float32) bool {
 	var ret bool
+	tmp_value := float64(value)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&value)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
 	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -372,9 +394,9 @@ func (self *PackedFloat32Array) Add(rhs PackedFloat32Array) PackedFloat32Array {
 
 // Index reads element [index] from the receiver.
 func (self *PackedFloat32Array) Index(index int64) float32 {
-	var ret float32
-	gdextension.CallPtrIndexedGetter(packedFloat32ArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrIndexedGetter(packedFloat32ArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.

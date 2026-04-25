@@ -162,8 +162,10 @@ func NewTransform2DFromTransform2D(from Transform2D) Transform2D {
 // NewTransform2DRotationPosition constructs a Transform2D via the host (constructor index 2).
 func NewTransform2DRotationPosition(rotation float32, position Vector2) Transform2D {
 	var v Transform2D
+	tmp_rotation := float64(rotation)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&rotation)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_rotation)),
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
 	gdextension.CallPtrConstructor(transform2DCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
@@ -173,10 +175,14 @@ func NewTransform2DRotationPosition(rotation float32, position Vector2) Transfor
 // NewTransform2DRotationScaleSkewPosition constructs a Transform2D via the host (constructor index 3).
 func NewTransform2DRotationScaleSkewPosition(rotation float32, scale Vector2, skew float32, position Vector2) Transform2D {
 	var v Transform2D
+	tmp_rotation := float64(rotation)
+
+	tmp_skew := float64(skew)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&rotation)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_rotation)),
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
-		gdextension.TypePtr(unsafe.Pointer(&skew)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_skew)),
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
 	gdextension.CallPtrConstructor(transform2DCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
@@ -211,9 +217,9 @@ func (self *Transform2D) AffineInverse() Transform2D {
 
 // GetRotation mirrors the Godot Transform2D.get_rotation method.
 func (self *Transform2D) GetRotation() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetRotation, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetRotation, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // GetOrigin mirrors the Godot Transform2D.get_origin method.
@@ -232,9 +238,9 @@ func (self *Transform2D) GetScale() Vector2 {
 
 // GetSkew mirrors the Godot Transform2D.get_skew method.
 func (self *Transform2D) GetSkew() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetSkew, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetSkew, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Orthonormalized mirrors the Godot Transform2D.orthonormalized method.
@@ -247,8 +253,10 @@ func (self *Transform2D) Orthonormalized() Transform2D {
 // Rotated mirrors the Godot Transform2D.rotated method.
 func (self *Transform2D) Rotated(angle float32) Transform2D {
 	var ret Transform2D
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform2DMethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -257,8 +265,10 @@ func (self *Transform2D) Rotated(angle float32) Transform2D {
 // RotatedLocal mirrors the Godot Transform2D.rotated_local method.
 func (self *Transform2D) RotatedLocal(angle float32) Transform2D {
 	var ret Transform2D
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform2DMethodRotatedLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -306,9 +316,9 @@ func (self *Transform2D) TranslatedLocal(offset Vector2) Transform2D {
 
 // Determinant mirrors the Godot Transform2D.determinant method.
 func (self *Transform2D) Determinant() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(transform2DMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(transform2DMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // BasisXform mirrors the Godot Transform2D.basis_xform method.
@@ -334,9 +344,11 @@ func (self *Transform2D) BasisXformInv(v Vector2) Vector2 {
 // InterpolateWith mirrors the Godot Transform2D.interpolate_with method.
 func (self *Transform2D) InterpolateWith(xform Transform2D, weight float32) Transform2D {
 	var ret Transform2D
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&xform)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(transform2DMethodInterpolateWith, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret

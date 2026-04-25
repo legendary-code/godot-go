@@ -192,9 +192,11 @@ func NewColorFromColor(from Color) Color {
 // NewColorFromAlpha constructs a Color via the host (constructor index 2).
 func NewColorFromAlpha(from Color, alpha float32) Color {
 	var v Color
+	tmp_alpha := float64(alpha)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
-		gdextension.TypePtr(unsafe.Pointer(&alpha)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
 	gdextension.CallPtrConstructor(colorCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -203,10 +205,16 @@ func NewColorFromAlpha(from Color, alpha float32) Color {
 // NewColorRGB constructs a Color via the host (constructor index 3).
 func NewColorRGB(r float32, g float32, b float32) Color {
 	var v Color
+	tmp_r := float64(r)
+
+	tmp_g := float64(g)
+
+	tmp_b := float64(b)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&r)),
-		gdextension.TypePtr(unsafe.Pointer(&g)),
-		gdextension.TypePtr(unsafe.Pointer(&b)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_r)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_g)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b)),
 	}
 	gdextension.CallPtrConstructor(colorCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -215,11 +223,19 @@ func NewColorRGB(r float32, g float32, b float32) Color {
 // NewColorRGBA constructs a Color via the host (constructor index 4).
 func NewColorRGBA(r float32, g float32, b float32, a float32) Color {
 	var v Color
+	tmp_r := float64(r)
+
+	tmp_g := float64(g)
+
+	tmp_b := float64(b)
+
+	tmp_a := float64(a)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&r)),
-		gdextension.TypePtr(unsafe.Pointer(&g)),
-		gdextension.TypePtr(unsafe.Pointer(&b)),
-		gdextension.TypePtr(unsafe.Pointer(&a)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_r)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_g)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_a)),
 	}
 	gdextension.CallPtrConstructor(colorCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -246,9 +262,11 @@ func NewColorCodeAlpha(code string, alpha float32) Color {
 	stringFromGo(&tmp_code, code)
 	defer stringDestroy(&tmp_code)
 
+	tmp_alpha := float64(alpha)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_code)),
-		gdextension.TypePtr(unsafe.Pointer(&alpha)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
 	gdextension.CallPtrConstructor(colorCtor6, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -328,9 +346,11 @@ func (self *Color) Inverted() Color {
 // Lerp mirrors the Godot Color.lerp method.
 func (self *Color) Lerp(to Color, weight float32) Color {
 	var ret Color
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(colorMethodLerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -339,8 +359,10 @@ func (self *Color) Lerp(to Color, weight float32) Color {
 // Lightened mirrors the Godot Color.lightened method.
 func (self *Color) Lightened(amount float32) Color {
 	var ret Color
+	tmp_amount := float64(amount)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&amount)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
 	gdextension.CallPtrBuiltinMethod(colorMethodLightened, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -349,8 +371,10 @@ func (self *Color) Lightened(amount float32) Color {
 // Darkened mirrors the Godot Color.darkened method.
 func (self *Color) Darkened(amount float32) Color {
 	var ret Color
+	tmp_amount := float64(amount)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&amount)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
 	gdextension.CallPtrBuiltinMethod(colorMethodDarkened, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -368,9 +392,9 @@ func (self *Color) Blend(over Color) Color {
 
 // GetLuminance mirrors the Godot Color.get_luminance method.
 func (self *Color) GetLuminance() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(colorMethodGetLuminance, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(colorMethodGetLuminance, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SrgbToLinear mirrors the Godot Color.srgb_to_linear method.
@@ -463,11 +487,19 @@ func ColorFromString(str string, def Color) Color {
 // FromHsv mirrors the Godot Color.from_hsv method.
 func ColorFromHsv(h float32, s float32, v float32, alpha float32) Color {
 	var ret Color
+	tmp_h := float64(h)
+
+	tmp_s := float64(s)
+
+	tmp_v := float64(v)
+
+	tmp_alpha := float64(alpha)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&h)),
-		gdextension.TypePtr(unsafe.Pointer(&s)),
-		gdextension.TypePtr(unsafe.Pointer(&v)),
-		gdextension.TypePtr(unsafe.Pointer(&alpha)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_h)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_s)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_v)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
 	gdextension.CallPtrBuiltinMethod(colorMethodFromHsv, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -476,11 +508,19 @@ func ColorFromHsv(h float32, s float32, v float32, alpha float32) Color {
 // FromOkHsl mirrors the Godot Color.from_ok_hsl method.
 func ColorFromOkHsl(h float32, s float32, l float32, alpha float32) Color {
 	var ret Color
+	tmp_h := float64(h)
+
+	tmp_s := float64(s)
+
+	tmp_l := float64(l)
+
+	tmp_alpha := float64(alpha)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&h)),
-		gdextension.TypePtr(unsafe.Pointer(&s)),
-		gdextension.TypePtr(unsafe.Pointer(&l)),
-		gdextension.TypePtr(unsafe.Pointer(&alpha)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_h)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_s)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_l)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
 	gdextension.CallPtrBuiltinMethod(colorMethodFromOkHsl, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -623,9 +663,9 @@ func (self *Color) InPackedColorArray(rhs PackedColorArray) bool {
 
 // Index reads element [index] from the receiver.
 func (self *Color) Index(index int64) float32 {
-	var ret float32
-	gdextension.CallPtrIndexedGetter(colorIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrIndexedGetter(colorIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.

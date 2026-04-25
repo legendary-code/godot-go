@@ -4,10 +4,14 @@
 // the framework's generated builtin bindings. At SCENE init it greets
 // Godot and runs a few round-trip exercises against the generated code:
 //
-//   - Vector2(3, 4).Length() must equal 5
+//   - Vector2(3, 4).Length() must equal 5 (float arg + float return ABI)
 //   - Vector2 → Variant → Vector2 round-trips byte-equal
-//   - String "hello" → Length() must equal 5 (transparent boundary)
-//   - Array.Append(...) and Array.Size() must agree
+//   - String "hello" → Length() must equal 5 (int return ABI)
+//   - String "hello".Find("ll", 0) must equal 2 (int arg + int return ABI)
+//   - StringNumInt64(1<<32 + 7) → "4294967303" stresses the int arg path
+//     across the 32-bit boundary (truncation would yield "7" or "1")
+//   - String("4294967303").ToInt() → 1<<32 + 7 stresses the int return
+//     path the same way
 package main
 
 import (
@@ -29,22 +33,63 @@ func init() {
 }
 
 func runSmokeChecks() {
-	// Vector2 length round-trip.
+	passed, failed := 0, 0
+	check := func(label string, ok bool, got, want any) {
+		if ok {
+			passed++
+			runtime.Printf("godot-go: PASS  %s = %v", label, got)
+			return
+		}
+		failed++
+		runtime.Printerrf("godot-go: FAIL  %s = %v (expected %v)", label, got, want)
+	}
+
+	// Vector2(3, 4).Length() exercises the PtrCall float ABI on both sides:
+	// Godot encodes "float" as 8-byte double regardless of the engine's
+	// real_t precision, so the generated bindings widen to float64 buffers
+	// at the boundary even though the user-facing type is float32.
 	pos := variant.NewVector2XY(3, 4)
-	runtime.Printf("godot-go: Vector2(3,4).Length() = %.3f (expected 5.000)", pos.Length())
+	check("Vector2(3,4).Length()", pos.Length() == 5, pos.Length(), float32(5))
 
 	// Vector2 → Variant → Vector2.
 	slot := pos.ToVariant()
 	defer slot.Destroy()
 	recovered := variant.Vector2FromVariant(slot)
-	runtime.Printf("godot-go: roundtrip Vector2 = (%.1f, %.1f) (expected (3.0, 4.0))",
-		recovered.X(), recovered.Y())
+	rx, ry := recovered.X(), recovered.Y()
+	check("Vector2 → Variant → Vector2",
+		rx == 3 && ry == 4,
+		[2]float32{rx, ry}, [2]float32{3, 4})
 
 	// Transparent string boundary: NewStringFromString takes a Go string,
 	// String.Length() returns int64 — the user never sees the opaque type.
+	// Find exercises the int arg path (the from offset).
 	greeting := variant.NewStringFromString("hello")
 	defer greeting.Destroy()
-	runtime.Printf("godot-go: String(\"hello\").Length() = %d (expected 5)", greeting.Length())
+	gotLen := greeting.Length()
+	check("String(\"hello\").Length()", gotLen == 5, gotLen, int64(5))
+	gotFind := greeting.Find("ll", 0)
+	check("String(\"hello\").Find(\"ll\", 0)", gotFind == 2, gotFind, int64(2))
+
+	// Stress the int ABI across the 32-bit boundary. 1<<32 + 7 has bits in
+	// both halves of an int64, so any truncation to int32 along the call
+	// path is visible in the result (low half alone would give 7, high
+	// half alone would give 1).
+	const big int64 = (int64(1) << 32) + 7
+	const bigStr = "4294967303"
+	gotNum := variant.StringNumInt64(big, 10, false)
+	check("StringNumInt64(1<<32+7, 10, false)", gotNum == bigStr, gotNum, bigStr)
+
+	bigGo := variant.NewStringFromString(bigStr)
+	defer bigGo.Destroy()
+	gotInt := bigGo.ToInt()
+	check("String(\"4294967303\").ToInt()", gotInt == big, gotInt, big)
+
+	if failed == 0 {
+		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
+	} else {
+		runtime.Printerrf("godot-go: smoke checks FAILED (%d/%d passed, %d failed)",
+			passed, passed+failed, failed)
+	}
 }
 
 func main() {}

@@ -184,9 +184,11 @@ func NewQuaternionFromBasis(from Basis) Quaternion {
 // NewQuaternionAxisAngle constructs a Quaternion via the host (constructor index 3).
 func NewQuaternionAxisAngle(axis Vector3, angle float32) Quaternion {
 	var v Quaternion
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrConstructor(quaternionCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -206,11 +208,19 @@ func NewQuaternionArcFromArcTo(arc_from Vector3, arc_to Vector3) Quaternion {
 // NewQuaternionXYZW constructs a Quaternion via the host (constructor index 5).
 func NewQuaternionXYZW(x float32, y float32, z float32, w float32) Quaternion {
 	var v Quaternion
+	tmp_x := float64(x)
+
+	tmp_y := float64(y)
+
+	tmp_z := float64(z)
+
+	tmp_w := float64(w)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&x)),
-		gdextension.TypePtr(unsafe.Pointer(&y)),
-		gdextension.TypePtr(unsafe.Pointer(&z)),
-		gdextension.TypePtr(unsafe.Pointer(&w)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_x)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_y)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_z)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_w)),
 	}
 	gdextension.CallPtrConstructor(quaternionCtor5, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -218,16 +228,16 @@ func NewQuaternionXYZW(x float32, y float32, z float32, w float32) Quaternion {
 
 // Length mirrors the Godot Quaternion.length method.
 func (self *Quaternion) Length() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(quaternionMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(quaternionMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Quaternion.length_squared method.
 func (self *Quaternion) LengthSquared() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(quaternionMethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(quaternionMethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Normalized mirrors the Godot Quaternion.normalized method.
@@ -284,30 +294,32 @@ func (self *Quaternion) Exp() Quaternion {
 
 // AngleTo mirrors the Godot Quaternion.angle_to method.
 func (self *Quaternion) AngleTo(to Quaternion) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(quaternionMethodAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Dot mirrors the Godot Quaternion.dot method.
 func (self *Quaternion) Dot(with Quaternion) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(quaternionMethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Slerp mirrors the Godot Quaternion.slerp method.
 func (self *Quaternion) Slerp(to Quaternion, weight float32) Quaternion {
 	var ret Quaternion
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -316,9 +328,11 @@ func (self *Quaternion) Slerp(to Quaternion, weight float32) Quaternion {
 // Slerpni mirrors the Godot Quaternion.slerpni method.
 func (self *Quaternion) Slerpni(to Quaternion, weight float32) Quaternion {
 	var ret Quaternion
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerpni, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -327,11 +341,13 @@ func (self *Quaternion) Slerpni(to Quaternion, weight float32) Quaternion {
 // SphericalCubicInterpolate mirrors the Godot Quaternion.spherical_cubic_interpolate method.
 func (self *Quaternion) SphericalCubicInterpolate(b Quaternion, pre_a Quaternion, post_b Quaternion, weight float32) Quaternion {
 	var ret Quaternion
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -340,14 +356,22 @@ func (self *Quaternion) SphericalCubicInterpolate(b Quaternion, pre_a Quaternion
 // SphericalCubicInterpolateInTime mirrors the Godot Quaternion.spherical_cubic_interpolate_in_time method.
 func (self *Quaternion) SphericalCubicInterpolateInTime(b Quaternion, pre_a Quaternion, post_b Quaternion, weight float32, b_t float32, pre_a_t float32, post_b_t float32) Quaternion {
 	var ret Quaternion
+	tmp_weight := float64(weight)
+
+	tmp_b_t := float64(b_t)
+
+	tmp_pre_a_t := float64(pre_a_t)
+
+	tmp_post_b_t := float64(post_b_t)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&pre_a)),
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
-		gdextension.TypePtr(unsafe.Pointer(&b_t)),
-		gdextension.TypePtr(unsafe.Pointer(&pre_a_t)),
-		gdextension.TypePtr(unsafe.Pointer(&post_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_b_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_pre_a_t)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_post_b_t)),
 	}
 	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolateInTime, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -382,9 +406,9 @@ func (self *Quaternion) GetAxis() Vector3 {
 
 // GetAngle mirrors the Godot Quaternion.get_angle method.
 func (self *Quaternion) GetAngle() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAngle, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAngle, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Neg mirrors the Godot Quaternion unary- operator.
@@ -494,9 +518,9 @@ func (self *Quaternion) InArray(rhs Array) bool {
 
 // Index reads element [index] from the receiver.
 func (self *Quaternion) Index(index int64) float32 {
-	var ret float32
-	gdextension.CallPtrIndexedGetter(quaternionIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrIndexedGetter(quaternionIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.

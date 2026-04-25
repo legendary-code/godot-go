@@ -201,12 +201,12 @@ func (self *Vector3i) MaxAxisIndex() int64 {
 
 // DistanceTo mirrors the Godot Vector3i.distance_to method.
 func (self *Vector3i) DistanceTo(to Vector3i) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // DistanceSquaredTo mirrors the Godot Vector3i.distance_squared_to method.
@@ -221,9 +221,9 @@ func (self *Vector3i) DistanceSquaredTo(to Vector3i) int64 {
 
 // Length mirrors the Godot Vector3i.length method.
 func (self *Vector3i) Length() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(vector3iMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(vector3iMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Vector3i.length_squared method.

@@ -166,9 +166,11 @@ func NewBasisFromQuaternion(from Quaternion) Basis {
 // NewBasisAxisAngle constructs a Basis via the host (constructor index 3).
 func NewBasisAxisAngle(axis Vector3, angle float32) Basis {
 	var v Basis
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrConstructor(basisCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
@@ -209,17 +211,19 @@ func (self *Basis) Orthonormalized() Basis {
 
 // Determinant mirrors the Godot Basis.determinant method.
 func (self *Basis) Determinant() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(basisMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(basisMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Rotated mirrors the Godot Basis.rotated method.
 func (self *Basis) Rotated(axis Vector3, angle float32) Basis {
 	var ret Basis
+	tmp_angle := float64(angle)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
-		gdextension.TypePtr(unsafe.Pointer(&angle)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
 	gdextension.CallPtrBuiltinMethod(basisMethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
@@ -264,40 +268,42 @@ func (self *Basis) GetEuler(order int64) Vector3 {
 
 // Tdotx mirrors the Godot Basis.tdotx method.
 func (self *Basis) Tdotx(with Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdotx, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(basisMethodTdotx, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Tdoty mirrors the Godot Basis.tdoty method.
 func (self *Basis) Tdoty(with Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdoty, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(basisMethodTdoty, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Tdotz mirrors the Godot Basis.tdotz method.
 func (self *Basis) Tdotz(with Vector3) float32 {
-	var ret float32
+	var raw float64
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdotz, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(basisMethodTdotz, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Slerp mirrors the Godot Basis.slerp method.
 func (self *Basis) Slerp(to Basis, weight float32) Basis {
 	var ret Basis
+	tmp_weight := float64(weight)
+
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
-		gdextension.TypePtr(unsafe.Pointer(&weight)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
 	gdextension.CallPtrBuiltinMethod(basisMethodSlerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret

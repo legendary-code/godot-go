@@ -761,7 +761,7 @@ func (self *String) Bigrams() PackedStringArray {
 
 // Similarity mirrors the Godot String.similarity method.
 func (self *String) Similarity(text string) float32 {
-	var ret float32
+	var raw float64
 	var tmp_text String
 	stringFromGo(&tmp_text, text)
 	defer stringDestroy(&tmp_text)
@@ -769,8 +769,8 @@ func (self *String) Similarity(text string) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringMethodSimilarity, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	gdextension.CallPtrBuiltinMethod(stringMethodSimilarity, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // Format mirrors the Godot String.format method.
@@ -1463,9 +1463,9 @@ func (self *String) ToInt() int64 {
 
 // ToFloat mirrors the Godot String.to_float method.
 func (self *String) ToFloat() float32 {
-	var ret float32
-	gdextension.CallPtrBuiltinMethod(stringMethodToFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
-	return ret
+	var raw float64
+	gdextension.CallPtrBuiltinMethod(stringMethodToFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	return float32(raw)
 }
 
 // HexToInt mirrors the Godot String.hex_to_int method.
@@ -1626,8 +1626,10 @@ func (self *String) HexDecode() PackedByteArray {
 func StringNumScientific(number float32) string {
 	var raw String
 	defer stringDestroy(&raw)
+	tmp_number := float64(number)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&number)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_number)),
 	}
 	gdextension.CallPtrBuiltinMethod(stringMethodNumScientific, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
@@ -1637,8 +1639,10 @@ func StringNumScientific(number float32) string {
 func StringNum(number float32, decimals int64) string {
 	var raw String
 	defer stringDestroy(&raw)
+	tmp_number := float64(number)
+
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&number)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp_number)),
 		gdextension.TypePtr(unsafe.Pointer(&decimals)),
 	}
 	gdextension.CallPtrBuiltinMethod(stringMethodNum, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
