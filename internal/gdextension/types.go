@@ -183,3 +183,25 @@ type (
 	// references a Godot Object across script-engine boundaries.
 	ObjectInstanceID uint64
 )
+
+// Resolved-function-pointer aliases. The host hands back C function pointers
+// from getters like variant_get_ptr_constructor; we shuttle them through Go
+// as opaque pointer-sized values and route them back into typed C trampolines
+// for invocation. C permits casts between function pointer types, so the
+// round-trip is well-defined; the Go-named types only document intent.
+type (
+	PtrConstructor       unsafe.Pointer
+	PtrDestructor        unsafe.Pointer
+	PtrBuiltInMethod     unsafe.Pointer
+	PtrOperatorEvaluator unsafe.Pointer
+	PtrIndexedSetter     unsafe.Pointer
+	PtrIndexedGetter     unsafe.Pointer
+	PtrKeyedSetter       unsafe.Pointer
+	PtrKeyedGetter       unsafe.Pointer
+	PtrUtilityFunction   unsafe.Pointer
+
+	// VariantFromTypeFunc converts a typed value pointer into a Variant slot.
+	VariantFromTypeFunc unsafe.Pointer
+	// VariantToTypeFunc converts a Variant slot into a typed value pointer.
+	VariantToTypeFunc unsafe.Pointer
+)

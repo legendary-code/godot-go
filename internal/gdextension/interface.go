@@ -43,6 +43,26 @@ var iface struct {
 	memAlloc2        C.GDExtensionInterfaceMemAlloc2
 	memRealloc2      C.GDExtensionInterfaceMemRealloc2
 	memFree2         C.GDExtensionInterfaceMemFree2
+
+	variantNewCopy  C.GDExtensionInterfaceVariantNewCopy
+	variantDestroy  C.GDExtensionInterfaceVariantDestroy
+	variantGetType  C.GDExtensionInterfaceVariantGetType
+
+	getVariantFromTypeConstructor    C.GDExtensionInterfaceGetVariantFromTypeConstructor
+	getVariantToTypeConstructor      C.GDExtensionInterfaceGetVariantToTypeConstructor
+	variantGetPtrConstructor         C.GDExtensionInterfaceVariantGetPtrConstructor
+	variantGetPtrDestructor          C.GDExtensionInterfaceVariantGetPtrDestructor
+	variantGetPtrBuiltinMethod       C.GDExtensionInterfaceVariantGetPtrBuiltinMethod
+	variantGetPtrOperatorEvaluator   C.GDExtensionInterfaceVariantGetPtrOperatorEvaluator
+	variantGetPtrIndexedSetter       C.GDExtensionInterfaceVariantGetPtrIndexedSetter
+	variantGetPtrIndexedGetter       C.GDExtensionInterfaceVariantGetPtrIndexedGetter
+	variantGetPtrKeyedSetter         C.GDExtensionInterfaceVariantGetPtrKeyedSetter
+	variantGetPtrKeyedGetter         C.GDExtensionInterfaceVariantGetPtrKeyedGetter
+	variantGetPtrUtilityFunction     C.GDExtensionInterfaceVariantGetPtrUtilityFunction
+
+	stringNewWithUtf8CharsAndLen2     C.GDExtensionInterfaceStringNewWithUtf8CharsAndLen2
+	stringToUtf8Chars                 C.GDExtensionInterfaceStringToUtf8Chars
+	stringNameNewWithUtf8CharsAndLen  C.GDExtensionInterfaceStringNameNewWithUtf8CharsAndLen
 }
 
 // Library returns the GDExtensionClassLibraryPtr the host handed us. Required
@@ -62,6 +82,26 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.memAlloc2 = (C.GDExtensionInterfaceMemAlloc2)(unsafe.Pointer(resolveProc("mem_alloc2")))
 	iface.memRealloc2 = (C.GDExtensionInterfaceMemRealloc2)(unsafe.Pointer(resolveProc("mem_realloc2")))
 	iface.memFree2 = (C.GDExtensionInterfaceMemFree2)(unsafe.Pointer(resolveProc("mem_free2")))
+
+	iface.variantNewCopy = (C.GDExtensionInterfaceVariantNewCopy)(unsafe.Pointer(resolveProc("variant_new_copy")))
+	iface.variantDestroy = (C.GDExtensionInterfaceVariantDestroy)(unsafe.Pointer(resolveProc("variant_destroy")))
+	iface.variantGetType = (C.GDExtensionInterfaceVariantGetType)(unsafe.Pointer(resolveProc("variant_get_type")))
+
+	iface.getVariantFromTypeConstructor = (C.GDExtensionInterfaceGetVariantFromTypeConstructor)(unsafe.Pointer(resolveProc("get_variant_from_type_constructor")))
+	iface.getVariantToTypeConstructor = (C.GDExtensionInterfaceGetVariantToTypeConstructor)(unsafe.Pointer(resolveProc("get_variant_to_type_constructor")))
+	iface.variantGetPtrConstructor = (C.GDExtensionInterfaceVariantGetPtrConstructor)(unsafe.Pointer(resolveProc("variant_get_ptr_constructor")))
+	iface.variantGetPtrDestructor = (C.GDExtensionInterfaceVariantGetPtrDestructor)(unsafe.Pointer(resolveProc("variant_get_ptr_destructor")))
+	iface.variantGetPtrBuiltinMethod = (C.GDExtensionInterfaceVariantGetPtrBuiltinMethod)(unsafe.Pointer(resolveProc("variant_get_ptr_builtin_method")))
+	iface.variantGetPtrOperatorEvaluator = (C.GDExtensionInterfaceVariantGetPtrOperatorEvaluator)(unsafe.Pointer(resolveProc("variant_get_ptr_operator_evaluator")))
+	iface.variantGetPtrIndexedSetter = (C.GDExtensionInterfaceVariantGetPtrIndexedSetter)(unsafe.Pointer(resolveProc("variant_get_ptr_indexed_setter")))
+	iface.variantGetPtrIndexedGetter = (C.GDExtensionInterfaceVariantGetPtrIndexedGetter)(unsafe.Pointer(resolveProc("variant_get_ptr_indexed_getter")))
+	iface.variantGetPtrKeyedSetter = (C.GDExtensionInterfaceVariantGetPtrKeyedSetter)(unsafe.Pointer(resolveProc("variant_get_ptr_keyed_setter")))
+	iface.variantGetPtrKeyedGetter = (C.GDExtensionInterfaceVariantGetPtrKeyedGetter)(unsafe.Pointer(resolveProc("variant_get_ptr_keyed_getter")))
+	iface.variantGetPtrUtilityFunction = (C.GDExtensionInterfaceVariantGetPtrUtilityFunction)(unsafe.Pointer(resolveProc("variant_get_ptr_utility_function")))
+
+	iface.stringNewWithUtf8CharsAndLen2 = (C.GDExtensionInterfaceStringNewWithUtf8CharsAndLen2)(unsafe.Pointer(resolveProc("string_new_with_utf8_chars_and_len2")))
+	iface.stringToUtf8Chars = (C.GDExtensionInterfaceStringToUtf8Chars)(unsafe.Pointer(resolveProc("string_to_utf8_chars")))
+	iface.stringNameNewWithUtf8CharsAndLen = (C.GDExtensionInterfaceStringNameNewWithUtf8CharsAndLen)(unsafe.Pointer(resolveProc("string_name_new_with_utf8_chars_and_len")))
 }
 
 func resolveProc(name string) C.GDExtensionInterfaceFunctionPtr {
