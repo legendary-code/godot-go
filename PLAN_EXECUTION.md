@@ -204,7 +204,7 @@ a/b/c rhythm and keep every commit landable.
   checks plus the Engine version assertion) and load time stays flat
   as the class count grows. **[Met]**
 
-### Phase 4 — Singletons, utility functions, native structures, globals
+### Phase 4 — Singletons, utility functions, native structures, globals **[Done]**
 
 - [x] `singletons` lazy accessors. Already shipped during 3b/3c as
       `<ClassName>Singleton()` `sync.OnceValue` resolvers in `core/` and
@@ -225,8 +225,15 @@ a/b/c rhythm and keep every commit landable.
       PascalCase verbatim — no prefix stripping (fragile against shapes
       like Error.OK or KeyModifierMask.KEY_*). `global_constants` is empty
       in 4.6.2 so nothing to emit there.
-- [ ] `native_structures` → `native/` plain Go structs (used in a handful
-      of low-level callbacks; layout strings parsed from the json). 14 entries.
+- [x] `native_structures` → `native/native.gen.go`. All 14 entries
+      (AudioFrame, Glyph, ObjectID, PhysicsServer*Extension*, …) emitted
+      as plain Go structs with C-layout-stable fields. Format strings
+      parsed for primitives, builtins, `Object *` pointers,
+      `TextServer::Direction` C++ enums (collapsed to int64), inline
+      arrays (`Collisions [32]PhysicsServer3DExtensionMotionCollision`),
+      and same-package struct refs (`ColliderId ObjectID`). Layout
+      relies on Windows / Linux x86_64 conventions (C `int` → int32);
+      noted in the package preamble.
 
 ### Phase 5 — User-class codegen tool (`cmd/godot-go`)
 

@@ -95,6 +95,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := emitNativeStructures(api, *outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit native: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Aliases run last so they can reference any of the freshly-emitted
 	// class files in core/ and editor/.
 	if err := emitAliases(api, emitted, godotDir); err != nil {

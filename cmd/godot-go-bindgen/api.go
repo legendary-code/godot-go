@@ -18,6 +18,16 @@ type API struct {
 	Singletons                []Singleton                `json:"singletons"`
 	UtilityFunctions          []UtilityFunction          `json:"utility_functions"`
 	GlobalEnums               []GlobalEnum               `json:"global_enums"`
+	NativeStructures          []NativeStructure          `json:"native_structures"`
+}
+
+// NativeStructure is a low-level C struct referenced by a handful of
+// extension callbacks (physics ray/shape results, text shaping caret info,
+// scripting profiling rows). The Format string is C-ish field declarations
+// separated by `;`, e.g. "float left;float right".
+type NativeStructure struct {
+	Name   string `json:"name"`
+	Format string `json:"format"`
 }
 
 // GlobalEnum is a top-level enum (or bitfield) from extension_api.json#global_enums.
