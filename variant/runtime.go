@@ -100,3 +100,9 @@ func nodePathToGo(self *NodePath) string {
 func nodePathDestroy(self *NodePath) {
 	gdextension.CallPtrDestructor(nodePathDtor, gdextension.TypePtr(unsafe.Pointer(self)))
 }
+
+// Public boundary helpers used by codegen in sibling packages (core/, editor/)
+// — each is a thin wrapper over the package-private boundary above.
+func StringToGo(self *String) string             { return stringToGo(self) }
+func StringNameToGo(self *StringName) string     { return stringNameToGo(self) }
+func NodePathToGo(self *NodePath) string         { return nodePathToGo(self) }

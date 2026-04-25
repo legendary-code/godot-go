@@ -94,14 +94,14 @@ func NewCallableFromCallable(from Callable) Callable {
 }
 
 // Create mirrors the Godot Callable.create method.
-func CallableCreate(variant Variant, method string) Callable {
+func CallableCreate(v Variant, method string) Callable {
 	var ret Callable
 	var tmp_method StringName
 	stringNameFromGo(&tmp_method, method)
 	defer stringNameDestroy(&tmp_method)
 
 	args := [...]gdextension.TypePtr{
-		gdextension.TypePtr(unsafe.Pointer(&variant)),
+		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_method)),
 	}
 	gdextension.CallPtrBuiltinMethod(callableMethodCreate, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))

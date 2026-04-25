@@ -72,8 +72,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes against %s (precision=%s, build_config=%s)\n",
-		len(emitted), api.Header.VersionFullName, api.Header.Precision, *buildConfig)
+	// Engine-class sweep. Register all class names first so cross-class
+	// type references resolve (a method on Node returning Node3D won't
+	// otherwise know that Node3D is a known class).
+	registerEngineClasses(api)
+	classCount := 0
+	for i := range api.Classes {
+		c := &api.Classes[i]
+		if err := emitEngineClass(api, c, *outDir); err != nil {
+			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit class %s: %v\n", c.Name, err)
+			os.Exit(1)
+		}
+		classCount++
+	}
+
+	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes + %d engine classes against %s (precision=%s, build_config=%s)\n",
+		len(emitted), classCount, api.Header.VersionFullName, api.Header.Precision, *buildConfig)
 }
 
 func precisionForBuildConfig(bc string) string {

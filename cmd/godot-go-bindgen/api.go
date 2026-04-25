@@ -10,10 +10,12 @@ import (
 // added here as later phases need them; everything we don't decode is
 // discarded by encoding/json's default behavior.
 type API struct {
-	Header                    Header                          `json:"header"`
-	BuiltinClassSizes         []BuildConfigSizes              `json:"builtin_class_sizes"`
-	BuiltinClassMemberOffsets []BuildConfigMemberOffsets      `json:"builtin_class_member_offsets"`
-	BuiltinClasses            []BuiltinClass                  `json:"builtin_classes"`
+	Header                    Header                     `json:"header"`
+	BuiltinClassSizes         []BuildConfigSizes         `json:"builtin_class_sizes"`
+	BuiltinClassMemberOffsets []BuildConfigMemberOffsets `json:"builtin_class_member_offsets"`
+	BuiltinClasses            []BuiltinClass             `json:"builtin_classes"`
+	Classes                   []Class                    `json:"classes"`
+	Singletons                []Singleton                `json:"singletons"`
 }
 
 type Header struct {
@@ -94,6 +96,72 @@ type Operator struct {
 	ReturnType string `json:"return_type"`
 }
 
+// Class is an engine-class entry from extension_api.json#classes (the host's
+// classdb). 944 are tagged api_type="core" and 79 are "editor".
+type Class struct {
+	Name           string          `json:"name"`
+	IsRefcounted   bool            `json:"is_refcounted"`
+	IsInstantiable bool            `json:"is_instantiable"`
+	Inherits       string          `json:"inherits"`
+	APIType        string          `json:"api_type"`
+	Constants      []ClassConstant `json:"constants"`
+	Enums          []ClassEnum     `json:"enums"`
+	Methods        []ClassMethod   `json:"methods"`
+	// Signals + properties are decoded but unused in Phase 3b. Properties
+	// stay accessible through their underlying Get*/Set* methods; signals
+	// arrive in a later phase.
+}
+
+type ClassConstant struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+
+type ClassEnum struct {
+	Name       string          `json:"name"`
+	IsBitfield bool            `json:"is_bitfield"`
+	Values     []ClassEnumVal  `json:"values"`
+}
+
+type ClassEnumVal struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+
+// ClassMethod is a method on an engine class. Unlike builtin methods, the
+// hash here is uint32-range (often above int32 max) and the dispatch path
+// goes through classdb_get_method_bind + object_method_bind_ptrcall/_call.
+type ClassMethod struct {
+	Name       string          `json:"name"`
+	IsConst    bool            `json:"is_const"`
+	IsVararg   bool            `json:"is_vararg"`
+	IsStatic   bool            `json:"is_static"`
+	IsVirtual  bool            `json:"is_virtual"`
+	IsRequired bool            `json:"is_required"`
+	Hash       int64           `json:"hash"`
+	ReturnVal  *ClassReturnVal `json:"return_value"`
+	Arguments  []ClassArgument `json:"arguments"`
+}
+
+type ClassReturnVal struct {
+	Type string `json:"type"`
+	Meta string `json:"meta"`
+}
+
+type ClassArgument struct {
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Meta         string `json:"meta"`
+	DefaultValue string `json:"default_value"`
+}
+
+// Singleton names a global engine instance (e.g. Engine, Input, OS). The
+// Type field gives the class to wrap; Name is what the host registers it as.
+type Singleton struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
 func loadAPI(path string) (*API, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -145,6 +213,27 @@ func (a *API) FindBuiltin(name string) *BuiltinClass {
 	for i := range a.BuiltinClasses {
 		if a.BuiltinClasses[i].Name == name {
 			return &a.BuiltinClasses[i]
+		}
+	}
+	return nil
+}
+
+// FindClass returns the engine-class entry by name, or nil if absent.
+func (a *API) FindClass(name string) *Class {
+	for i := range a.Classes {
+		if a.Classes[i].Name == name {
+			return &a.Classes[i]
+		}
+	}
+	return nil
+}
+
+// SingletonForType returns the singleton registration for `class`, or nil if
+// the class is not a host-registered singleton.
+func (a *API) SingletonForType(class string) *Singleton {
+	for i := range a.Singletons {
+		if a.Singletons[i].Type == class {
+			return &a.Singletons[i]
 		}
 	}
 	return nil

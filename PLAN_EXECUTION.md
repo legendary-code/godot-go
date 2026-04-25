@@ -147,11 +147,11 @@ a/b/c rhythm and keep every commit landable.
 
 #### 3a — ABI shims + hand-bound proof
 
-- [ ] Wrap `classdb_construct_object2`, `classdb_get_method_bind`,
+- [x] Wrap `classdb_construct_object2`, `classdb_get_method_bind`,
       `object_method_bind_ptrcall`, `object_method_bind_call`,
       `object_destroy`, `global_get_singleton` in
       `internal/gdextension` (cgo trampolines + Go wrappers).
-- [ ] Hand-write the minimum `core.Object` (opaque pointer + Destroy)
+- [x] Hand-write the minimum `core.Object` (opaque pointer + Destroy)
       and `core.Engine` with a singleton accessor + `GetVersionInfo()`
       returning a `Dictionary`. This proves the engine-class ABI works
       before automating.
@@ -160,7 +160,7 @@ a/b/c rhythm and keep every commit landable.
 
 #### 3b — bindgen sweep
 
-- [ ] Walk `classes`. For each, emit:
+- [x] Walk `classes`. For each, emit:
       - opaque struct with embedded base (per `inherits`),
       - method bindings via the 3a shims (vararg via `_call`, fixed via
         `_ptrcall`), using the new lazy-pointer pattern from the start
@@ -169,7 +169,9 @@ a/b/c rhythm and keep every commit landable.
       - enums (nested) → `type ClassNameEnumName int` + consts,
       - constants → untyped consts,
       - properties left as the underlying Get*/Set* method pairs.
-- [ ] Reuse the Phase 2 argPrep/returnPrep machinery; engine classes
+      Vararg methods + native-struct pointer args (`const X*`) deferred
+      to phases 4/5; virtual methods (user-overrideable) deferred to 5.
+- [x] Reuse the Phase 2 argPrep/returnPrep machinery; engine classes
       pass as opaque `Object*` pointers.
 
 #### 3c — facade aliases + cross-package edges
