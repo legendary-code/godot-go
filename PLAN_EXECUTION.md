@@ -82,32 +82,33 @@ example or test gate so we never have a long unverified stretch.
 
 ### Phase 0 — Bootstrap & decisions
 
-- [ ] Pin Go toolchain version in `go.mod` (currently 1.26.1, sanity-check
+- [x] Pin Go toolchain version in `go.mod` (currently 1.26.1, sanity-check
       against the installed toolchain).
-- [ ] Add a top-level `Taskfile.yaml` script with targets:
+- [x] Add a top-level `Taskfile.yaml` script with targets:
       `generate:types` (regenerate framework code from json), `test`, `example`.
-- [ ] Decide cgo build strategy:
+- [x] Decide cgo build strategy:
       - extension built as a Go `c-shared` `.dll`/`.so`/`.dylib`,
       - `gdextension_interface.h` consumed via cgo `#include`,
       - per-platform `cgo` flags captured in build tags.
-- [ ] Decide build configurations matrix (`float_32`, `float_64`,
-      `double_32`, `double_64`) — pick `float_32` as MVP, gate the others
-      behind build tags.
+- [x] Decide build configurations matrix (`float_32`, `float_64`,
+      `double_32`, `double_64`) — single-precision `float_64` is the
+      live target (matches the Steam build of Godot 4.6.2 we're testing
+      against); the other three configs are deferred behind build tags.
 - **Exit:** module builds an empty `c-shared` library on Windows that loads
   in Godot and prints from `GDExtensionInit`.
 
 ### Phase 1 — GDExtension C interface (host ABI)
 
-- [ ] `internal/gdextension/types.go` — Go mirrors of the enums/structs in
+- [x] `internal/gdextension/types.go` — Go mirrors of the enums/structs in
       `gdextension_interface.h` (variant types, call errors, init levels,
       property info, method info, etc.). Hand-written; small surface.
-- [ ] `internal/gdextension/interface.go` — load function-pointer table:
+- [x] `internal/gdextension/interface.go` — load function-pointer table:
       every `GDExtensionInterface*` getter is wrapped in a Go func that
       calls through the cached pointer.
-- [ ] `internal/gdextension/entrypoint.go` — `//export gdextension_library_init` that
+- [x] `internal/gdextension/entrypoint.go` — `//export gdextension_library_init` that
       Godot calls; sets up the interface table, library pointer, init/
       deinit callbacks at each `GDExtensionInitializationLevel`.
-- [ ] `internal/runtime/log.go` — print/print_error helpers backed by
+- [x] `internal/runtime/log.go` — print/print_error helpers backed by
       the host's `print` interface (handy for all later phases).
 - **Exit:** load extension, log "hello godot-go" at SCENE init level.
 
