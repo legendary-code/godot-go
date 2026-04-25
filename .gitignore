@@ -1,0 +1,10 @@
+# go-task checksum cache
+.task/
+
+# IDE / agent state
+.idea/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

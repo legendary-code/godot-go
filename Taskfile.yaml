@@ -1,0 +1,46 @@
+version: '3'
+
+vars:
+  EXAMPLE_PKG: ./examples/smoke
+  EXAMPLE_OUT_DIR: examples/smoke/godot_project/bin
+  EXAMPLE_LIB_NAME: godot_go_smoke
+  LIB_EXT:
+    sh: |
+      case "{{OS}}" in
+        windows) echo .dll ;;
+        darwin)  echo .dylib ;;
+        *)       echo .so ;;
+      esac
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  test:
+    desc: Run the Go test suite.
+    cmds:
+      - go test ./...
+
+  generate:types:
+    desc: Regenerate framework bindings from extension_api.json. (stub until cmd/godot-go-bindgen lands.)
+    cmds:
+      - echo "TODO Phase 2+ — implement cmd/godot-go-bindgen"
+
+  build:example:
+    desc: Build the Phase 0 smoke extension as a c-shared library.
+    cmds:
+      - mkdir -p {{.EXAMPLE_OUT_DIR}}
+      - go build -buildmode=c-shared -o {{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}} {{.EXAMPLE_PKG}}
+    sources:
+      - examples/smoke/**/*.go
+      - internal/**/*.go
+      - internal/**/*.h
+      - godot/gdextension_interface.h
+    generates:
+      - '{{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}}'
+
+  example:
+    desc: Alias for build:example.
+    cmds:
+      - task: build:example

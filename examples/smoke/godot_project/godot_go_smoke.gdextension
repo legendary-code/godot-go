@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "gdextension_library_init"
+compatibility_minimum = "4.6"
+
+[libraries]
+
+windows.x86_64 = "res://bin/godot_go_smoke.dll"
+linux.x86_64   = "res://bin/godot_go_smoke.so"
+macos          = "res://bin/godot_go_smoke.dylib"
