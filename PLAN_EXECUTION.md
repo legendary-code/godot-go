@@ -113,7 +113,7 @@ example or test gate so we never have a long unverified stretch.
 
 ### Phase 2 — Variant + builtin types codegen
 
-- [ ] `cmd/godot-go-bindgen` reads `extension_api.json`, walks
+- [x] `cmd/godot-go-bindgen` reads `extension_api.json`, walks
       `builtin_classes`, emits Go types into `variant/`:
       - opaque value types sized per `builtin_class_sizes` for the chosen
         build config (use `[N]byte` backing arrays; expose typed accessors
@@ -122,19 +122,21 @@ example or test gate so we never have a long unverified stretch.
       - methods via `variant_get_ptr_builtin_method`,
       - operators via `variant_get_ptr_operator_evaluator`,
       - to/from-Variant conversions.
-- [ ] Map primitive Godot types to Go primitives where idiomatic:
-      `bool`→`bool`, `int`→`int64`, `float`→`float64`. `String` and
-      `StringName` are **transparent**: the user-facing API always takes
-      and returns Go `string`. The opaque `variant.String` /
-      `variant.StringName` types exist internally (they are how Variant
-      slots and engine ABI calls are stored), but conversion happens at
-      the framework boundary — users never see, import, or construct
-      them. NodePath follows the same rule.
-- [ ] Generate `godot/*_aliases.go` re-exports for the high-traffic types
-      (Vector2/3/4, Color, Rect2, Transform2D/3D, Variant, String,
+- [x] Map primitive Godot types to Go primitives where idiomatic:
+      `bool`→`bool`, `int`→`int64`, `float`→`float32` (single-precision
+      build; Godot's PtrCall ABI widens to 8-byte `double` at the
+      boundary regardless). `String`, `StringName`, and `NodePath` are
+      **transparent**: the user-facing API always takes and returns Go
+      `string`. Their opaque types exist only for Variant slot storage
+      and engine ABI calls — users never see, import, or construct them.
+- [x] Generate `godot/aliases.gen.go` re-exports for the high-traffic
+      types (Vector2/3/4, Color, Rect2, Transform2D/3D, Variant, String,
       StringName, NodePath, Callable, Signal, Dictionary, Array, Packed*).
-- **Exit:** unit tests round-trip `Vector2{1,2}` → Variant → Vector2 and
-  call `String.length()` / `Array.append()` against a live host.
+- **Exit (met):** the `examples/smoke` extension loads in Godot 4.6.2
+  and reports 7/7 passing checks covering Vector2 → Variant → Vector2
+  round-trip, the float PtrCall ABI on both call directions, the int
+  PtrCall ABI across the 32-bit boundary, the transparent String
+  boundary, and `Array.Append` × 3 → `Size() == 3`.
 
 ### Phase 3 — Engine class codegen
 

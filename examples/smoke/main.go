@@ -12,6 +12,7 @@
 //     across the 32-bit boundary (truncation would yield "7" or "1")
 //   - String("4294967303").ToInt() → 1<<32 + 7 stresses the int return
 //     path the same way
+//   - Array.Append three Variants → Size() must agree (Variant arg path)
 package main
 
 import (
@@ -83,6 +84,23 @@ func runSmokeChecks() {
 	defer bigGo.Destroy()
 	gotInt := bigGo.ToInt()
 	check("String(\"4294967303\").ToInt()", gotInt == big, gotInt, big)
+
+	// Array.Append exercises the Variant arg path; Size() exercises an
+	// int return on a stateful builtin. Each Append takes a Variant whose
+	// underlying slot is freed when the Array is destroyed.
+	arr := variant.NewArray()
+	defer arr.Destroy()
+	for _, v := range []variant.Vector2{
+		variant.NewVector2XY(1, 0),
+		variant.NewVector2XY(0, 1),
+		variant.NewVector2XY(1, 1),
+	} {
+		slot := v.ToVariant()
+		arr.Append(*slot)
+		slot.Destroy()
+	}
+	gotSize := arr.Size()
+	check("Array.Append x3 → Size()", gotSize == 3, gotSize, int64(3))
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
