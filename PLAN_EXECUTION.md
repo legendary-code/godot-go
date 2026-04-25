@@ -141,23 +141,60 @@ example or test gate so we never have a long unverified stretch.
 
 ### Phase 3 — Engine class codegen
 
-- [ ] Walk `classes`. For each entry, emit into `core/` or `editor/` based
-      on `api_type`. Generated content per class:
+There are 944 `core` + 79 `editor` classes (1023 total) and 39
+singletons. The phase is sliced into four steps to mirror Phase 2's
+a/b/c rhythm and keep every commit landable.
+
+#### 3a — ABI shims + hand-bound proof
+
+- [ ] Wrap `classdb_construct_object2`, `classdb_get_method_bind`,
+      `object_method_bind_ptrcall`, `object_method_bind_call`,
+      `object_destroy`, `global_get_singleton` in
+      `internal/gdextension` (cgo trampolines + Go wrappers).
+- [ ] Hand-write the minimum `core.Object` (opaque pointer + Destroy)
+      and `core.Engine` with a singleton accessor + `GetVersionInfo()`
+      returning a `Dictionary`. This proves the engine-class ABI works
+      before automating.
+- **Exit:** smoke project calls `Engine.Singleton().GetVersionInfo()`,
+  pulls "major" out of the returned `Dictionary`, asserts == 4.
+
+#### 3b — bindgen sweep
+
+- [ ] Walk `classes`. For each, emit:
       - opaque struct with embedded base (per `inherits`),
-      - method bindings via `classdb_get_method_bind` + `object_method_bind_ptrcall`
-        (or `_call` for vararg),
-      - enums (nested) emitted as `type ClassNameEnumName int` + consts,
-      - constants emitted as untyped consts,
-      - properties emitted as Get*/Set* method pairs (Godot already exposes
-        them as methods; skip synthesizing fields).
-- [ ] Resolve cross-package references (a `core` class returning an
-      `editor` type — handle via interface or by importing). Default rule:
-      `editor` may import `core`, never the reverse.
-- [ ] Re-export root types (`Object`, `Node`, `Node2D`, `Node3D`,
-      `Resource`, `RefCounted`, `Control`, `CanvasItem`, …) as aliases on
-      the `godot/` package.
-- **Exit:** call `Engine.singleton().get_version_info()` from Go and assert
-  the major version is 4.
+      - method bindings via the 3a shims (vararg via `_call`, fixed via
+        `_ptrcall`), using the new lazy-pointer pattern from the start
+        (see 3d) so 1k classes don't pay tens of thousands of name
+        lookups at load time,
+      - enums (nested) → `type ClassNameEnumName int` + consts,
+      - constants → untyped consts,
+      - properties left as the underlying Get*/Set* method pairs.
+- [ ] Reuse the Phase 2 argPrep/returnPrep machinery; engine classes
+      pass as opaque `Object*` pointers.
+
+#### 3c — facade aliases + cross-package edges
+
+- [ ] Resolve cross-package references. Default rule: `editor` may
+      import `core`, never the reverse. A `core` method that references
+      an `editor` type falls back to an interface or is skipped.
+- [ ] Re-export the root types (`Object`, `Node`, `Node2D`, `Node3D`,
+      `Resource`, `RefCounted`, `Control`, `CanvasItem`, …) onto the
+      `godot/` package via `godot/aliases.gen.go`.
+
+#### 3d — lazy method-pointer caching; retrofit Phase 2
+
+- [ ] Engine-class bindings already ship lazy from 3b — go back and
+      retrofit the same pattern to the `variant/` package. Phase 2
+      eagerly binds every constructor / method / operator pointer in
+      `init()` because the surface was small (~34 classes); applying
+      the same lazy resolver everywhere keeps load time near-zero and
+      lets both packages share one strategy.
+- [ ] Confirm no measurable per-call regression on the smoke checks
+      (the lazy path is one extra atomic load + branch per call).
+
+- **Phase 3 overall exit:** smoke reports 8/8 passing (Phase 2's seven
+  checks plus the Engine version assertion) and load time stays flat
+  as the class count grows.
 
 ### Phase 4 — Singletons, utility functions, native structures, globals
 
