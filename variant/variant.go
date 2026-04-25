@@ -1,6 +1,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -29,4 +30,54 @@ func (v *Variant) Type() gdextension.VariantType {
 // Destroy releases the slot's contents. Safe to call on a zero Variant.
 func (v *Variant) Destroy() {
 	gdextension.VariantDestroy(gdextension.VariantPtr(unsafe.Pointer(v)))
+}
+
+// Lazily-resolved Variant<->Type converters used by the hand-written helpers
+// below. Resolved on first call rather than at init() so this file doesn't
+// have to register against the init-level system the *.gen.go files use.
+var (
+	variantFromInt = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeInt)
+	})
+	variantToInt = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeInt)
+	})
+	variantFromString = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeString)
+	})
+)
+
+// NewVariantInt wraps an int64 in a fresh Variant. The result is owned by
+// the caller and must be released with Destroy.
+func NewVariantInt(i int64) Variant {
+	var out Variant
+	src := i
+	gdextension.CallVariantFromType(variantFromInt(),
+		gdextension.VariantPtr(unsafe.Pointer(&out)),
+		gdextension.TypePtr(unsafe.Pointer(&src)))
+	return out
+}
+
+// NewVariantString wraps a Go string in a fresh Variant (type = STRING). The
+// result is owned by the caller and must be released with Destroy.
+func NewVariantString(s string) Variant {
+	var tmp String
+	stringFromGo(&tmp, s)
+	defer stringDestroy(&tmp)
+	var out Variant
+	gdextension.CallVariantFromType(variantFromString(),
+		gdextension.VariantPtr(unsafe.Pointer(&out)),
+		gdextension.TypePtr(unsafe.Pointer(&tmp)))
+	return out
+}
+
+// AsInt unwraps an INT-typed Variant. Behavior is undefined if the Variant
+// holds any other type — callers that don't know the runtime type should
+// inspect Type() first.
+func (v *Variant) AsInt() int64 {
+	var out int64
+	gdextension.CallTypeFromVariant(variantToInt(),
+		gdextension.TypePtr(unsafe.Pointer(&out)),
+		gdextension.VariantPtr(unsafe.Pointer(v)))
+	return out
 }

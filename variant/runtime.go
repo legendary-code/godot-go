@@ -7,46 +7,18 @@
 package variant
 
 import (
-	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
-// Builtin storage sizes for the framework's float_64 build (64-bit pointers,
-// single-precision floats). The numbers come from extension_api.json#
-// builtin_class_sizes; pointer-sized payloads (String/StringName/NodePath)
-// are 8 bytes, where the float_32 config uses 4.
-const (
-	stringSize     = 8
-	stringNameSize = 8
-	nodePathSize   = 8
-)
-
-// internStringName returns a stable StringNamePtr for s. The backing storage
-// is a heap-allocated [stringNameSize]byte slot held forever — Godot interns
-// StringNames in its own table, and the framework only needs the host-visible
-// pointer to remain valid for the extension's lifetime.
+// internStringName is a thin facade over gdextension.InternStringName so the
+// generated *.gen.go files keep their existing call shape. The size constants
+// and the cache itself live in the gdextension package because the core/
+// engine-class bindings need the same pool.
 func internStringName(s string) gdextension.StringNamePtr {
-	internMu.Lock()
-	defer internMu.Unlock()
-	if p, ok := internCache[s]; ok {
-		return p
-	}
-	slot := new([stringNameSize]byte)
-	p := gdextension.StringNamePtr(unsafe.Pointer(slot))
-	gdextension.StringNameNewWithUtf8(p, s)
-	if internCache == nil {
-		internCache = map[string]gdextension.StringNamePtr{}
-	}
-	internCache[s] = p
-	return p
+	return gdextension.InternStringName(s)
 }
-
-var (
-	internMu    sync.Mutex
-	internCache map[string]gdextension.StringNamePtr
-)
 
 // The transparent string boundary helpers below depend on resolved
 // constructor/destructor pointers populated by string.gen.go / stringname.gen.go

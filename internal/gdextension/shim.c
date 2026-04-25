@@ -228,6 +228,45 @@ void godot_go_call_ptr_utility_function(godot_go_anyfn fn,
     ((GDExtensionPtrUtilityFunction)fn)(r_return, p_args, p_argument_count);
 }
 
+GDExtensionObjectPtr godot_go_call_classdb_construct_object2(GDExtensionInterfaceClassdbConstructObject2 fn,
+                                                              GDExtensionConstStringNamePtr p_classname) {
+    return fn(p_classname);
+}
+
+GDExtensionMethodBindPtr godot_go_call_classdb_get_method_bind(GDExtensionInterfaceClassdbGetMethodBind fn,
+                                                                GDExtensionConstStringNamePtr p_classname,
+                                                                GDExtensionConstStringNamePtr p_methodname,
+                                                                GDExtensionInt p_hash) {
+    return fn(p_classname, p_methodname, p_hash);
+}
+
+void godot_go_call_object_method_bind_ptrcall(GDExtensionInterfaceObjectMethodBindPtrcall fn,
+                                              GDExtensionMethodBindPtr p_method_bind,
+                                              GDExtensionObjectPtr p_instance,
+                                              const GDExtensionConstTypePtr *p_args,
+                                              GDExtensionTypePtr r_ret) {
+    fn(p_method_bind, p_instance, p_args, r_ret);
+}
+
+void godot_go_call_object_method_bind_call(GDExtensionInterfaceObjectMethodBindCall fn,
+                                           GDExtensionMethodBindPtr p_method_bind,
+                                           GDExtensionObjectPtr p_instance,
+                                           const GDExtensionConstVariantPtr *p_args,
+                                           GDExtensionInt p_arg_count,
+                                           GDExtensionUninitializedVariantPtr r_ret,
+                                           GDExtensionCallError *r_error) {
+    fn(p_method_bind, p_instance, p_args, p_arg_count, r_ret, r_error);
+}
+
+void godot_go_call_object_destroy(GDExtensionInterfaceObjectDestroy fn, GDExtensionObjectPtr p_o) {
+    fn(p_o);
+}
+
+GDExtensionObjectPtr godot_go_call_global_get_singleton(GDExtensionInterfaceGlobalGetSingleton fn,
+                                                         GDExtensionConstStringNamePtr p_name) {
+    return fn(p_name);
+}
+
 const char *godot_go_version2_status(const GDExtensionGodotVersion2 *v) { return v->status; }
 const char *godot_go_version2_build (const GDExtensionGodotVersion2 *v) { return v->build;  }
 const char *godot_go_version2_hash  (const GDExtensionGodotVersion2 *v) { return v->hash;   }

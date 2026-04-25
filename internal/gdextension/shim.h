@@ -89,6 +89,35 @@ void godot_go_call_ptr_keyed_setter      (godot_go_anyfn fn, GDExtensionTypePtr 
 void godot_go_call_ptr_keyed_getter      (godot_go_anyfn fn, GDExtensionConstTypePtr p_base, GDExtensionConstTypePtr p_key, GDExtensionTypePtr r_value);
 void godot_go_call_ptr_utility_function  (godot_go_anyfn fn, GDExtensionTypePtr r_return, const GDExtensionConstTypePtr *p_args, int32_t p_argument_count);
 
+/* ---------- Engine class (Object) ABI. ---------- */
+
+GDExtensionObjectPtr godot_go_call_classdb_construct_object2(GDExtensionInterfaceClassdbConstructObject2 fn,
+                                                              GDExtensionConstStringNamePtr p_classname);
+
+GDExtensionMethodBindPtr godot_go_call_classdb_get_method_bind(GDExtensionInterfaceClassdbGetMethodBind fn,
+                                                                GDExtensionConstStringNamePtr p_classname,
+                                                                GDExtensionConstStringNamePtr p_methodname,
+                                                                GDExtensionInt p_hash);
+
+void godot_go_call_object_method_bind_ptrcall(GDExtensionInterfaceObjectMethodBindPtrcall fn,
+                                              GDExtensionMethodBindPtr p_method_bind,
+                                              GDExtensionObjectPtr p_instance,
+                                              const GDExtensionConstTypePtr *p_args,
+                                              GDExtensionTypePtr r_ret);
+
+void godot_go_call_object_method_bind_call(GDExtensionInterfaceObjectMethodBindCall fn,
+                                           GDExtensionMethodBindPtr p_method_bind,
+                                           GDExtensionObjectPtr p_instance,
+                                           const GDExtensionConstVariantPtr *p_args,
+                                           GDExtensionInt p_arg_count,
+                                           GDExtensionUninitializedVariantPtr r_ret,
+                                           GDExtensionCallError *r_error);
+
+void godot_go_call_object_destroy(GDExtensionInterfaceObjectDestroy fn, GDExtensionObjectPtr p_o);
+
+GDExtensionObjectPtr godot_go_call_global_get_singleton(GDExtensionInterfaceGlobalGetSingleton fn,
+                                                         GDExtensionConstStringNamePtr p_name);
+
 /* Field accessors for GDExtensionGodotVersion2.
  * Avoids cgo's keyword-renaming around the `string` field. */
 const char *godot_go_version2_status(const GDExtensionGodotVersion2 *v);

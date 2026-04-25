@@ -13,9 +13,12 @@
 //   - String("4294967303").ToInt() → 1<<32 + 7 stresses the int return
 //     path the same way
 //   - Array.Append three Variants → Size() must agree (Variant arg path)
+//   - Engine.Singleton().GetVersionInfo()["major"] must equal 4 (engine-class
+//     ABI: classdb singleton lookup + method bind + Dictionary return)
 package main
 
 import (
+	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/internal/gdextension"
 	"github.com/legendary-code/godot-go/internal/runtime"
 	"github.com/legendary-code/godot-go/variant"
@@ -101,6 +104,26 @@ func runSmokeChecks() {
 	}
 	gotSize := arr.Size()
 	check("Array.Append x3 → Size()", gotSize == 3, gotSize, int64(3))
+
+	// Engine-class ABI proof: Engine singleton → get_version_info →
+	// Dictionary["major"]. Touches classdb_construct/global_get_singleton,
+	// classdb_get_method_bind, object_method_bind_ptrcall, and the
+	// Variant<->int converter all in one call chain.
+	eng := core.EngineSingleton()
+	if eng == nil || eng.IsNil() {
+		check("Engine singleton resolved", false, eng, "non-nil")
+	} else {
+		info := eng.GetVersionInfo()
+		defer info.Destroy()
+		key := variant.NewVariantString("major")
+		defer key.Destroy()
+		def := variant.NewVariantInt(-1)
+		defer def.Destroy()
+		got := info.Get(key, def)
+		defer got.Destroy()
+		major := got.AsInt()
+		check("Engine.GetVersionInfo()[\"major\"]", major == 4, major, int64(4))
+	}
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)

@@ -63,6 +63,13 @@ var iface struct {
 	stringNewWithUtf8CharsAndLen2     C.GDExtensionInterfaceStringNewWithUtf8CharsAndLen2
 	stringToUtf8Chars                 C.GDExtensionInterfaceStringToUtf8Chars
 	stringNameNewWithUtf8CharsAndLen  C.GDExtensionInterfaceStringNameNewWithUtf8CharsAndLen
+
+	classdbConstructObject2  C.GDExtensionInterfaceClassdbConstructObject2
+	classdbGetMethodBind     C.GDExtensionInterfaceClassdbGetMethodBind
+	objectMethodBindPtrcall  C.GDExtensionInterfaceObjectMethodBindPtrcall
+	objectMethodBindCall     C.GDExtensionInterfaceObjectMethodBindCall
+	objectDestroy            C.GDExtensionInterfaceObjectDestroy
+	globalGetSingleton       C.GDExtensionInterfaceGlobalGetSingleton
 }
 
 // Library returns the GDExtensionClassLibraryPtr the host handed us. Required
@@ -102,6 +109,13 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.stringNewWithUtf8CharsAndLen2 = (C.GDExtensionInterfaceStringNewWithUtf8CharsAndLen2)(unsafe.Pointer(resolveProc("string_new_with_utf8_chars_and_len2")))
 	iface.stringToUtf8Chars = (C.GDExtensionInterfaceStringToUtf8Chars)(unsafe.Pointer(resolveProc("string_to_utf8_chars")))
 	iface.stringNameNewWithUtf8CharsAndLen = (C.GDExtensionInterfaceStringNameNewWithUtf8CharsAndLen)(unsafe.Pointer(resolveProc("string_name_new_with_utf8_chars_and_len")))
+
+	iface.classdbConstructObject2 = (C.GDExtensionInterfaceClassdbConstructObject2)(unsafe.Pointer(resolveProc("classdb_construct_object2")))
+	iface.classdbGetMethodBind = (C.GDExtensionInterfaceClassdbGetMethodBind)(unsafe.Pointer(resolveProc("classdb_get_method_bind")))
+	iface.objectMethodBindPtrcall = (C.GDExtensionInterfaceObjectMethodBindPtrcall)(unsafe.Pointer(resolveProc("object_method_bind_ptrcall")))
+	iface.objectMethodBindCall = (C.GDExtensionInterfaceObjectMethodBindCall)(unsafe.Pointer(resolveProc("object_method_bind_call")))
+	iface.objectDestroy = (C.GDExtensionInterfaceObjectDestroy)(unsafe.Pointer(resolveProc("object_destroy")))
+	iface.globalGetSingleton = (C.GDExtensionInterfaceGlobalGetSingleton)(unsafe.Pointer(resolveProc("global_get_singleton")))
 }
 
 func resolveProc(name string) C.GDExtensionInterfaceFunctionPtr {
