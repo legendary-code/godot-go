@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -43,109 +44,145 @@ func (self *Transform2D) SetOrigin(value Vector2) {
 	*(*Vector2)(unsafe.Pointer(&self[16])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	transform2DFromType                gdextension.VariantFromTypeFunc
-	transform2DToType                  gdextension.VariantToTypeFunc
-	transform2DCtor0                   gdextension.PtrConstructor
-	transform2DCtor1                   gdextension.PtrConstructor
-	transform2DCtor2                   gdextension.PtrConstructor
-	transform2DCtor3                   gdextension.PtrConstructor
-	transform2DCtor4                   gdextension.PtrConstructor
-	transform2DMethodInverse           gdextension.PtrBuiltInMethod
-	transform2DMethodAffineInverse     gdextension.PtrBuiltInMethod
-	transform2DMethodGetRotation       gdextension.PtrBuiltInMethod
-	transform2DMethodGetOrigin         gdextension.PtrBuiltInMethod
-	transform2DMethodGetScale          gdextension.PtrBuiltInMethod
-	transform2DMethodGetSkew           gdextension.PtrBuiltInMethod
-	transform2DMethodOrthonormalized   gdextension.PtrBuiltInMethod
-	transform2DMethodRotated           gdextension.PtrBuiltInMethod
-	transform2DMethodRotatedLocal      gdextension.PtrBuiltInMethod
-	transform2DMethodScaled            gdextension.PtrBuiltInMethod
-	transform2DMethodScaledLocal       gdextension.PtrBuiltInMethod
-	transform2DMethodTranslated        gdextension.PtrBuiltInMethod
-	transform2DMethodTranslatedLocal   gdextension.PtrBuiltInMethod
-	transform2DMethodDeterminant       gdextension.PtrBuiltInMethod
-	transform2DMethodBasisXform        gdextension.PtrBuiltInMethod
-	transform2DMethodBasisXformInv     gdextension.PtrBuiltInMethod
-	transform2DMethodInterpolateWith   gdextension.PtrBuiltInMethod
-	transform2DMethodIsConformal       gdextension.PtrBuiltInMethod
-	transform2DMethodIsEqualApprox     gdextension.PtrBuiltInMethod
-	transform2DMethodIsFinite          gdextension.PtrBuiltInMethod
-	transform2DMethodLookingAt         gdextension.PtrBuiltInMethod
-	transform2DOpNot                   gdextension.PtrOperatorEvaluator
-	transform2DOpMulInt                gdextension.PtrOperatorEvaluator
-	transform2DOpDivInt                gdextension.PtrOperatorEvaluator
-	transform2DOpMulFloat              gdextension.PtrOperatorEvaluator
-	transform2DOpDivFloat              gdextension.PtrOperatorEvaluator
-	transform2DOpMulVector2            gdextension.PtrOperatorEvaluator
-	transform2DOpMulRect2              gdextension.PtrOperatorEvaluator
-	transform2DOpEq                    gdextension.PtrOperatorEvaluator
-	transform2DOpNe                    gdextension.PtrOperatorEvaluator
-	transform2DOpMul                   gdextension.PtrOperatorEvaluator
-	transform2DOpInDictionary          gdextension.PtrOperatorEvaluator
-	transform2DOpInArray               gdextension.PtrOperatorEvaluator
-	transform2DOpMulPackedVector2Array gdextension.PtrOperatorEvaluator
-	transform2DIndexedGetter           gdextension.PtrIndexedGetter
-	transform2DIndexedSetter           gdextension.PtrIndexedSetter
+	transform2DFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeTransform2D)
+	})
+	transform2DToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeTransform2D)
+	})
+	transform2DCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 0)
+	})
+	transform2DCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 1)
+	})
+	transform2DCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 2)
+	})
+	transform2DCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 3)
+	})
+	transform2DCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 4)
+	})
+	transform2DMethodInverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("inverse"), 1420440541)
+	})
+	transform2DMethodAffineInverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("affine_inverse"), 1420440541)
+	})
+	transform2DMethodGetRotation = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_rotation"), 466405837)
+	})
+	transform2DMethodGetOrigin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_origin"), 2428350749)
+	})
+	transform2DMethodGetScale = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_scale"), 2428350749)
+	})
+	transform2DMethodGetSkew = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_skew"), 466405837)
+	})
+	transform2DMethodOrthonormalized = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("orthonormalized"), 1420440541)
+	})
+	transform2DMethodRotated = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("rotated"), 729597514)
+	})
+	transform2DMethodRotatedLocal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("rotated_local"), 729597514)
+	})
+	transform2DMethodScaled = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("scaled"), 1446323263)
+	})
+	transform2DMethodScaledLocal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("scaled_local"), 1446323263)
+	})
+	transform2DMethodTranslated = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("translated"), 1446323263)
+	})
+	transform2DMethodTranslatedLocal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("translated_local"), 1446323263)
+	})
+	transform2DMethodDeterminant = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("determinant"), 466405837)
+	})
+	transform2DMethodBasisXform = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("basis_xform"), 2026743667)
+	})
+	transform2DMethodBasisXformInv = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("basis_xform_inv"), 2026743667)
+	})
+	transform2DMethodInterpolateWith = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("interpolate_with"), 359399686)
+	})
+	transform2DMethodIsConformal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_conformal"), 3918633141)
+	})
+	transform2DMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_equal_approx"), 3837431929)
+	})
+	transform2DMethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_finite"), 3918633141)
+	})
+	transform2DMethodLookingAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("looking_at"), 1446323263)
+	})
+	transform2DOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeTransform2D, gdextension.VariantTypeNil)
+	})
+	transform2DOpMulInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeInt)
+	})
+	transform2DOpDivInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeTransform2D, gdextension.VariantTypeInt)
+	})
+	transform2DOpMulFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeFloat)
+	})
+	transform2DOpDivFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeTransform2D, gdextension.VariantTypeFloat)
+	})
+	transform2DOpMulVector2 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeVector2)
+	})
+	transform2DOpMulRect2 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeRect2)
+	})
+	transform2DOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
+	})
+	transform2DOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
+	})
+	transform2DOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
+	})
+	transform2DOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeTransform2D, gdextension.VariantTypeDictionary)
+	})
+	transform2DOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeTransform2D, gdextension.VariantTypeArray)
+	})
+	transform2DOpMulPackedVector2Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypePackedVector2Array)
+	})
+	transform2DIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeTransform2D)
+	})
+	transform2DIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeTransform2D)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initTransform2D)
-}
-
-func initTransform2D() {
-	transform2DFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeTransform2D)
-	transform2DToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeTransform2D)
-	transform2DCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 0)
-	transform2DCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 1)
-	transform2DCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 2)
-	transform2DCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 3)
-	transform2DCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeTransform2D, 4)
-	transform2DMethodInverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("inverse"), 1420440541)
-	transform2DMethodAffineInverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("affine_inverse"), 1420440541)
-	transform2DMethodGetRotation = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_rotation"), 466405837)
-	transform2DMethodGetOrigin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_origin"), 2428350749)
-	transform2DMethodGetScale = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_scale"), 2428350749)
-	transform2DMethodGetSkew = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("get_skew"), 466405837)
-	transform2DMethodOrthonormalized = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("orthonormalized"), 1420440541)
-	transform2DMethodRotated = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("rotated"), 729597514)
-	transform2DMethodRotatedLocal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("rotated_local"), 729597514)
-	transform2DMethodScaled = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("scaled"), 1446323263)
-	transform2DMethodScaledLocal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("scaled_local"), 1446323263)
-	transform2DMethodTranslated = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("translated"), 1446323263)
-	transform2DMethodTranslatedLocal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("translated_local"), 1446323263)
-	transform2DMethodDeterminant = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("determinant"), 466405837)
-	transform2DMethodBasisXform = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("basis_xform"), 2026743667)
-	transform2DMethodBasisXformInv = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("basis_xform_inv"), 2026743667)
-	transform2DMethodInterpolateWith = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("interpolate_with"), 359399686)
-	transform2DMethodIsConformal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_conformal"), 3918633141)
-	transform2DMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_equal_approx"), 3837431929)
-	transform2DMethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("is_finite"), 3918633141)
-	transform2DMethodLookingAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeTransform2D, internStringName("looking_at"), 1446323263)
-	transform2DOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeTransform2D, gdextension.VariantTypeNil)
-	transform2DOpMulInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeInt)
-	transform2DOpDivInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeTransform2D, gdextension.VariantTypeInt)
-	transform2DOpMulFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeFloat)
-	transform2DOpDivFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeTransform2D, gdextension.VariantTypeFloat)
-	transform2DOpMulVector2 = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeVector2)
-	transform2DOpMulRect2 = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeRect2)
-	transform2DOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
-	transform2DOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
-	transform2DOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypeTransform2D)
-	transform2DOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeTransform2D, gdextension.VariantTypeDictionary)
-	transform2DOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeTransform2D, gdextension.VariantTypeArray)
-	transform2DOpMulPackedVector2Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeTransform2D, gdextension.VariantTypePackedVector2Array)
-	transform2DIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeTransform2D)
-	transform2DIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeTransform2D)
-
-}
 
 // NewTransform2D constructs a Transform2D via the host (constructor index 0).
 func NewTransform2D() Transform2D {
 	var v Transform2D
-	gdextension.CallPtrConstructor(transform2DCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(transform2DCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -155,7 +192,7 @@ func NewTransform2DFromTransform2D(from Transform2D) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(transform2DCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(transform2DCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -168,7 +205,7 @@ func NewTransform2DRotationPosition(rotation float32, position Vector2) Transfor
 		gdextension.TypePtr(unsafe.Pointer(&tmp_rotation)),
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
-	gdextension.CallPtrConstructor(transform2DCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(transform2DCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -185,7 +222,7 @@ func NewTransform2DRotationScaleSkewPosition(rotation float32, scale Vector2, sk
 		gdextension.TypePtr(unsafe.Pointer(&tmp_skew)),
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
-	gdextension.CallPtrConstructor(transform2DCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(transform2DCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -197,56 +234,56 @@ func NewTransform2DXAxisYAxisOrigin(x_axis Vector2, y_axis Vector2, origin Vecto
 		gdextension.TypePtr(unsafe.Pointer(&y_axis)),
 		gdextension.TypePtr(unsafe.Pointer(&origin)),
 	}
-	gdextension.CallPtrConstructor(transform2DCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(transform2DCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Inverse mirrors the Godot Transform2D.inverse method.
 func (self *Transform2D) Inverse() Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrBuiltinMethod(transform2DMethodInverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodInverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // AffineInverse mirrors the Godot Transform2D.affine_inverse method.
 func (self *Transform2D) AffineInverse() Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrBuiltinMethod(transform2DMethodAffineInverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodAffineInverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetRotation mirrors the Godot Transform2D.get_rotation method.
 func (self *Transform2D) GetRotation() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetRotation, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetRotation(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetOrigin mirrors the Godot Transform2D.get_origin method.
 func (self *Transform2D) GetOrigin() Vector2 {
 	var ret Vector2
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetOrigin, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetOrigin(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetScale mirrors the Godot Transform2D.get_scale method.
 func (self *Transform2D) GetScale() Vector2 {
 	var ret Vector2
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetScale, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetScale(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetSkew mirrors the Godot Transform2D.get_skew method.
 func (self *Transform2D) GetSkew() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(transform2DMethodGetSkew, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodGetSkew(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // Orthonormalized mirrors the Godot Transform2D.orthonormalized method.
 func (self *Transform2D) Orthonormalized() Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrBuiltinMethod(transform2DMethodOrthonormalized, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodOrthonormalized(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -258,7 +295,7 @@ func (self *Transform2D) Rotated(angle float32) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodRotated(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -270,7 +307,7 @@ func (self *Transform2D) RotatedLocal(angle float32) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodRotatedLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodRotatedLocal(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -280,7 +317,7 @@ func (self *Transform2D) Scaled(scale Vector2) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodScaled, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodScaled(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -290,7 +327,7 @@ func (self *Transform2D) ScaledLocal(scale Vector2) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodScaledLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodScaledLocal(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -300,7 +337,7 @@ func (self *Transform2D) Translated(offset Vector2) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodTranslated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodTranslated(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -310,14 +347,14 @@ func (self *Transform2D) TranslatedLocal(offset Vector2) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodTranslatedLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodTranslatedLocal(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Determinant mirrors the Godot Transform2D.determinant method.
 func (self *Transform2D) Determinant() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(transform2DMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodDeterminant(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -327,7 +364,7 @@ func (self *Transform2D) BasisXform(v Vector2) Vector2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodBasisXform, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodBasisXform(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -337,7 +374,7 @@ func (self *Transform2D) BasisXformInv(v Vector2) Vector2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodBasisXformInv, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodBasisXformInv(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -350,14 +387,14 @@ func (self *Transform2D) InterpolateWith(xform Transform2D, weight float32) Tran
 		gdextension.TypePtr(unsafe.Pointer(&xform)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodInterpolateWith, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodInterpolateWith(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsConformal mirrors the Godot Transform2D.is_conformal method.
 func (self *Transform2D) IsConformal() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(transform2DMethodIsConformal, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodIsConformal(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -367,14 +404,14 @@ func (self *Transform2D) IsEqualApprox(xform Transform2D) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&xform)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot Transform2D.is_finite method.
 func (self *Transform2D) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(transform2DMethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -384,118 +421,118 @@ func (self *Transform2D) LookingAt(target Vector2) Transform2D {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&target)),
 	}
-	gdextension.CallPtrBuiltinMethod(transform2DMethodLookingAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(transform2DMethodLookingAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Transform2D not operator.
 func (self *Transform2D) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(transform2DOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulInt mirrors the Godot Transform2D * operator.
 func (self *Transform2D) MulInt(rhs int64) Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMulInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMulInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivInt mirrors the Godot Transform2D / operator.
 func (self *Transform2D) DivInt(rhs int64) Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrOperatorEvaluator(transform2DOpDivInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpDivInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulFloat mirrors the Godot Transform2D * operator.
 func (self *Transform2D) MulFloat(rhs float32) Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMulFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMulFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivFloat mirrors the Godot Transform2D / operator.
 func (self *Transform2D) DivFloat(rhs float32) Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrOperatorEvaluator(transform2DOpDivFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpDivFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulVector2 mirrors the Godot Transform2D * operator.
 func (self *Transform2D) MulVector2(rhs Vector2) Vector2 {
 	var ret Vector2
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMulVector2, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMulVector2(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulRect2 mirrors the Godot Transform2D * operator.
 func (self *Transform2D) MulRect2(rhs Rect2) Rect2 {
 	var ret Rect2
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMulRect2, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMulRect2(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Transform2D == operator.
 func (self *Transform2D) Eq(rhs Transform2D) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(transform2DOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Transform2D != operator.
 func (self *Transform2D) Ne(rhs Transform2D) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(transform2DOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Transform2D * operator.
 func (self *Transform2D) Mul(rhs Transform2D) Transform2D {
 	var ret Transform2D
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Transform2D in operator.
 func (self *Transform2D) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(transform2DOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Transform2D in operator.
 func (self *Transform2D) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(transform2DOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulPackedVector2Array mirrors the Godot Transform2D * operator.
 func (self *Transform2D) MulPackedVector2Array(rhs PackedVector2Array) PackedVector2Array {
 	var ret PackedVector2Array
-	gdextension.CallPtrOperatorEvaluator(transform2DOpMulPackedVector2Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(transform2DOpMulPackedVector2Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Transform2D) Index(index int64) Vector2 {
 	var ret Vector2
-	gdextension.CallPtrIndexedGetter(transform2DIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(transform2DIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Transform2D) SetIndex(index int64, value Vector2) {
-	gdextension.CallPtrIndexedSetter(transform2DIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(transform2DIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Transform2D) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(transform2DFromType,
+	gdextension.CallVariantFromType(transform2DFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -505,7 +542,7 @@ func (self *Transform2D) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func Transform2DFromVariant(src *Variant) Transform2D {
 	var v Transform2D
-	gdextension.CallTypeFromVariant(transform2DToType,
+	gdextension.CallTypeFromVariant(transform2DToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

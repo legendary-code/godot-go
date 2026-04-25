@@ -31,9 +31,9 @@ func internStringName(s string) gdextension.StringNamePtr {
 //   stringCtor3    — String <- NodePath
 //   nodepathCtor2  — NodePath <- String
 //
-// Init-callback ordering: every generated initX runs at InitLevelCore before
-// any user code does, so the helpers below are always called against
-// already-populated pointers.
+// Each is now a sync.OnceValue resolved on first call rather than registered
+// against an init-level callback. The generated code below invokes them as
+// `<name>()` — this file does the same.
 
 // stringFromGo fills the uninitialized String slot dst with the contents of
 // s, encoded as UTF-8. Caller must call stringDestroy(dst) once dst is no
@@ -50,7 +50,7 @@ func stringToGo(self *String) string {
 
 // stringDestroy runs String's destructor on self.
 func stringDestroy(self *String) {
-	gdextension.CallPtrDestructor(stringDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(stringDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // stringNameFromGo fills the uninitialized StringName slot dst from a Go
@@ -66,14 +66,14 @@ func stringNameFromGo(dst *StringName, s string) {
 func stringNameToGo(self *StringName) string {
 	var tmp String
 	args := [...]gdextension.TypePtr{gdextension.TypePtr(unsafe.Pointer(self))}
-	gdextension.CallPtrConstructor(stringCtor2, gdextension.TypePtr(unsafe.Pointer(&tmp)), args[:])
+	gdextension.CallPtrConstructor(stringCtor2(), gdextension.TypePtr(unsafe.Pointer(&tmp)), args[:])
 	defer stringDestroy(&tmp)
 	return stringToGo(&tmp)
 }
 
 // stringNameDestroy runs StringName's destructor on self.
 func stringNameDestroy(self *StringName) {
-	gdextension.CallPtrDestructor(stringNameDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(stringNameDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // nodePathFromGo fills the uninitialized NodePath slot dst from a Go string.
@@ -83,7 +83,7 @@ func nodePathFromGo(dst *NodePath, s string) {
 	stringFromGo(&tmp, s)
 	defer stringDestroy(&tmp)
 	args := [...]gdextension.TypePtr{gdextension.TypePtr(unsafe.Pointer(&tmp))}
-	gdextension.CallPtrConstructor(nodePathCtor2, gdextension.TypePtr(unsafe.Pointer(dst)), args[:])
+	gdextension.CallPtrConstructor(nodePathCtor2(), gdextension.TypePtr(unsafe.Pointer(dst)), args[:])
 }
 
 // nodePathToGo extracts a NodePath as a Go string by routing through a
@@ -91,14 +91,14 @@ func nodePathFromGo(dst *NodePath, s string) {
 func nodePathToGo(self *NodePath) string {
 	var tmp String
 	args := [...]gdextension.TypePtr{gdextension.TypePtr(unsafe.Pointer(self))}
-	gdextension.CallPtrConstructor(stringCtor3, gdextension.TypePtr(unsafe.Pointer(&tmp)), args[:])
+	gdextension.CallPtrConstructor(stringCtor3(), gdextension.TypePtr(unsafe.Pointer(&tmp)), args[:])
 	defer stringDestroy(&tmp)
 	return stringToGo(&tmp)
 }
 
 // nodePathDestroy runs NodePath's destructor on self.
 func nodePathDestroy(self *NodePath) {
-	gdextension.CallPtrDestructor(nodePathDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(nodePathDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // Public boundary helpers used by codegen in sibling packages (core/, editor/)

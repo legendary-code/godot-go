@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -33,81 +34,103 @@ func (self *Rect2) SetSize(value Vector2) {
 	*(*Vector2)(unsafe.Pointer(&self[8])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	rect2FromType             gdextension.VariantFromTypeFunc
-	rect2ToType               gdextension.VariantToTypeFunc
-	rect2Ctor0                gdextension.PtrConstructor
-	rect2Ctor1                gdextension.PtrConstructor
-	rect2Ctor2                gdextension.PtrConstructor
-	rect2Ctor3                gdextension.PtrConstructor
-	rect2Ctor4                gdextension.PtrConstructor
-	rect2MethodGetCenter      gdextension.PtrBuiltInMethod
-	rect2MethodGetArea        gdextension.PtrBuiltInMethod
-	rect2MethodHasArea        gdextension.PtrBuiltInMethod
-	rect2MethodHasPoint       gdextension.PtrBuiltInMethod
-	rect2MethodIsEqualApprox  gdextension.PtrBuiltInMethod
-	rect2MethodIsFinite       gdextension.PtrBuiltInMethod
-	rect2MethodIntersects     gdextension.PtrBuiltInMethod
-	rect2MethodEncloses       gdextension.PtrBuiltInMethod
-	rect2MethodIntersection   gdextension.PtrBuiltInMethod
-	rect2MethodMerge          gdextension.PtrBuiltInMethod
-	rect2MethodExpand         gdextension.PtrBuiltInMethod
-	rect2MethodGetSupport     gdextension.PtrBuiltInMethod
-	rect2MethodGrow           gdextension.PtrBuiltInMethod
-	rect2MethodGrowSide       gdextension.PtrBuiltInMethod
-	rect2MethodGrowIndividual gdextension.PtrBuiltInMethod
-	rect2MethodAbs            gdextension.PtrBuiltInMethod
-	rect2OpNot                gdextension.PtrOperatorEvaluator
-	rect2OpEq                 gdextension.PtrOperatorEvaluator
-	rect2OpNe                 gdextension.PtrOperatorEvaluator
-	rect2OpMulTransform2D     gdextension.PtrOperatorEvaluator
-	rect2OpInDictionary       gdextension.PtrOperatorEvaluator
-	rect2OpInArray            gdextension.PtrOperatorEvaluator
+	rect2FromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeRect2)
+	})
+	rect2ToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeRect2)
+	})
+	rect2Ctor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 0)
+	})
+	rect2Ctor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 1)
+	})
+	rect2Ctor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 2)
+	})
+	rect2Ctor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 3)
+	})
+	rect2Ctor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 4)
+	})
+	rect2MethodGetCenter = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_center"), 2428350749)
+	})
+	rect2MethodGetArea = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_area"), 466405837)
+	})
+	rect2MethodHasArea = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("has_area"), 3918633141)
+	})
+	rect2MethodHasPoint = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("has_point"), 3190634762)
+	})
+	rect2MethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("is_equal_approx"), 1908192260)
+	})
+	rect2MethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("is_finite"), 3918633141)
+	})
+	rect2MethodIntersects = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("intersects"), 819294880)
+	})
+	rect2MethodEncloses = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("encloses"), 1908192260)
+	})
+	rect2MethodIntersection = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("intersection"), 2282977743)
+	})
+	rect2MethodMerge = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("merge"), 2282977743)
+	})
+	rect2MethodExpand = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("expand"), 293272265)
+	})
+	rect2MethodGetSupport = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_support"), 2026743667)
+	})
+	rect2MethodGrow = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow"), 39664498)
+	})
+	rect2MethodGrowSide = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow_side"), 4177736158)
+	})
+	rect2MethodGrowIndividual = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow_individual"), 3203390369)
+	})
+	rect2MethodAbs = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("abs"), 3107653634)
+	})
+	rect2OpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeRect2, gdextension.VariantTypeNil)
+	})
+	rect2OpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeRect2, gdextension.VariantTypeRect2)
+	})
+	rect2OpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeRect2, gdextension.VariantTypeRect2)
+	})
+	rect2OpMulTransform2D = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeRect2, gdextension.VariantTypeTransform2D)
+	})
+	rect2OpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeRect2, gdextension.VariantTypeDictionary)
+	})
+	rect2OpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeRect2, gdextension.VariantTypeArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initRect2)
-}
-
-func initRect2() {
-	rect2FromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeRect2)
-	rect2ToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeRect2)
-	rect2Ctor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 0)
-	rect2Ctor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 1)
-	rect2Ctor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 2)
-	rect2Ctor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 3)
-	rect2Ctor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeRect2, 4)
-	rect2MethodGetCenter = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_center"), 2428350749)
-	rect2MethodGetArea = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_area"), 466405837)
-	rect2MethodHasArea = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("has_area"), 3918633141)
-	rect2MethodHasPoint = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("has_point"), 3190634762)
-	rect2MethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("is_equal_approx"), 1908192260)
-	rect2MethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("is_finite"), 3918633141)
-	rect2MethodIntersects = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("intersects"), 819294880)
-	rect2MethodEncloses = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("encloses"), 1908192260)
-	rect2MethodIntersection = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("intersection"), 2282977743)
-	rect2MethodMerge = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("merge"), 2282977743)
-	rect2MethodExpand = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("expand"), 293272265)
-	rect2MethodGetSupport = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("get_support"), 2026743667)
-	rect2MethodGrow = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow"), 39664498)
-	rect2MethodGrowSide = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow_side"), 4177736158)
-	rect2MethodGrowIndividual = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("grow_individual"), 3203390369)
-	rect2MethodAbs = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeRect2, internStringName("abs"), 3107653634)
-	rect2OpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeRect2, gdextension.VariantTypeNil)
-	rect2OpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeRect2, gdextension.VariantTypeRect2)
-	rect2OpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeRect2, gdextension.VariantTypeRect2)
-	rect2OpMulTransform2D = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeRect2, gdextension.VariantTypeTransform2D)
-	rect2OpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeRect2, gdextension.VariantTypeDictionary)
-	rect2OpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeRect2, gdextension.VariantTypeArray)
-
-}
 
 // NewRect2 constructs a Rect2 via the host (constructor index 0).
 func NewRect2() Rect2 {
 	var v Rect2
-	gdextension.CallPtrConstructor(rect2Ctor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(rect2Ctor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -117,7 +140,7 @@ func NewRect2FromRect2(from Rect2) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(rect2Ctor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(rect2Ctor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -127,7 +150,7 @@ func NewRect2FromRect2i(from Rect2i) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(rect2Ctor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(rect2Ctor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -138,7 +161,7 @@ func NewRect2PositionSize(position Vector2, size Vector2) Rect2 {
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 		gdextension.TypePtr(unsafe.Pointer(&size)),
 	}
-	gdextension.CallPtrConstructor(rect2Ctor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(rect2Ctor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -159,28 +182,28 @@ func NewRect2XYWidthHeight(x float32, y float32, width float32, height float32) 
 		gdextension.TypePtr(unsafe.Pointer(&tmp_width)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_height)),
 	}
-	gdextension.CallPtrConstructor(rect2Ctor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(rect2Ctor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // GetCenter mirrors the Godot Rect2.get_center method.
 func (self *Rect2) GetCenter() Vector2 {
 	var ret Vector2
-	gdextension.CallPtrBuiltinMethod(rect2MethodGetCenter, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGetCenter(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetArea mirrors the Godot Rect2.get_area method.
 func (self *Rect2) GetArea() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(rect2MethodGetArea, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGetArea(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // HasArea mirrors the Godot Rect2.has_area method.
 func (self *Rect2) HasArea() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(rect2MethodHasArea, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodHasArea(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -190,7 +213,7 @@ func (self *Rect2) HasPoint(point Vector2) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodHasPoint, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodHasPoint(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -200,14 +223,14 @@ func (self *Rect2) IsEqualApprox(rect Rect2) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&rect)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot Rect2.is_finite method.
 func (self *Rect2) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(rect2MethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -218,7 +241,7 @@ func (self *Rect2) Intersects(b Rect2, include_borders bool) bool {
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&include_borders)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodIntersects, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodIntersects(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -228,7 +251,7 @@ func (self *Rect2) Encloses(b Rect2) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodEncloses, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodEncloses(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -238,7 +261,7 @@ func (self *Rect2) Intersection(b Rect2) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodIntersection, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodIntersection(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -248,7 +271,7 @@ func (self *Rect2) Merge(b Rect2) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodMerge, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodMerge(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -258,7 +281,7 @@ func (self *Rect2) Expand(to Vector2) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodExpand, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodExpand(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -268,7 +291,7 @@ func (self *Rect2) GetSupport(direction Vector2) Vector2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&direction)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodGetSupport, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGetSupport(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -280,7 +303,7 @@ func (self *Rect2) Grow(amount float32) Rect2 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodGrow, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGrow(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -293,7 +316,7 @@ func (self *Rect2) GrowSide(side int64, amount float32) Rect2 {
 		gdextension.TypePtr(unsafe.Pointer(&side)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodGrowSide, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGrowSide(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -314,56 +337,56 @@ func (self *Rect2) GrowIndividual(left float32, top float32, right float32, bott
 		gdextension.TypePtr(unsafe.Pointer(&tmp_right)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_bottom)),
 	}
-	gdextension.CallPtrBuiltinMethod(rect2MethodGrowIndividual, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodGrowIndividual(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Abs mirrors the Godot Rect2.abs method.
 func (self *Rect2) Abs() Rect2 {
 	var ret Rect2
-	gdextension.CallPtrBuiltinMethod(rect2MethodAbs, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(rect2MethodAbs(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Rect2 not operator.
 func (self *Rect2) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(rect2OpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Rect2 == operator.
 func (self *Rect2) Eq(rhs Rect2) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(rect2OpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Rect2 != operator.
 func (self *Rect2) Ne(rhs Rect2) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(rect2OpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulTransform2D mirrors the Godot Rect2 * operator.
 func (self *Rect2) MulTransform2D(rhs Transform2D) Rect2 {
 	var ret Rect2
-	gdextension.CallPtrOperatorEvaluator(rect2OpMulTransform2D, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpMulTransform2D(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Rect2 in operator.
 func (self *Rect2) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(rect2OpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Rect2 in operator.
 func (self *Rect2) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(rect2OpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(rect2OpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -371,7 +394,7 @@ func (self *Rect2) InArray(rhs Array) bool {
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Rect2) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(rect2FromType,
+	gdextension.CallVariantFromType(rect2FromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -381,7 +404,7 @@ func (self *Rect2) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func Rect2FromVariant(src *Variant) Rect2 {
 	var v Rect2
-	gdextension.CallTypeFromVariant(rect2ToType,
+	gdextension.CallTypeFromVariant(rect2ToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

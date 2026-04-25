@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,97 +14,127 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type PackedColorArray [16]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	packedColorArrayFromType          gdextension.VariantFromTypeFunc
-	packedColorArrayToType            gdextension.VariantToTypeFunc
-	packedColorArrayDtor              gdextension.PtrDestructor
-	packedColorArrayCtor0             gdextension.PtrConstructor
-	packedColorArrayCtor1             gdextension.PtrConstructor
-	packedColorArrayCtor2             gdextension.PtrConstructor
-	packedColorArrayMethodGet         gdextension.PtrBuiltInMethod
-	packedColorArrayMethodSet         gdextension.PtrBuiltInMethod
-	packedColorArrayMethodSize        gdextension.PtrBuiltInMethod
-	packedColorArrayMethodIsEmpty     gdextension.PtrBuiltInMethod
-	packedColorArrayMethodPushBack    gdextension.PtrBuiltInMethod
-	packedColorArrayMethodAppend      gdextension.PtrBuiltInMethod
-	packedColorArrayMethodAppendArray gdextension.PtrBuiltInMethod
-	packedColorArrayMethodRemoveAt    gdextension.PtrBuiltInMethod
-	packedColorArrayMethodInsert      gdextension.PtrBuiltInMethod
-	packedColorArrayMethodFill        gdextension.PtrBuiltInMethod
-	packedColorArrayMethodResize      gdextension.PtrBuiltInMethod
-	packedColorArrayMethodClear       gdextension.PtrBuiltInMethod
-	packedColorArrayMethodHas         gdextension.PtrBuiltInMethod
-	packedColorArrayMethodReverse     gdextension.PtrBuiltInMethod
-	packedColorArrayMethodSlice       gdextension.PtrBuiltInMethod
-	packedColorArrayMethodToByteArray gdextension.PtrBuiltInMethod
-	packedColorArrayMethodSort        gdextension.PtrBuiltInMethod
-	packedColorArrayMethodBsearch     gdextension.PtrBuiltInMethod
-	packedColorArrayMethodDuplicate   gdextension.PtrBuiltInMethod
-	packedColorArrayMethodFind        gdextension.PtrBuiltInMethod
-	packedColorArrayMethodRfind       gdextension.PtrBuiltInMethod
-	packedColorArrayMethodCount       gdextension.PtrBuiltInMethod
-	packedColorArrayMethodErase       gdextension.PtrBuiltInMethod
-	packedColorArrayOpNot             gdextension.PtrOperatorEvaluator
-	packedColorArrayOpInDictionary    gdextension.PtrOperatorEvaluator
-	packedColorArrayOpInArray         gdextension.PtrOperatorEvaluator
-	packedColorArrayOpEq              gdextension.PtrOperatorEvaluator
-	packedColorArrayOpNe              gdextension.PtrOperatorEvaluator
-	packedColorArrayOpAdd             gdextension.PtrOperatorEvaluator
-	packedColorArrayIndexedGetter     gdextension.PtrIndexedGetter
-	packedColorArrayIndexedSetter     gdextension.PtrIndexedSetter
+	packedColorArrayFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 0)
+	})
+	packedColorArrayCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 1)
+	})
+	packedColorArrayCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 2)
+	})
+	packedColorArrayMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("get"), 2972831132)
+	})
+	packedColorArrayMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("set"), 1444096570)
+	})
+	packedColorArrayMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("size"), 3173160232)
+	})
+	packedColorArrayMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("is_empty"), 3918633141)
+	})
+	packedColorArrayMethodPushBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("push_back"), 1007858200)
+	})
+	packedColorArrayMethodAppend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("append"), 1007858200)
+	})
+	packedColorArrayMethodAppendArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("append_array"), 798822497)
+	})
+	packedColorArrayMethodRemoveAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("remove_at"), 2823966027)
+	})
+	packedColorArrayMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("insert"), 785289703)
+	})
+	packedColorArrayMethodFill = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("fill"), 3730314301)
+	})
+	packedColorArrayMethodResize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("resize"), 848867239)
+	})
+	packedColorArrayMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("clear"), 3218959716)
+	})
+	packedColorArrayMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("has"), 3167426256)
+	})
+	packedColorArrayMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("reverse"), 3218959716)
+	})
+	packedColorArrayMethodSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("slice"), 2451797139)
+	})
+	packedColorArrayMethodToByteArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("to_byte_array"), 247621236)
+	})
+	packedColorArrayMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("sort"), 3218959716)
+	})
+	packedColorArrayMethodBsearch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("bsearch"), 2639732838)
+	})
+	packedColorArrayMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("duplicate"), 3072026941)
+	})
+	packedColorArrayMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("find"), 3156095363)
+	})
+	packedColorArrayMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("rfind"), 3156095363)
+	})
+	packedColorArrayMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("count"), 1682108616)
+	})
+	packedColorArrayMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("erase"), 1007858200)
+	})
+	packedColorArrayOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeNil)
+	})
+	packedColorArrayOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeDictionary)
+	})
+	packedColorArrayOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeArray)
+	})
+	packedColorArrayOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedColorArray)
+	})
+	packedColorArrayIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedColorArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initPackedColorArray)
-}
-
-func initPackedColorArray() {
-	packedColorArrayFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedColorArray)
-	packedColorArrayToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedColorArray)
-	packedColorArrayDtor = gdextension.GetPtrDestructor(gdextension.VariantTypePackedColorArray)
-	packedColorArrayCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 0)
-	packedColorArrayCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 1)
-	packedColorArrayCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedColorArray, 2)
-	packedColorArrayMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("get"), 2972831132)
-	packedColorArrayMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("set"), 1444096570)
-	packedColorArrayMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("size"), 3173160232)
-	packedColorArrayMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("is_empty"), 3918633141)
-	packedColorArrayMethodPushBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("push_back"), 1007858200)
-	packedColorArrayMethodAppend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("append"), 1007858200)
-	packedColorArrayMethodAppendArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("append_array"), 798822497)
-	packedColorArrayMethodRemoveAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("remove_at"), 2823966027)
-	packedColorArrayMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("insert"), 785289703)
-	packedColorArrayMethodFill = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("fill"), 3730314301)
-	packedColorArrayMethodResize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("resize"), 848867239)
-	packedColorArrayMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("clear"), 3218959716)
-	packedColorArrayMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("has"), 3167426256)
-	packedColorArrayMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("reverse"), 3218959716)
-	packedColorArrayMethodSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("slice"), 2451797139)
-	packedColorArrayMethodToByteArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("to_byte_array"), 247621236)
-	packedColorArrayMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("sort"), 3218959716)
-	packedColorArrayMethodBsearch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("bsearch"), 2639732838)
-	packedColorArrayMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("duplicate"), 3072026941)
-	packedColorArrayMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("find"), 3156095363)
-	packedColorArrayMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("rfind"), 3156095363)
-	packedColorArrayMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("count"), 1682108616)
-	packedColorArrayMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedColorArray, internStringName("erase"), 1007858200)
-	packedColorArrayOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeNil)
-	packedColorArrayOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeDictionary)
-	packedColorArrayOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedColorArray, gdextension.VariantTypeArray)
-	packedColorArrayOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
-	packedColorArrayOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
-	packedColorArrayOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedColorArray, gdextension.VariantTypePackedColorArray)
-	packedColorArrayIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedColorArray)
-	packedColorArrayIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedColorArray)
-
-}
 
 // NewPackedColorArray constructs a PackedColorArray via the host (constructor index 0).
 func NewPackedColorArray() PackedColorArray {
 	var v PackedColorArray
-	gdextension.CallPtrConstructor(packedColorArrayCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(packedColorArrayCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -113,7 +144,7 @@ func NewPackedColorArrayFromPackedColorArray(from PackedColorArray) PackedColorA
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedColorArrayCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedColorArrayCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -123,7 +154,7 @@ func NewPackedColorArrayFromArray(from Array) PackedColorArray {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedColorArrayCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedColorArrayCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -133,7 +164,7 @@ func (self *PackedColorArray) Get(index int64) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -143,20 +174,20 @@ func (self *PackedColorArray) Set(index int64, value Color) {
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Size mirrors the Godot PackedColorArray.size method.
 func (self *PackedColorArray) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot PackedColorArray.is_empty method.
 func (self *PackedColorArray) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -166,7 +197,7 @@ func (self *PackedColorArray) PushBack(value Color) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodPushBack(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -176,7 +207,7 @@ func (self *PackedColorArray) Append(value Color) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodAppend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -185,7 +216,7 @@ func (self *PackedColorArray) AppendArray(array PackedColorArray) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodAppendArray, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodAppendArray(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // RemoveAt mirrors the Godot PackedColorArray.remove_at method.
@@ -193,7 +224,7 @@ func (self *PackedColorArray) RemoveAt(index int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodRemoveAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodRemoveAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Insert mirrors the Godot PackedColorArray.insert method.
@@ -203,7 +234,7 @@ func (self *PackedColorArray) Insert(at_index int64, value Color) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&at_index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -212,7 +243,7 @@ func (self *PackedColorArray) Fill(value Color) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodFill(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Resize mirrors the Godot PackedColorArray.resize method.
@@ -221,13 +252,13 @@ func (self *PackedColorArray) Resize(new_size int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&new_size)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodResize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodResize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot PackedColorArray.clear method.
 func (self *PackedColorArray) Clear() {
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Has mirrors the Godot PackedColorArray.has method.
@@ -236,13 +267,13 @@ func (self *PackedColorArray) Has(value Color) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Reverse mirrors the Godot PackedColorArray.reverse method.
 func (self *PackedColorArray) Reverse() {
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Slice mirrors the Godot PackedColorArray.slice method.
@@ -252,20 +283,20 @@ func (self *PackedColorArray) Slice(begin int64, end int64) PackedColorArray {
 		gdextension.TypePtr(unsafe.Pointer(&begin)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToByteArray mirrors the Godot PackedColorArray.to_byte_array method.
 func (self *PackedColorArray) ToByteArray() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodToByteArray, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodToByteArray(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sort mirrors the Godot PackedColorArray.sort method.
 func (self *PackedColorArray) Sort() {
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Bsearch mirrors the Godot PackedColorArray.bsearch method.
@@ -275,14 +306,14 @@ func (self *PackedColorArray) Bsearch(value Color, before bool) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodBsearch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Duplicate mirrors the Godot PackedColorArray.duplicate method.
 func (self *PackedColorArray) Duplicate() PackedColorArray {
 	var ret PackedColorArray
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -293,7 +324,7 @@ func (self *PackedColorArray) Find(value Color, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -304,7 +335,7 @@ func (self *PackedColorArray) Rfind(value Color, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -314,7 +345,7 @@ func (self *PackedColorArray) Count(value Color) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -324,75 +355,75 @@ func (self *PackedColorArray) Erase(value Color) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedColorArrayMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot PackedColorArray not operator.
 func (self *PackedColorArray) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot PackedColorArray in operator.
 func (self *PackedColorArray) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot PackedColorArray in operator.
 func (self *PackedColorArray) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot PackedColorArray == operator.
 func (self *PackedColorArray) Eq(rhs PackedColorArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot PackedColorArray != operator.
 func (self *PackedColorArray) Ne(rhs PackedColorArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot PackedColorArray + operator.
 func (self *PackedColorArray) Add(rhs PackedColorArray) PackedColorArray {
 	var ret PackedColorArray
-	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedColorArrayOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *PackedColorArray) Index(index int64) Color {
 	var ret Color
-	gdextension.CallPtrIndexedGetter(packedColorArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(packedColorArrayIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *PackedColorArray) SetIndex(index int64, value Color) {
-	gdextension.CallPtrIndexedSetter(packedColorArrayIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(packedColorArrayIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *PackedColorArray) Destroy() {
-	gdextension.CallPtrDestructor(packedColorArrayDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(packedColorArrayDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *PackedColorArray) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(packedColorArrayFromType,
+	gdextension.CallVariantFromType(packedColorArrayFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -402,7 +433,7 @@ func (self *PackedColorArray) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func PackedColorArrayFromVariant(src *Variant) PackedColorArray {
 	var v PackedColorArray
-	gdextension.CallTypeFromVariant(packedColorArrayToType,
+	gdextension.CallTypeFromVariant(packedColorArrayToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

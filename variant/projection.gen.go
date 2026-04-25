@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -53,105 +54,139 @@ func (self *Projection) SetW(value Vector4) {
 	*(*Vector4)(unsafe.Pointer(&self[48])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	projectionFromType                       gdextension.VariantFromTypeFunc
-	projectionToType                         gdextension.VariantToTypeFunc
-	projectionCtor0                          gdextension.PtrConstructor
-	projectionCtor1                          gdextension.PtrConstructor
-	projectionCtor2                          gdextension.PtrConstructor
-	projectionCtor3                          gdextension.PtrConstructor
-	projectionMethodCreateDepthCorrection    gdextension.PtrBuiltInMethod
-	projectionMethodCreateLightAtlasRect     gdextension.PtrBuiltInMethod
-	projectionMethodCreatePerspective        gdextension.PtrBuiltInMethod
-	projectionMethodCreatePerspectiveHmd     gdextension.PtrBuiltInMethod
-	projectionMethodCreateForHmd             gdextension.PtrBuiltInMethod
-	projectionMethodCreateOrthogonal         gdextension.PtrBuiltInMethod
-	projectionMethodCreateOrthogonalAspect   gdextension.PtrBuiltInMethod
-	projectionMethodCreateFrustum            gdextension.PtrBuiltInMethod
-	projectionMethodCreateFrustumAspect      gdextension.PtrBuiltInMethod
-	projectionMethodCreateFitAabb            gdextension.PtrBuiltInMethod
-	projectionMethodDeterminant              gdextension.PtrBuiltInMethod
-	projectionMethodPerspectiveZnearAdjusted gdextension.PtrBuiltInMethod
-	projectionMethodGetProjectionPlane       gdextension.PtrBuiltInMethod
-	projectionMethodFlippedY                 gdextension.PtrBuiltInMethod
-	projectionMethodJitterOffseted           gdextension.PtrBuiltInMethod
-	projectionMethodGetFovy                  gdextension.PtrBuiltInMethod
-	projectionMethodGetZFar                  gdextension.PtrBuiltInMethod
-	projectionMethodGetZNear                 gdextension.PtrBuiltInMethod
-	projectionMethodGetAspect                gdextension.PtrBuiltInMethod
-	projectionMethodGetFov                   gdextension.PtrBuiltInMethod
-	projectionMethodIsOrthogonal             gdextension.PtrBuiltInMethod
-	projectionMethodGetViewportHalfExtents   gdextension.PtrBuiltInMethod
-	projectionMethodGetFarPlaneHalfExtents   gdextension.PtrBuiltInMethod
-	projectionMethodInverse                  gdextension.PtrBuiltInMethod
-	projectionMethodGetPixelsPerMeter        gdextension.PtrBuiltInMethod
-	projectionMethodGetLodMultiplier         gdextension.PtrBuiltInMethod
-	projectionOpNot                          gdextension.PtrOperatorEvaluator
-	projectionOpMulVector4                   gdextension.PtrOperatorEvaluator
-	projectionOpEq                           gdextension.PtrOperatorEvaluator
-	projectionOpNe                           gdextension.PtrOperatorEvaluator
-	projectionOpMul                          gdextension.PtrOperatorEvaluator
-	projectionOpInDictionary                 gdextension.PtrOperatorEvaluator
-	projectionOpInArray                      gdextension.PtrOperatorEvaluator
-	projectionIndexedGetter                  gdextension.PtrIndexedGetter
-	projectionIndexedSetter                  gdextension.PtrIndexedSetter
+	projectionFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeProjection)
+	})
+	projectionToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeProjection)
+	})
+	projectionCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 0)
+	})
+	projectionCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 1)
+	})
+	projectionCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 2)
+	})
+	projectionCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 3)
+	})
+	projectionMethodCreateDepthCorrection = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_depth_correction"), 1228516048)
+	})
+	projectionMethodCreateLightAtlasRect = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_light_atlas_rect"), 2654950662)
+	})
+	projectionMethodCreatePerspective = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_perspective"), 390915442)
+	})
+	projectionMethodCreatePerspectiveHmd = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_perspective_hmd"), 2857674800)
+	})
+	projectionMethodCreateForHmd = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_for_hmd"), 4184144994)
+	})
+	projectionMethodCreateOrthogonal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_orthogonal"), 3707929169)
+	})
+	projectionMethodCreateOrthogonalAspect = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_orthogonal_aspect"), 390915442)
+	})
+	projectionMethodCreateFrustum = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_frustum"), 3707929169)
+	})
+	projectionMethodCreateFrustumAspect = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_frustum_aspect"), 1535076251)
+	})
+	projectionMethodCreateFitAabb = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_fit_aabb"), 2264694907)
+	})
+	projectionMethodDeterminant = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("determinant"), 466405837)
+	})
+	projectionMethodPerspectiveZnearAdjusted = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("perspective_znear_adjusted"), 3584785443)
+	})
+	projectionMethodGetProjectionPlane = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_projection_plane"), 1551184160)
+	})
+	projectionMethodFlippedY = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("flipped_y"), 4212530932)
+	})
+	projectionMethodJitterOffseted = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("jitter_offseted"), 2448438599)
+	})
+	projectionMethodGetFovy = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_fovy"), 3514207532)
+	})
+	projectionMethodGetZFar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_z_far"), 466405837)
+	})
+	projectionMethodGetZNear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_z_near"), 466405837)
+	})
+	projectionMethodGetAspect = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_aspect"), 466405837)
+	})
+	projectionMethodGetFov = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_fov"), 466405837)
+	})
+	projectionMethodIsOrthogonal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("is_orthogonal"), 3918633141)
+	})
+	projectionMethodGetViewportHalfExtents = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_viewport_half_extents"), 2428350749)
+	})
+	projectionMethodGetFarPlaneHalfExtents = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_far_plane_half_extents"), 2428350749)
+	})
+	projectionMethodInverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("inverse"), 4212530932)
+	})
+	projectionMethodGetPixelsPerMeter = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_pixels_per_meter"), 4103005248)
+	})
+	projectionMethodGetLodMultiplier = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_lod_multiplier"), 466405837)
+	})
+	projectionOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeProjection, gdextension.VariantTypeNil)
+	})
+	projectionOpMulVector4 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeProjection, gdextension.VariantTypeVector4)
+	})
+	projectionOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
+	})
+	projectionOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
+	})
+	projectionOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
+	})
+	projectionOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeProjection, gdextension.VariantTypeDictionary)
+	})
+	projectionOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeProjection, gdextension.VariantTypeArray)
+	})
+	projectionIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeProjection)
+	})
+	projectionIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeProjection)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initProjection)
-}
-
-func initProjection() {
-	projectionFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeProjection)
-	projectionToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeProjection)
-	projectionCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 0)
-	projectionCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 1)
-	projectionCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 2)
-	projectionCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeProjection, 3)
-	projectionMethodCreateDepthCorrection = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_depth_correction"), 1228516048)
-	projectionMethodCreateLightAtlasRect = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_light_atlas_rect"), 2654950662)
-	projectionMethodCreatePerspective = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_perspective"), 390915442)
-	projectionMethodCreatePerspectiveHmd = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_perspective_hmd"), 2857674800)
-	projectionMethodCreateForHmd = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_for_hmd"), 4184144994)
-	projectionMethodCreateOrthogonal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_orthogonal"), 3707929169)
-	projectionMethodCreateOrthogonalAspect = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_orthogonal_aspect"), 390915442)
-	projectionMethodCreateFrustum = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_frustum"), 3707929169)
-	projectionMethodCreateFrustumAspect = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_frustum_aspect"), 1535076251)
-	projectionMethodCreateFitAabb = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("create_fit_aabb"), 2264694907)
-	projectionMethodDeterminant = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("determinant"), 466405837)
-	projectionMethodPerspectiveZnearAdjusted = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("perspective_znear_adjusted"), 3584785443)
-	projectionMethodGetProjectionPlane = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_projection_plane"), 1551184160)
-	projectionMethodFlippedY = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("flipped_y"), 4212530932)
-	projectionMethodJitterOffseted = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("jitter_offseted"), 2448438599)
-	projectionMethodGetFovy = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_fovy"), 3514207532)
-	projectionMethodGetZFar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_z_far"), 466405837)
-	projectionMethodGetZNear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_z_near"), 466405837)
-	projectionMethodGetAspect = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_aspect"), 466405837)
-	projectionMethodGetFov = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_fov"), 466405837)
-	projectionMethodIsOrthogonal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("is_orthogonal"), 3918633141)
-	projectionMethodGetViewportHalfExtents = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_viewport_half_extents"), 2428350749)
-	projectionMethodGetFarPlaneHalfExtents = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_far_plane_half_extents"), 2428350749)
-	projectionMethodInverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("inverse"), 4212530932)
-	projectionMethodGetPixelsPerMeter = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_pixels_per_meter"), 4103005248)
-	projectionMethodGetLodMultiplier = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeProjection, internStringName("get_lod_multiplier"), 466405837)
-	projectionOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeProjection, gdextension.VariantTypeNil)
-	projectionOpMulVector4 = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeProjection, gdextension.VariantTypeVector4)
-	projectionOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
-	projectionOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
-	projectionOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeProjection, gdextension.VariantTypeProjection)
-	projectionOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeProjection, gdextension.VariantTypeDictionary)
-	projectionOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeProjection, gdextension.VariantTypeArray)
-	projectionIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeProjection)
-	projectionIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeProjection)
-
-}
 
 // NewProjection constructs a Projection via the host (constructor index 0).
 func NewProjection() Projection {
 	var v Projection
-	gdextension.CallPtrConstructor(projectionCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(projectionCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -161,7 +196,7 @@ func NewProjectionFromProjection(from Projection) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(projectionCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(projectionCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -171,7 +206,7 @@ func NewProjectionFromTransform3D(from Transform3D) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(projectionCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(projectionCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -184,7 +219,7 @@ func NewProjectionXAxisYAxisZAxisWAxis(x_axis Vector4, y_axis Vector4, z_axis Ve
 		gdextension.TypePtr(unsafe.Pointer(&z_axis)),
 		gdextension.TypePtr(unsafe.Pointer(&w_axis)),
 	}
-	gdextension.CallPtrConstructor(projectionCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(projectionCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -194,7 +229,7 @@ func ProjectionCreateDepthCorrection(flip_y bool) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&flip_y)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateDepthCorrection, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateDepthCorrection(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -204,7 +239,7 @@ func ProjectionCreateLightAtlasRect(rect Rect2) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&rect)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateLightAtlasRect, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateLightAtlasRect(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -226,7 +261,7 @@ func ProjectionCreatePerspective(fovy float32, aspect float32, z_near float32, z
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspective, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspective(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -255,7 +290,7 @@ func ProjectionCreatePerspectiveHmd(fovy float32, aspect float32, z_near float32
 		gdextension.TypePtr(unsafe.Pointer(&tmp_intraocular_dist)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_convergence_dist)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspectiveHmd, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreatePerspectiveHmd(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -286,7 +321,7 @@ func ProjectionCreateForHmd(eye int64, aspect float32, intraocular_dist float32,
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateForHmd, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateForHmd(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -313,7 +348,7 @@ func ProjectionCreateOrthogonal(left float32, right float32, bottom float32, top
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonal, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonal(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -335,7 +370,7 @@ func ProjectionCreateOrthogonalAspect(size float32, aspect float32, z_near float
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonalAspect, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateOrthogonalAspect(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -362,7 +397,7 @@ func ProjectionCreateFrustum(left float32, right float32, bottom float32, top fl
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_near)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustum, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustum(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -385,7 +420,7 @@ func ProjectionCreateFrustumAspect(size float32, aspect float32, offset Vector2,
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z_far)),
 		gdextension.TypePtr(unsafe.Pointer(&flip_fov)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustumAspect, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFrustumAspect(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -395,14 +430,14 @@ func ProjectionCreateFitAabb(aabb AABB) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&aabb)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFitAabb, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodCreateFitAabb(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Determinant mirrors the Godot Projection.determinant method.
 func (self *Projection) Determinant() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodDeterminant(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -414,7 +449,7 @@ func (self *Projection) PerspectiveZnearAdjusted(new_znear float32) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_new_znear)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodPerspectiveZnearAdjusted, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodPerspectiveZnearAdjusted(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -424,14 +459,14 @@ func (self *Projection) GetProjectionPlane(plane int64) Plane {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&plane)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetProjectionPlane, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetProjectionPlane(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // FlippedY mirrors the Godot Projection.flipped_y method.
 func (self *Projection) FlippedY() Projection {
 	var ret Projection
-	gdextension.CallPtrBuiltinMethod(projectionMethodFlippedY, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodFlippedY(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -441,7 +476,7 @@ func (self *Projection) JitterOffseted(offset Vector2) Projection {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodJitterOffseted, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodJitterOffseted(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -456,63 +491,63 @@ func ProjectionGetFovy(fovx float32, aspect float32) float32 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_fovx)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_aspect)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetFovy, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetFovy(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetZFar mirrors the Godot Projection.get_z_far method.
 func (self *Projection) GetZFar() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetZFar, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetZFar(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetZNear mirrors the Godot Projection.get_z_near method.
 func (self *Projection) GetZNear() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetZNear, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetZNear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetAspect mirrors the Godot Projection.get_aspect method.
 func (self *Projection) GetAspect() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetAspect, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetAspect(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetFov mirrors the Godot Projection.get_fov method.
 func (self *Projection) GetFov() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetFov, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetFov(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // IsOrthogonal mirrors the Godot Projection.is_orthogonal method.
 func (self *Projection) IsOrthogonal() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(projectionMethodIsOrthogonal, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodIsOrthogonal(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetViewportHalfExtents mirrors the Godot Projection.get_viewport_half_extents method.
 func (self *Projection) GetViewportHalfExtents() Vector2 {
 	var ret Vector2
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetViewportHalfExtents, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetViewportHalfExtents(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetFarPlaneHalfExtents mirrors the Godot Projection.get_far_plane_half_extents method.
 func (self *Projection) GetFarPlaneHalfExtents() Vector2 {
 	var ret Vector2
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetFarPlaneHalfExtents, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetFarPlaneHalfExtents(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Inverse mirrors the Godot Projection.inverse method.
 func (self *Projection) Inverse() Projection {
 	var ret Projection
-	gdextension.CallPtrBuiltinMethod(projectionMethodInverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodInverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -522,83 +557,83 @@ func (self *Projection) GetPixelsPerMeter(for_pixel_width int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&for_pixel_width)),
 	}
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetPixelsPerMeter, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetPixelsPerMeter(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetLodMultiplier mirrors the Godot Projection.get_lod_multiplier method.
 func (self *Projection) GetLodMultiplier() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(projectionMethodGetLodMultiplier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(projectionMethodGetLodMultiplier(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // Not mirrors the Godot Projection not operator.
 func (self *Projection) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(projectionOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulVector4 mirrors the Godot Projection * operator.
 func (self *Projection) MulVector4(rhs Vector4) Vector4 {
 	var ret Vector4
-	gdextension.CallPtrOperatorEvaluator(projectionOpMulVector4, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpMulVector4(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Projection == operator.
 func (self *Projection) Eq(rhs Projection) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(projectionOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Projection != operator.
 func (self *Projection) Ne(rhs Projection) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(projectionOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Projection * operator.
 func (self *Projection) Mul(rhs Projection) Projection {
 	var ret Projection
-	gdextension.CallPtrOperatorEvaluator(projectionOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Projection in operator.
 func (self *Projection) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(projectionOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Projection in operator.
 func (self *Projection) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(projectionOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(projectionOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Projection) Index(index int64) Vector4 {
 	var ret Vector4
-	gdextension.CallPtrIndexedGetter(projectionIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(projectionIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Projection) SetIndex(index int64, value Vector4) {
-	gdextension.CallPtrIndexedSetter(projectionIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(projectionIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Projection) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(projectionFromType,
+	gdextension.CallVariantFromType(projectionFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -608,7 +643,7 @@ func (self *Projection) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func ProjectionFromVariant(src *Variant) Projection {
 	var v Projection
-	gdextension.CallTypeFromVariant(projectionToType,
+	gdextension.CallTypeFromVariant(projectionToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,189 +14,265 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type PackedByteArray [16]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	packedByteArrayFromType                         gdextension.VariantFromTypeFunc
-	packedByteArrayToType                           gdextension.VariantToTypeFunc
-	packedByteArrayDtor                             gdextension.PtrDestructor
-	packedByteArrayCtor0                            gdextension.PtrConstructor
-	packedByteArrayCtor1                            gdextension.PtrConstructor
-	packedByteArrayCtor2                            gdextension.PtrConstructor
-	packedByteArrayMethodGet                        gdextension.PtrBuiltInMethod
-	packedByteArrayMethodSet                        gdextension.PtrBuiltInMethod
-	packedByteArrayMethodSize                       gdextension.PtrBuiltInMethod
-	packedByteArrayMethodIsEmpty                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodPushBack                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodAppend                     gdextension.PtrBuiltInMethod
-	packedByteArrayMethodAppendArray                gdextension.PtrBuiltInMethod
-	packedByteArrayMethodRemoveAt                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodInsert                     gdextension.PtrBuiltInMethod
-	packedByteArrayMethodFill                       gdextension.PtrBuiltInMethod
-	packedByteArrayMethodResize                     gdextension.PtrBuiltInMethod
-	packedByteArrayMethodClear                      gdextension.PtrBuiltInMethod
-	packedByteArrayMethodHas                        gdextension.PtrBuiltInMethod
-	packedByteArrayMethodReverse                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodSlice                      gdextension.PtrBuiltInMethod
-	packedByteArrayMethodSort                       gdextension.PtrBuiltInMethod
-	packedByteArrayMethodBsearch                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDuplicate                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodFind                       gdextension.PtrBuiltInMethod
-	packedByteArrayMethodRfind                      gdextension.PtrBuiltInMethod
-	packedByteArrayMethodCount                      gdextension.PtrBuiltInMethod
-	packedByteArrayMethodErase                      gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromAscii         gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromUtf8          gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromUtf16         gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromUtf32         gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromWchar         gdextension.PtrBuiltInMethod
-	packedByteArrayMethodGetStringFromMultibyteChar gdextension.PtrBuiltInMethod
-	packedByteArrayMethodHexEncode                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodCompress                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecompress                 gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecompressDynamic          gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeU8                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeS8                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeU16                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeS16                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeU32                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeS32                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeU64                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeS64                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeHalf                 gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeFloat                gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeDouble               gdextension.PtrBuiltInMethod
-	packedByteArrayMethodHasEncodedVar              gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeVar                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodDecodeVarSize              gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToInt32Array               gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToInt64Array               gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToFloat32Array             gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToFloat64Array             gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToVector2Array             gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToVector3Array             gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToVector4Array             gdextension.PtrBuiltInMethod
-	packedByteArrayMethodToColorArray               gdextension.PtrBuiltInMethod
-	packedByteArrayMethodBswap16                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodBswap32                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodBswap64                    gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeU8                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeS8                   gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeU16                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeS16                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeU32                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeS32                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeU64                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeS64                  gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeHalf                 gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeFloat                gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeDouble               gdextension.PtrBuiltInMethod
-	packedByteArrayMethodEncodeVar                  gdextension.PtrBuiltInMethod
-	packedByteArrayOpNot                            gdextension.PtrOperatorEvaluator
-	packedByteArrayOpInDictionary                   gdextension.PtrOperatorEvaluator
-	packedByteArrayOpInArray                        gdextension.PtrOperatorEvaluator
-	packedByteArrayOpEq                             gdextension.PtrOperatorEvaluator
-	packedByteArrayOpNe                             gdextension.PtrOperatorEvaluator
-	packedByteArrayOpAdd                            gdextension.PtrOperatorEvaluator
-	packedByteArrayIndexedGetter                    gdextension.PtrIndexedGetter
-	packedByteArrayIndexedSetter                    gdextension.PtrIndexedSetter
+	packedByteArrayFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 0)
+	})
+	packedByteArrayCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 1)
+	})
+	packedByteArrayCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 2)
+	})
+	packedByteArrayMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get"), 4103005248)
+	})
+	packedByteArrayMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("set"), 3638975848)
+	})
+	packedByteArrayMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("size"), 3173160232)
+	})
+	packedByteArrayMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("is_empty"), 3918633141)
+	})
+	packedByteArrayMethodPushBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("push_back"), 694024632)
+	})
+	packedByteArrayMethodAppend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("append"), 694024632)
+	})
+	packedByteArrayMethodAppendArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("append_array"), 791097111)
+	})
+	packedByteArrayMethodRemoveAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("remove_at"), 2823966027)
+	})
+	packedByteArrayMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("insert"), 1487112728)
+	})
+	packedByteArrayMethodFill = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("fill"), 2823966027)
+	})
+	packedByteArrayMethodResize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("resize"), 848867239)
+	})
+	packedByteArrayMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("clear"), 3218959716)
+	})
+	packedByteArrayMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("has"), 931488181)
+	})
+	packedByteArrayMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("reverse"), 3218959716)
+	})
+	packedByteArrayMethodSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("slice"), 2278869132)
+	})
+	packedByteArrayMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("sort"), 3218959716)
+	})
+	packedByteArrayMethodBsearch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bsearch"), 954237325)
+	})
+	packedByteArrayMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("duplicate"), 247621236)
+	})
+	packedByteArrayMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("find"), 2984303840)
+	})
+	packedByteArrayMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("rfind"), 2984303840)
+	})
+	packedByteArrayMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("count"), 4103005248)
+	})
+	packedByteArrayMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("erase"), 694024632)
+	})
+	packedByteArrayMethodGetStringFromAscii = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_ascii"), 3942272618)
+	})
+	packedByteArrayMethodGetStringFromUtf8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf8"), 3942272618)
+	})
+	packedByteArrayMethodGetStringFromUtf16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf16"), 3942272618)
+	})
+	packedByteArrayMethodGetStringFromUtf32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf32"), 3942272618)
+	})
+	packedByteArrayMethodGetStringFromWchar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_wchar"), 3942272618)
+	})
+	packedByteArrayMethodGetStringFromMultibyteChar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_multibyte_char"), 3134094431)
+	})
+	packedByteArrayMethodHexEncode = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("hex_encode"), 3942272618)
+	})
+	packedByteArrayMethodCompress = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("compress"), 1845905913)
+	})
+	packedByteArrayMethodDecompress = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decompress"), 2278869132)
+	})
+	packedByteArrayMethodDecompressDynamic = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decompress_dynamic"), 2278869132)
+	})
+	packedByteArrayMethodDecodeU8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u8"), 4103005248)
+	})
+	packedByteArrayMethodDecodeS8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s8"), 4103005248)
+	})
+	packedByteArrayMethodDecodeU16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u16"), 4103005248)
+	})
+	packedByteArrayMethodDecodeS16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s16"), 4103005248)
+	})
+	packedByteArrayMethodDecodeU32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u32"), 4103005248)
+	})
+	packedByteArrayMethodDecodeS32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s32"), 4103005248)
+	})
+	packedByteArrayMethodDecodeU64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u64"), 4103005248)
+	})
+	packedByteArrayMethodDecodeS64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s64"), 4103005248)
+	})
+	packedByteArrayMethodDecodeHalf = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_half"), 1401583798)
+	})
+	packedByteArrayMethodDecodeFloat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_float"), 1401583798)
+	})
+	packedByteArrayMethodDecodeDouble = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_double"), 1401583798)
+	})
+	packedByteArrayMethodHasEncodedVar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("has_encoded_var"), 2914632957)
+	})
+	packedByteArrayMethodDecodeVar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_var"), 1740420038)
+	})
+	packedByteArrayMethodDecodeVarSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_var_size"), 954237325)
+	})
+	packedByteArrayMethodToInt32Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_int32_array"), 3158844420)
+	})
+	packedByteArrayMethodToInt64Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_int64_array"), 1961294120)
+	})
+	packedByteArrayMethodToFloat32Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_float32_array"), 3575107827)
+	})
+	packedByteArrayMethodToFloat64Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_float64_array"), 1627308337)
+	})
+	packedByteArrayMethodToVector2Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector2_array"), 1660374357)
+	})
+	packedByteArrayMethodToVector3Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector3_array"), 4171207452)
+	})
+	packedByteArrayMethodToVector4Array = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector4_array"), 146203628)
+	})
+	packedByteArrayMethodToColorArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_color_array"), 3072026941)
+	})
+	packedByteArrayMethodBswap16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap16"), 3638975848)
+	})
+	packedByteArrayMethodBswap32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap32"), 3638975848)
+	})
+	packedByteArrayMethodBswap64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap64"), 3638975848)
+	})
+	packedByteArrayMethodEncodeU8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u8"), 3638975848)
+	})
+	packedByteArrayMethodEncodeS8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s8"), 3638975848)
+	})
+	packedByteArrayMethodEncodeU16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u16"), 3638975848)
+	})
+	packedByteArrayMethodEncodeS16 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s16"), 3638975848)
+	})
+	packedByteArrayMethodEncodeU32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u32"), 3638975848)
+	})
+	packedByteArrayMethodEncodeS32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s32"), 3638975848)
+	})
+	packedByteArrayMethodEncodeU64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u64"), 3638975848)
+	})
+	packedByteArrayMethodEncodeS64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s64"), 3638975848)
+	})
+	packedByteArrayMethodEncodeHalf = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_half"), 1113000516)
+	})
+	packedByteArrayMethodEncodeFloat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_float"), 1113000516)
+	})
+	packedByteArrayMethodEncodeDouble = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_double"), 1113000516)
+	})
+	packedByteArrayMethodEncodeVar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_var"), 2604460497)
+	})
+	packedByteArrayOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeNil)
+	})
+	packedByteArrayOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeDictionary)
+	})
+	packedByteArrayOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeArray)
+	})
+	packedByteArrayOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedByteArray)
+	})
+	packedByteArrayIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedByteArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initPackedByteArray)
-}
-
-func initPackedByteArray() {
-	packedByteArrayFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedByteArray)
-	packedByteArrayToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedByteArray)
-	packedByteArrayDtor = gdextension.GetPtrDestructor(gdextension.VariantTypePackedByteArray)
-	packedByteArrayCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 0)
-	packedByteArrayCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 1)
-	packedByteArrayCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedByteArray, 2)
-	packedByteArrayMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get"), 4103005248)
-	packedByteArrayMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("set"), 3638975848)
-	packedByteArrayMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("size"), 3173160232)
-	packedByteArrayMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("is_empty"), 3918633141)
-	packedByteArrayMethodPushBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("push_back"), 694024632)
-	packedByteArrayMethodAppend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("append"), 694024632)
-	packedByteArrayMethodAppendArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("append_array"), 791097111)
-	packedByteArrayMethodRemoveAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("remove_at"), 2823966027)
-	packedByteArrayMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("insert"), 1487112728)
-	packedByteArrayMethodFill = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("fill"), 2823966027)
-	packedByteArrayMethodResize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("resize"), 848867239)
-	packedByteArrayMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("clear"), 3218959716)
-	packedByteArrayMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("has"), 931488181)
-	packedByteArrayMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("reverse"), 3218959716)
-	packedByteArrayMethodSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("slice"), 2278869132)
-	packedByteArrayMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("sort"), 3218959716)
-	packedByteArrayMethodBsearch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bsearch"), 954237325)
-	packedByteArrayMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("duplicate"), 247621236)
-	packedByteArrayMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("find"), 2984303840)
-	packedByteArrayMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("rfind"), 2984303840)
-	packedByteArrayMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("count"), 4103005248)
-	packedByteArrayMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("erase"), 694024632)
-	packedByteArrayMethodGetStringFromAscii = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_ascii"), 3942272618)
-	packedByteArrayMethodGetStringFromUtf8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf8"), 3942272618)
-	packedByteArrayMethodGetStringFromUtf16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf16"), 3942272618)
-	packedByteArrayMethodGetStringFromUtf32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_utf32"), 3942272618)
-	packedByteArrayMethodGetStringFromWchar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_wchar"), 3942272618)
-	packedByteArrayMethodGetStringFromMultibyteChar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("get_string_from_multibyte_char"), 3134094431)
-	packedByteArrayMethodHexEncode = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("hex_encode"), 3942272618)
-	packedByteArrayMethodCompress = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("compress"), 1845905913)
-	packedByteArrayMethodDecompress = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decompress"), 2278869132)
-	packedByteArrayMethodDecompressDynamic = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decompress_dynamic"), 2278869132)
-	packedByteArrayMethodDecodeU8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u8"), 4103005248)
-	packedByteArrayMethodDecodeS8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s8"), 4103005248)
-	packedByteArrayMethodDecodeU16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u16"), 4103005248)
-	packedByteArrayMethodDecodeS16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s16"), 4103005248)
-	packedByteArrayMethodDecodeU32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u32"), 4103005248)
-	packedByteArrayMethodDecodeS32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s32"), 4103005248)
-	packedByteArrayMethodDecodeU64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_u64"), 4103005248)
-	packedByteArrayMethodDecodeS64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_s64"), 4103005248)
-	packedByteArrayMethodDecodeHalf = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_half"), 1401583798)
-	packedByteArrayMethodDecodeFloat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_float"), 1401583798)
-	packedByteArrayMethodDecodeDouble = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_double"), 1401583798)
-	packedByteArrayMethodHasEncodedVar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("has_encoded_var"), 2914632957)
-	packedByteArrayMethodDecodeVar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_var"), 1740420038)
-	packedByteArrayMethodDecodeVarSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("decode_var_size"), 954237325)
-	packedByteArrayMethodToInt32Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_int32_array"), 3158844420)
-	packedByteArrayMethodToInt64Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_int64_array"), 1961294120)
-	packedByteArrayMethodToFloat32Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_float32_array"), 3575107827)
-	packedByteArrayMethodToFloat64Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_float64_array"), 1627308337)
-	packedByteArrayMethodToVector2Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector2_array"), 1660374357)
-	packedByteArrayMethodToVector3Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector3_array"), 4171207452)
-	packedByteArrayMethodToVector4Array = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_vector4_array"), 146203628)
-	packedByteArrayMethodToColorArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("to_color_array"), 3072026941)
-	packedByteArrayMethodBswap16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap16"), 3638975848)
-	packedByteArrayMethodBswap32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap32"), 3638975848)
-	packedByteArrayMethodBswap64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("bswap64"), 3638975848)
-	packedByteArrayMethodEncodeU8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u8"), 3638975848)
-	packedByteArrayMethodEncodeS8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s8"), 3638975848)
-	packedByteArrayMethodEncodeU16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u16"), 3638975848)
-	packedByteArrayMethodEncodeS16 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s16"), 3638975848)
-	packedByteArrayMethodEncodeU32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u32"), 3638975848)
-	packedByteArrayMethodEncodeS32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s32"), 3638975848)
-	packedByteArrayMethodEncodeU64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_u64"), 3638975848)
-	packedByteArrayMethodEncodeS64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_s64"), 3638975848)
-	packedByteArrayMethodEncodeHalf = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_half"), 1113000516)
-	packedByteArrayMethodEncodeFloat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_float"), 1113000516)
-	packedByteArrayMethodEncodeDouble = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_double"), 1113000516)
-	packedByteArrayMethodEncodeVar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedByteArray, internStringName("encode_var"), 2604460497)
-	packedByteArrayOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeNil)
-	packedByteArrayOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeDictionary)
-	packedByteArrayOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedByteArray, gdextension.VariantTypeArray)
-	packedByteArrayOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
-	packedByteArrayOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
-	packedByteArrayOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedByteArray, gdextension.VariantTypePackedByteArray)
-	packedByteArrayIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedByteArray)
-	packedByteArrayIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedByteArray)
-
-}
 
 // NewPackedByteArray constructs a PackedByteArray via the host (constructor index 0).
 func NewPackedByteArray() PackedByteArray {
 	var v PackedByteArray
-	gdextension.CallPtrConstructor(packedByteArrayCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(packedByteArrayCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -205,7 +282,7 @@ func NewPackedByteArrayFromPackedByteArray(from PackedByteArray) PackedByteArray
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedByteArrayCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedByteArrayCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -215,7 +292,7 @@ func NewPackedByteArrayFromArray(from Array) PackedByteArray {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedByteArrayCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedByteArrayCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -225,7 +302,7 @@ func (self *PackedByteArray) Get(index int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -235,20 +312,20 @@ func (self *PackedByteArray) Set(index int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Size mirrors the Godot PackedByteArray.size method.
 func (self *PackedByteArray) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot PackedByteArray.is_empty method.
 func (self *PackedByteArray) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -258,7 +335,7 @@ func (self *PackedByteArray) PushBack(value int64) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodPushBack(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -268,7 +345,7 @@ func (self *PackedByteArray) Append(value int64) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodAppend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -277,7 +354,7 @@ func (self *PackedByteArray) AppendArray(array PackedByteArray) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodAppendArray, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodAppendArray(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // RemoveAt mirrors the Godot PackedByteArray.remove_at method.
@@ -285,7 +362,7 @@ func (self *PackedByteArray) RemoveAt(index int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodRemoveAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodRemoveAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Insert mirrors the Godot PackedByteArray.insert method.
@@ -295,7 +372,7 @@ func (self *PackedByteArray) Insert(at_index int64, value int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&at_index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -304,7 +381,7 @@ func (self *PackedByteArray) Fill(value int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodFill(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Resize mirrors the Godot PackedByteArray.resize method.
@@ -313,13 +390,13 @@ func (self *PackedByteArray) Resize(new_size int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&new_size)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodResize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodResize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot PackedByteArray.clear method.
 func (self *PackedByteArray) Clear() {
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Has mirrors the Godot PackedByteArray.has method.
@@ -328,13 +405,13 @@ func (self *PackedByteArray) Has(value int64) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Reverse mirrors the Godot PackedByteArray.reverse method.
 func (self *PackedByteArray) Reverse() {
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Slice mirrors the Godot PackedByteArray.slice method.
@@ -344,13 +421,13 @@ func (self *PackedByteArray) Slice(begin int64, end int64) PackedByteArray {
 		gdextension.TypePtr(unsafe.Pointer(&begin)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sort mirrors the Godot PackedByteArray.sort method.
 func (self *PackedByteArray) Sort() {
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Bsearch mirrors the Godot PackedByteArray.bsearch method.
@@ -360,14 +437,14 @@ func (self *PackedByteArray) Bsearch(value int64, before bool) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBsearch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Duplicate mirrors the Godot PackedByteArray.duplicate method.
 func (self *PackedByteArray) Duplicate() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -378,7 +455,7 @@ func (self *PackedByteArray) Find(value int64, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -389,7 +466,7 @@ func (self *PackedByteArray) Rfind(value int64, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -399,7 +476,7 @@ func (self *PackedByteArray) Count(value int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -409,7 +486,7 @@ func (self *PackedByteArray) Erase(value int64) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -417,7 +494,7 @@ func (self *PackedByteArray) Erase(value int64) bool {
 func (self *PackedByteArray) GetStringFromAscii() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromAscii, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromAscii(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -425,7 +502,7 @@ func (self *PackedByteArray) GetStringFromAscii() string {
 func (self *PackedByteArray) GetStringFromUtf8() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf8, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf8(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -433,7 +510,7 @@ func (self *PackedByteArray) GetStringFromUtf8() string {
 func (self *PackedByteArray) GetStringFromUtf16() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf16, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf16(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -441,7 +518,7 @@ func (self *PackedByteArray) GetStringFromUtf16() string {
 func (self *PackedByteArray) GetStringFromUtf32() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf32, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromUtf32(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -449,7 +526,7 @@ func (self *PackedByteArray) GetStringFromUtf32() string {
 func (self *PackedByteArray) GetStringFromWchar() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromWchar, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromWchar(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -464,7 +541,7 @@ func (self *PackedByteArray) GetStringFromMultibyteChar(encoding string) string 
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_encoding)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromMultibyteChar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodGetStringFromMultibyteChar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -472,7 +549,7 @@ func (self *PackedByteArray) GetStringFromMultibyteChar(encoding string) string 
 func (self *PackedByteArray) HexEncode() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHexEncode, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHexEncode(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -482,7 +559,7 @@ func (self *PackedByteArray) Compress(compression_mode int64) PackedByteArray {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&compression_mode)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodCompress, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodCompress(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -493,7 +570,7 @@ func (self *PackedByteArray) Decompress(buffer_size int64, compression_mode int6
 		gdextension.TypePtr(unsafe.Pointer(&buffer_size)),
 		gdextension.TypePtr(unsafe.Pointer(&compression_mode)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecompress, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecompress(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -504,7 +581,7 @@ func (self *PackedByteArray) DecompressDynamic(max_output_size int64, compressio
 		gdextension.TypePtr(unsafe.Pointer(&max_output_size)),
 		gdextension.TypePtr(unsafe.Pointer(&compression_mode)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecompressDynamic, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecompressDynamic(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -514,7 +591,7 @@ func (self *PackedByteArray) DecodeU8(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU8, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU8(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -524,7 +601,7 @@ func (self *PackedByteArray) DecodeS8(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS8, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS8(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -534,7 +611,7 @@ func (self *PackedByteArray) DecodeU16(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU16, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU16(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -544,7 +621,7 @@ func (self *PackedByteArray) DecodeS16(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS16, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS16(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -554,7 +631,7 @@ func (self *PackedByteArray) DecodeU32(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU32, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU32(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -564,7 +641,7 @@ func (self *PackedByteArray) DecodeS32(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS32, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS32(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -574,7 +651,7 @@ func (self *PackedByteArray) DecodeU64(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU64, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeU64(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -584,7 +661,7 @@ func (self *PackedByteArray) DecodeS64(byte_offset int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS64, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeS64(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -594,7 +671,7 @@ func (self *PackedByteArray) DecodeHalf(byte_offset int64) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeHalf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeHalf(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -604,7 +681,7 @@ func (self *PackedByteArray) DecodeFloat(byte_offset int64) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeFloat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeFloat(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -614,7 +691,7 @@ func (self *PackedByteArray) DecodeDouble(byte_offset int64) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeDouble, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeDouble(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -625,7 +702,7 @@ func (self *PackedByteArray) HasEncodedVar(byte_offset int64, allow_objects bool
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&allow_objects)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHasEncodedVar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodHasEncodedVar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -636,7 +713,7 @@ func (self *PackedByteArray) DecodeVar(byte_offset int64, allow_objects bool) Va
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&allow_objects)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeVar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeVar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -647,63 +724,63 @@ func (self *PackedByteArray) DecodeVarSize(byte_offset int64, allow_objects bool
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&allow_objects)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeVarSize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodDecodeVarSize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToInt32Array mirrors the Godot PackedByteArray.to_int32_array method.
 func (self *PackedByteArray) ToInt32Array() PackedInt32Array {
 	var ret PackedInt32Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToInt32Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToInt32Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToInt64Array mirrors the Godot PackedByteArray.to_int64_array method.
 func (self *PackedByteArray) ToInt64Array() PackedInt64Array {
 	var ret PackedInt64Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToInt64Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToInt64Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToFloat32Array mirrors the Godot PackedByteArray.to_float32_array method.
 func (self *PackedByteArray) ToFloat32Array() PackedFloat32Array {
 	var ret PackedFloat32Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToFloat32Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToFloat32Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToFloat64Array mirrors the Godot PackedByteArray.to_float64_array method.
 func (self *PackedByteArray) ToFloat64Array() PackedFloat64Array {
 	var ret PackedFloat64Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToFloat64Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToFloat64Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToVector2Array mirrors the Godot PackedByteArray.to_vector2_array method.
 func (self *PackedByteArray) ToVector2Array() PackedVector2Array {
 	var ret PackedVector2Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector2Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector2Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToVector3Array mirrors the Godot PackedByteArray.to_vector3_array method.
 func (self *PackedByteArray) ToVector3Array() PackedVector3Array {
 	var ret PackedVector3Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector3Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector3Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToVector4Array mirrors the Godot PackedByteArray.to_vector4_array method.
 func (self *PackedByteArray) ToVector4Array() PackedVector4Array {
 	var ret PackedVector4Array
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector4Array, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToVector4Array(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToColorArray mirrors the Godot PackedByteArray.to_color_array method.
 func (self *PackedByteArray) ToColorArray() PackedColorArray {
 	var ret PackedColorArray
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToColorArray, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodToColorArray(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -713,7 +790,7 @@ func (self *PackedByteArray) Bswap16(offset int64, count int64) {
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 		gdextension.TypePtr(unsafe.Pointer(&count)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap16, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap16(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Bswap32 mirrors the Godot PackedByteArray.bswap32 method.
@@ -722,7 +799,7 @@ func (self *PackedByteArray) Bswap32(offset int64, count int64) {
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 		gdextension.TypePtr(unsafe.Pointer(&count)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap32, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap32(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Bswap64 mirrors the Godot PackedByteArray.bswap64 method.
@@ -731,7 +808,7 @@ func (self *PackedByteArray) Bswap64(offset int64, count int64) {
 		gdextension.TypePtr(unsafe.Pointer(&offset)),
 		gdextension.TypePtr(unsafe.Pointer(&count)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap64, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodBswap64(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeU8 mirrors the Godot PackedByteArray.encode_u8 method.
@@ -740,7 +817,7 @@ func (self *PackedByteArray) EncodeU8(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU8, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU8(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeS8 mirrors the Godot PackedByteArray.encode_s8 method.
@@ -749,7 +826,7 @@ func (self *PackedByteArray) EncodeS8(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS8, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS8(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeU16 mirrors the Godot PackedByteArray.encode_u16 method.
@@ -758,7 +835,7 @@ func (self *PackedByteArray) EncodeU16(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU16, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU16(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeS16 mirrors the Godot PackedByteArray.encode_s16 method.
@@ -767,7 +844,7 @@ func (self *PackedByteArray) EncodeS16(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS16, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS16(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeU32 mirrors the Godot PackedByteArray.encode_u32 method.
@@ -776,7 +853,7 @@ func (self *PackedByteArray) EncodeU32(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU32, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU32(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeS32 mirrors the Godot PackedByteArray.encode_s32 method.
@@ -785,7 +862,7 @@ func (self *PackedByteArray) EncodeS32(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS32, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS32(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeU64 mirrors the Godot PackedByteArray.encode_u64 method.
@@ -794,7 +871,7 @@ func (self *PackedByteArray) EncodeU64(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU64, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeU64(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeS64 mirrors the Godot PackedByteArray.encode_s64 method.
@@ -803,7 +880,7 @@ func (self *PackedByteArray) EncodeS64(byte_offset int64, value int64) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS64, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeS64(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeHalf mirrors the Godot PackedByteArray.encode_half method.
@@ -814,7 +891,7 @@ func (self *PackedByteArray) EncodeHalf(byte_offset int64, value float32) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeHalf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeHalf(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeFloat mirrors the Godot PackedByteArray.encode_float method.
@@ -825,7 +902,7 @@ func (self *PackedByteArray) EncodeFloat(byte_offset int64, value float32) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeFloat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeFloat(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeDouble mirrors the Godot PackedByteArray.encode_double method.
@@ -836,7 +913,7 @@ func (self *PackedByteArray) EncodeDouble(byte_offset int64, value float32) {
 		gdextension.TypePtr(unsafe.Pointer(&byte_offset)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeDouble, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeDouble(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // EncodeVar mirrors the Godot PackedByteArray.encode_var method.
@@ -847,75 +924,75 @@ func (self *PackedByteArray) EncodeVar(byte_offset int64, value Variant, allow_o
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&allow_objects)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeVar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedByteArrayMethodEncodeVar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot PackedByteArray not operator.
 func (self *PackedByteArray) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot PackedByteArray in operator.
 func (self *PackedByteArray) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot PackedByteArray in operator.
 func (self *PackedByteArray) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot PackedByteArray == operator.
 func (self *PackedByteArray) Eq(rhs PackedByteArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot PackedByteArray != operator.
 func (self *PackedByteArray) Ne(rhs PackedByteArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot PackedByteArray + operator.
 func (self *PackedByteArray) Add(rhs PackedByteArray) PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedByteArrayOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *PackedByteArray) Index(index int64) int64 {
 	var ret int64
-	gdextension.CallPtrIndexedGetter(packedByteArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(packedByteArrayIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *PackedByteArray) SetIndex(index int64, value int64) {
-	gdextension.CallPtrIndexedSetter(packedByteArrayIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(packedByteArrayIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *PackedByteArray) Destroy() {
-	gdextension.CallPtrDestructor(packedByteArrayDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(packedByteArrayDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *PackedByteArray) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(packedByteArrayFromType,
+	gdextension.CallVariantFromType(packedByteArrayFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -925,7 +1002,7 @@ func (self *PackedByteArray) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func PackedByteArrayFromVariant(src *Variant) PackedByteArray {
 	var v PackedByteArray
-	gdextension.CallTypeFromVariant(packedByteArrayToType,
+	gdextension.CallTypeFromVariant(packedByteArrayToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

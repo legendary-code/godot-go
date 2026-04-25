@@ -189,12 +189,16 @@ a/b/c rhythm and keep every commit landable.
 
 #### 3d — lazy method-pointer caching; retrofit Phase 2
 
-- [ ] Engine-class bindings already ship lazy from 3b — go back and
+- [x] Engine-class bindings already ship lazy from 3b — go back and
       retrofit the same pattern to the `variant/` package. Phase 2
       eagerly binds every constructor / method / operator pointer in
       `init()` because the surface was small (~34 classes); applying
       the same lazy resolver everywhere keeps load time near-zero and
-      lets both packages share one strategy.
+      lets both packages share one strategy. Every cached resolver
+      now goes out as `var <name> = sync.OnceValue(...)`; call sites
+      use `<name>()`. The generated `init()` + `init<Class>()` pair
+      and the `RegisterInitCallback(InitLevelCore, ...)` subscription
+      are gone from `variant/*.gen.go`.
 - [ ] Confirm no measurable per-call regression on the smoke checks
       (the lazy path is one extra atomic load + branch per call).
 

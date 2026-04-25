@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,361 +14,523 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type StringName [8]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	stringNameFromType                       gdextension.VariantFromTypeFunc
-	stringNameToType                         gdextension.VariantToTypeFunc
-	stringNameDtor                           gdextension.PtrDestructor
-	stringNameCtor0                          gdextension.PtrConstructor
-	stringNameCtor1                          gdextension.PtrConstructor
-	stringNameCtor2                          gdextension.PtrConstructor
-	stringNameMethodCasecmpTo                gdextension.PtrBuiltInMethod
-	stringNameMethodNocasecmpTo              gdextension.PtrBuiltInMethod
-	stringNameMethodNaturalcasecmpTo         gdextension.PtrBuiltInMethod
-	stringNameMethodNaturalnocasecmpTo       gdextension.PtrBuiltInMethod
-	stringNameMethodFilecasecmpTo            gdextension.PtrBuiltInMethod
-	stringNameMethodFilenocasecmpTo          gdextension.PtrBuiltInMethod
-	stringNameMethodLength                   gdextension.PtrBuiltInMethod
-	stringNameMethodSubstr                   gdextension.PtrBuiltInMethod
-	stringNameMethodGetSlice                 gdextension.PtrBuiltInMethod
-	stringNameMethodGetSlicec                gdextension.PtrBuiltInMethod
-	stringNameMethodGetSliceCount            gdextension.PtrBuiltInMethod
-	stringNameMethodFind                     gdextension.PtrBuiltInMethod
-	stringNameMethodFindn                    gdextension.PtrBuiltInMethod
-	stringNameMethodCount                    gdextension.PtrBuiltInMethod
-	stringNameMethodCountn                   gdextension.PtrBuiltInMethod
-	stringNameMethodRfind                    gdextension.PtrBuiltInMethod
-	stringNameMethodRfindn                   gdextension.PtrBuiltInMethod
-	stringNameMethodMatch                    gdextension.PtrBuiltInMethod
-	stringNameMethodMatchn                   gdextension.PtrBuiltInMethod
-	stringNameMethodBeginsWith               gdextension.PtrBuiltInMethod
-	stringNameMethodEndsWith                 gdextension.PtrBuiltInMethod
-	stringNameMethodIsSubsequenceOf          gdextension.PtrBuiltInMethod
-	stringNameMethodIsSubsequenceOfn         gdextension.PtrBuiltInMethod
-	stringNameMethodBigrams                  gdextension.PtrBuiltInMethod
-	stringNameMethodSimilarity               gdextension.PtrBuiltInMethod
-	stringNameMethodFormat                   gdextension.PtrBuiltInMethod
-	stringNameMethodReplace                  gdextension.PtrBuiltInMethod
-	stringNameMethodReplacen                 gdextension.PtrBuiltInMethod
-	stringNameMethodReplaceChar              gdextension.PtrBuiltInMethod
-	stringNameMethodReplaceChars             gdextension.PtrBuiltInMethod
-	stringNameMethodRemoveChar               gdextension.PtrBuiltInMethod
-	stringNameMethodRemoveChars              gdextension.PtrBuiltInMethod
-	stringNameMethodRepeat                   gdextension.PtrBuiltInMethod
-	stringNameMethodReverse                  gdextension.PtrBuiltInMethod
-	stringNameMethodInsert                   gdextension.PtrBuiltInMethod
-	stringNameMethodErase                    gdextension.PtrBuiltInMethod
-	stringNameMethodCapitalize               gdextension.PtrBuiltInMethod
-	stringNameMethodToCamelCase              gdextension.PtrBuiltInMethod
-	stringNameMethodToPascalCase             gdextension.PtrBuiltInMethod
-	stringNameMethodToSnakeCase              gdextension.PtrBuiltInMethod
-	stringNameMethodToKebabCase              gdextension.PtrBuiltInMethod
-	stringNameMethodSplit                    gdextension.PtrBuiltInMethod
-	stringNameMethodRsplit                   gdextension.PtrBuiltInMethod
-	stringNameMethodSplitFloats              gdextension.PtrBuiltInMethod
-	stringNameMethodJoin                     gdextension.PtrBuiltInMethod
-	stringNameMethodToUpper                  gdextension.PtrBuiltInMethod
-	stringNameMethodToLower                  gdextension.PtrBuiltInMethod
-	stringNameMethodLeft                     gdextension.PtrBuiltInMethod
-	stringNameMethodRight                    gdextension.PtrBuiltInMethod
-	stringNameMethodStripEdges               gdextension.PtrBuiltInMethod
-	stringNameMethodStripEscapes             gdextension.PtrBuiltInMethod
-	stringNameMethodLstrip                   gdextension.PtrBuiltInMethod
-	stringNameMethodRstrip                   gdextension.PtrBuiltInMethod
-	stringNameMethodGetExtension             gdextension.PtrBuiltInMethod
-	stringNameMethodGetBasename              gdextension.PtrBuiltInMethod
-	stringNameMethodPathJoin                 gdextension.PtrBuiltInMethod
-	stringNameMethodUnicodeAt                gdextension.PtrBuiltInMethod
-	stringNameMethodIndent                   gdextension.PtrBuiltInMethod
-	stringNameMethodDedent                   gdextension.PtrBuiltInMethod
-	stringNameMethodMd5Text                  gdextension.PtrBuiltInMethod
-	stringNameMethodSha1Text                 gdextension.PtrBuiltInMethod
-	stringNameMethodSha256Text               gdextension.PtrBuiltInMethod
-	stringNameMethodMd5Buffer                gdextension.PtrBuiltInMethod
-	stringNameMethodSha1Buffer               gdextension.PtrBuiltInMethod
-	stringNameMethodSha256Buffer             gdextension.PtrBuiltInMethod
-	stringNameMethodIsEmpty                  gdextension.PtrBuiltInMethod
-	stringNameMethodContains                 gdextension.PtrBuiltInMethod
-	stringNameMethodContainsn                gdextension.PtrBuiltInMethod
-	stringNameMethodIsAbsolutePath           gdextension.PtrBuiltInMethod
-	stringNameMethodIsRelativePath           gdextension.PtrBuiltInMethod
-	stringNameMethodSimplifyPath             gdextension.PtrBuiltInMethod
-	stringNameMethodGetBaseDir               gdextension.PtrBuiltInMethod
-	stringNameMethodGetFile                  gdextension.PtrBuiltInMethod
-	stringNameMethodXmlEscape                gdextension.PtrBuiltInMethod
-	stringNameMethodXmlUnescape              gdextension.PtrBuiltInMethod
-	stringNameMethodUriEncode                gdextension.PtrBuiltInMethod
-	stringNameMethodUriDecode                gdextension.PtrBuiltInMethod
-	stringNameMethodUriFileDecode            gdextension.PtrBuiltInMethod
-	stringNameMethodCEscape                  gdextension.PtrBuiltInMethod
-	stringNameMethodCUnescape                gdextension.PtrBuiltInMethod
-	stringNameMethodJsonEscape               gdextension.PtrBuiltInMethod
-	stringNameMethodValidateNodeName         gdextension.PtrBuiltInMethod
-	stringNameMethodValidateFilename         gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidAsciiIdentifier   gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidUnicodeIdentifier gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidIdentifier        gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidInt               gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidFloat             gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidHexNumber         gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidHtmlColor         gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidIpAddress         gdextension.PtrBuiltInMethod
-	stringNameMethodIsValidFilename          gdextension.PtrBuiltInMethod
-	stringNameMethodToInt                    gdextension.PtrBuiltInMethod
-	stringNameMethodToFloat                  gdextension.PtrBuiltInMethod
-	stringNameMethodHexToInt                 gdextension.PtrBuiltInMethod
-	stringNameMethodBinToInt                 gdextension.PtrBuiltInMethod
-	stringNameMethodLpad                     gdextension.PtrBuiltInMethod
-	stringNameMethodRpad                     gdextension.PtrBuiltInMethod
-	stringNameMethodPadDecimals              gdextension.PtrBuiltInMethod
-	stringNameMethodPadZeros                 gdextension.PtrBuiltInMethod
-	stringNameMethodTrimPrefix               gdextension.PtrBuiltInMethod
-	stringNameMethodTrimSuffix               gdextension.PtrBuiltInMethod
-	stringNameMethodToAsciiBuffer            gdextension.PtrBuiltInMethod
-	stringNameMethodToUtf8Buffer             gdextension.PtrBuiltInMethod
-	stringNameMethodToUtf16Buffer            gdextension.PtrBuiltInMethod
-	stringNameMethodToUtf32Buffer            gdextension.PtrBuiltInMethod
-	stringNameMethodToWcharBuffer            gdextension.PtrBuiltInMethod
-	stringNameMethodToMultibyteCharBuffer    gdextension.PtrBuiltInMethod
-	stringNameMethodHexDecode                gdextension.PtrBuiltInMethod
-	stringNameMethodHash                     gdextension.PtrBuiltInMethod
-	stringNameOpNot                          gdextension.PtrOperatorEvaluator
-	stringNameOpModBool                      gdextension.PtrOperatorEvaluator
-	stringNameOpModInt                       gdextension.PtrOperatorEvaluator
-	stringNameOpModFloat                     gdextension.PtrOperatorEvaluator
-	stringNameOpEqString                     gdextension.PtrOperatorEvaluator
-	stringNameOpNeString                     gdextension.PtrOperatorEvaluator
-	stringNameOpAddString                    gdextension.PtrOperatorEvaluator
-	stringNameOpModString                    gdextension.PtrOperatorEvaluator
-	stringNameOpInString                     gdextension.PtrOperatorEvaluator
-	stringNameOpModVector2                   gdextension.PtrOperatorEvaluator
-	stringNameOpModVector2i                  gdextension.PtrOperatorEvaluator
-	stringNameOpModRect2                     gdextension.PtrOperatorEvaluator
-	stringNameOpModRect2i                    gdextension.PtrOperatorEvaluator
-	stringNameOpModVector3                   gdextension.PtrOperatorEvaluator
-	stringNameOpModVector3i                  gdextension.PtrOperatorEvaluator
-	stringNameOpModTransform2D               gdextension.PtrOperatorEvaluator
-	stringNameOpModVector4                   gdextension.PtrOperatorEvaluator
-	stringNameOpModVector4i                  gdextension.PtrOperatorEvaluator
-	stringNameOpModPlane                     gdextension.PtrOperatorEvaluator
-	stringNameOpModQuaternion                gdextension.PtrOperatorEvaluator
-	stringNameOpModAABB                      gdextension.PtrOperatorEvaluator
-	stringNameOpModBasis                     gdextension.PtrOperatorEvaluator
-	stringNameOpModTransform3D               gdextension.PtrOperatorEvaluator
-	stringNameOpModProjection                gdextension.PtrOperatorEvaluator
-	stringNameOpModColor                     gdextension.PtrOperatorEvaluator
-	stringNameOpEq                           gdextension.PtrOperatorEvaluator
-	stringNameOpNe                           gdextension.PtrOperatorEvaluator
-	stringNameOpLt                           gdextension.PtrOperatorEvaluator
-	stringNameOpLe                           gdextension.PtrOperatorEvaluator
-	stringNameOpGt                           gdextension.PtrOperatorEvaluator
-	stringNameOpGe                           gdextension.PtrOperatorEvaluator
-	stringNameOpAdd                          gdextension.PtrOperatorEvaluator
-	stringNameOpMod                          gdextension.PtrOperatorEvaluator
-	stringNameOpIn                           gdextension.PtrOperatorEvaluator
-	stringNameOpModNodePath                  gdextension.PtrOperatorEvaluator
-	stringNameOpModRID                       gdextension.PtrOperatorEvaluator
-	stringNameOpModCallable                  gdextension.PtrOperatorEvaluator
-	stringNameOpModSignal                    gdextension.PtrOperatorEvaluator
-	stringNameOpModDictionary                gdextension.PtrOperatorEvaluator
-	stringNameOpInDictionary                 gdextension.PtrOperatorEvaluator
-	stringNameOpModArray                     gdextension.PtrOperatorEvaluator
-	stringNameOpInArray                      gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedByteArray           gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedInt32Array          gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedInt64Array          gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedFloat32Array        gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedFloat64Array        gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedStringArray         gdextension.PtrOperatorEvaluator
-	stringNameOpInPackedStringArray          gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedVector2Array        gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedVector3Array        gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedColorArray          gdextension.PtrOperatorEvaluator
-	stringNameOpModPackedVector4Array        gdextension.PtrOperatorEvaluator
+	stringNameFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeStringName)
+	})
+	stringNameToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeStringName)
+	})
+	stringNameDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypeStringName)
+	})
+	stringNameCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 0)
+	})
+	stringNameCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 1)
+	})
+	stringNameCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 2)
+	})
+	stringNameMethodCasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("casecmp_to"), 2920860731)
+	})
+	stringNameMethodNocasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("nocasecmp_to"), 2920860731)
+	})
+	stringNameMethodNaturalcasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("naturalcasecmp_to"), 2920860731)
+	})
+	stringNameMethodNaturalnocasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("naturalnocasecmp_to"), 2920860731)
+	})
+	stringNameMethodFilecasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("filecasecmp_to"), 2920860731)
+	})
+	stringNameMethodFilenocasecmpTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("filenocasecmp_to"), 2920860731)
+	})
+	stringNameMethodLength = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("length"), 3173160232)
+	})
+	stringNameMethodSubstr = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("substr"), 787537301)
+	})
+	stringNameMethodGetSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slice"), 3535100402)
+	})
+	stringNameMethodGetSlicec = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slicec"), 787537301)
+	})
+	stringNameMethodGetSliceCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slice_count"), 2920860731)
+	})
+	stringNameMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("find"), 1760645412)
+	})
+	stringNameMethodFindn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("findn"), 1760645412)
+	})
+	stringNameMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("count"), 2343087891)
+	})
+	stringNameMethodCountn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("countn"), 2343087891)
+	})
+	stringNameMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rfind"), 1760645412)
+	})
+	stringNameMethodRfindn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rfindn"), 1760645412)
+	})
+	stringNameMethodMatch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("match"), 2566493496)
+	})
+	stringNameMethodMatchn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("matchn"), 2566493496)
+	})
+	stringNameMethodBeginsWith = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("begins_with"), 2566493496)
+	})
+	stringNameMethodEndsWith = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("ends_with"), 2566493496)
+	})
+	stringNameMethodIsSubsequenceOf = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_subsequence_of"), 2566493496)
+	})
+	stringNameMethodIsSubsequenceOfn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_subsequence_ofn"), 2566493496)
+	})
+	stringNameMethodBigrams = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("bigrams"), 747180633)
+	})
+	stringNameMethodSimilarity = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("similarity"), 2697460964)
+	})
+	stringNameMethodFormat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("format"), 3212199029)
+	})
+	stringNameMethodReplace = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace"), 1340436205)
+	})
+	stringNameMethodReplacen = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replacen"), 1340436205)
+	})
+	stringNameMethodReplaceChar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace_char"), 787537301)
+	})
+	stringNameMethodReplaceChars = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace_chars"), 3535100402)
+	})
+	stringNameMethodRemoveChar = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("remove_char"), 2162347432)
+	})
+	stringNameMethodRemoveChars = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("remove_chars"), 3134094431)
+	})
+	stringNameMethodRepeat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("repeat"), 2162347432)
+	})
+	stringNameMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("reverse"), 3942272618)
+	})
+	stringNameMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("insert"), 248737229)
+	})
+	stringNameMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("erase"), 787537301)
+	})
+	stringNameMethodCapitalize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("capitalize"), 3942272618)
+	})
+	stringNameMethodToCamelCase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_camel_case"), 3942272618)
+	})
+	stringNameMethodToPascalCase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_pascal_case"), 3942272618)
+	})
+	stringNameMethodToSnakeCase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_snake_case"), 3942272618)
+	})
+	stringNameMethodToKebabCase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_kebab_case"), 3942272618)
+	})
+	stringNameMethodSplit = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("split"), 1252735785)
+	})
+	stringNameMethodRsplit = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rsplit"), 1252735785)
+	})
+	stringNameMethodSplitFloats = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("split_floats"), 2092079095)
+	})
+	stringNameMethodJoin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("join"), 3595973238)
+	})
+	stringNameMethodToUpper = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_upper"), 3942272618)
+	})
+	stringNameMethodToLower = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_lower"), 3942272618)
+	})
+	stringNameMethodLeft = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("left"), 2162347432)
+	})
+	stringNameMethodRight = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("right"), 2162347432)
+	})
+	stringNameMethodStripEdges = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("strip_edges"), 907855311)
+	})
+	stringNameMethodStripEscapes = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("strip_escapes"), 3942272618)
+	})
+	stringNameMethodLstrip = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("lstrip"), 3134094431)
+	})
+	stringNameMethodRstrip = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rstrip"), 3134094431)
+	})
+	stringNameMethodGetExtension = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_extension"), 3942272618)
+	})
+	stringNameMethodGetBasename = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_basename"), 3942272618)
+	})
+	stringNameMethodPathJoin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("path_join"), 3134094431)
+	})
+	stringNameMethodUnicodeAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("unicode_at"), 4103005248)
+	})
+	stringNameMethodIndent = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("indent"), 3134094431)
+	})
+	stringNameMethodDedent = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("dedent"), 3942272618)
+	})
+	stringNameMethodMd5Text = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("md5_text"), 3942272618)
+	})
+	stringNameMethodSha1Text = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha1_text"), 3942272618)
+	})
+	stringNameMethodSha256Text = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha256_text"), 3942272618)
+	})
+	stringNameMethodMd5Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("md5_buffer"), 247621236)
+	})
+	stringNameMethodSha1Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha1_buffer"), 247621236)
+	})
+	stringNameMethodSha256Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha256_buffer"), 247621236)
+	})
+	stringNameMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_empty"), 3918633141)
+	})
+	stringNameMethodContains = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("contains"), 2566493496)
+	})
+	stringNameMethodContainsn = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("containsn"), 2566493496)
+	})
+	stringNameMethodIsAbsolutePath = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_absolute_path"), 3918633141)
+	})
+	stringNameMethodIsRelativePath = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_relative_path"), 3918633141)
+	})
+	stringNameMethodSimplifyPath = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("simplify_path"), 3942272618)
+	})
+	stringNameMethodGetBaseDir = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_base_dir"), 3942272618)
+	})
+	stringNameMethodGetFile = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_file"), 3942272618)
+	})
+	stringNameMethodXmlEscape = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("xml_escape"), 3429816538)
+	})
+	stringNameMethodXmlUnescape = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("xml_unescape"), 3942272618)
+	})
+	stringNameMethodUriEncode = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_encode"), 3942272618)
+	})
+	stringNameMethodUriDecode = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_decode"), 3942272618)
+	})
+	stringNameMethodUriFileDecode = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_file_decode"), 3942272618)
+	})
+	stringNameMethodCEscape = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("c_escape"), 3942272618)
+	})
+	stringNameMethodCUnescape = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("c_unescape"), 3942272618)
+	})
+	stringNameMethodJsonEscape = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("json_escape"), 3942272618)
+	})
+	stringNameMethodValidateNodeName = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("validate_node_name"), 3942272618)
+	})
+	stringNameMethodValidateFilename = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("validate_filename"), 3942272618)
+	})
+	stringNameMethodIsValidAsciiIdentifier = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_ascii_identifier"), 3918633141)
+	})
+	stringNameMethodIsValidUnicodeIdentifier = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_unicode_identifier"), 3918633141)
+	})
+	stringNameMethodIsValidIdentifier = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_identifier"), 3918633141)
+	})
+	stringNameMethodIsValidInt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_int"), 3918633141)
+	})
+	stringNameMethodIsValidFloat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_float"), 3918633141)
+	})
+	stringNameMethodIsValidHexNumber = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_hex_number"), 593672999)
+	})
+	stringNameMethodIsValidHtmlColor = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_html_color"), 3918633141)
+	})
+	stringNameMethodIsValidIpAddress = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_ip_address"), 3918633141)
+	})
+	stringNameMethodIsValidFilename = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_filename"), 3918633141)
+	})
+	stringNameMethodToInt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_int"), 3173160232)
+	})
+	stringNameMethodToFloat = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_float"), 466405837)
+	})
+	stringNameMethodHexToInt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hex_to_int"), 3173160232)
+	})
+	stringNameMethodBinToInt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("bin_to_int"), 3173160232)
+	})
+	stringNameMethodLpad = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("lpad"), 248737229)
+	})
+	stringNameMethodRpad = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rpad"), 248737229)
+	})
+	stringNameMethodPadDecimals = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("pad_decimals"), 2162347432)
+	})
+	stringNameMethodPadZeros = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("pad_zeros"), 2162347432)
+	})
+	stringNameMethodTrimPrefix = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("trim_prefix"), 3134094431)
+	})
+	stringNameMethodTrimSuffix = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("trim_suffix"), 3134094431)
+	})
+	stringNameMethodToAsciiBuffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_ascii_buffer"), 247621236)
+	})
+	stringNameMethodToUtf8Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf8_buffer"), 247621236)
+	})
+	stringNameMethodToUtf16Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf16_buffer"), 247621236)
+	})
+	stringNameMethodToUtf32Buffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf32_buffer"), 247621236)
+	})
+	stringNameMethodToWcharBuffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_wchar_buffer"), 247621236)
+	})
+	stringNameMethodToMultibyteCharBuffer = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_multibyte_char_buffer"), 3055765187)
+	})
+	stringNameMethodHexDecode = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hex_decode"), 247621236)
+	})
+	stringNameMethodHash = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hash"), 3173160232)
+	})
+	stringNameOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeStringName, gdextension.VariantTypeNil)
+	})
+	stringNameOpModBool = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeBool)
+	})
+	stringNameOpModInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeInt)
+	})
+	stringNameOpModFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeFloat)
+	})
+	stringNameOpEqString = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
+	})
+	stringNameOpNeString = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
+	})
+	stringNameOpAddString = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
+	})
+	stringNameOpModString = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
+	})
+	stringNameOpInString = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
+	})
+	stringNameOpModVector2 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector2)
+	})
+	stringNameOpModVector2i = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector2i)
+	})
+	stringNameOpModRect2 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRect2)
+	})
+	stringNameOpModRect2i = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRect2i)
+	})
+	stringNameOpModVector3 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector3)
+	})
+	stringNameOpModVector3i = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector3i)
+	})
+	stringNameOpModTransform2D = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeTransform2D)
+	})
+	stringNameOpModVector4 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector4)
+	})
+	stringNameOpModVector4i = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector4i)
+	})
+	stringNameOpModPlane = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePlane)
+	})
+	stringNameOpModQuaternion = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeQuaternion)
+	})
+	stringNameOpModAABB = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeAABB)
+	})
+	stringNameOpModBasis = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeBasis)
+	})
+	stringNameOpModTransform3D = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeTransform3D)
+	})
+	stringNameOpModProjection = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeProjection)
+	})
+	stringNameOpModColor = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeColor)
+	})
+	stringNameOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpLt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpLe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpGt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpGe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpMod = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpIn = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
+	})
+	stringNameOpModNodePath = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeNodePath)
+	})
+	stringNameOpModRID = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRID)
+	})
+	stringNameOpModCallable = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeCallable)
+	})
+	stringNameOpModSignal = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeSignal)
+	})
+	stringNameOpModDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeDictionary)
+	})
+	stringNameOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeDictionary)
+	})
+	stringNameOpModArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeArray)
+	})
+	stringNameOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeArray)
+	})
+	stringNameOpModPackedByteArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedByteArray)
+	})
+	stringNameOpModPackedInt32Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedInt32Array)
+	})
+	stringNameOpModPackedInt64Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedInt64Array)
+	})
+	stringNameOpModPackedFloat32Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedFloat32Array)
+	})
+	stringNameOpModPackedFloat64Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedFloat64Array)
+	})
+	stringNameOpModPackedStringArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedStringArray)
+	})
+	stringNameOpInPackedStringArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypePackedStringArray)
+	})
+	stringNameOpModPackedVector2Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector2Array)
+	})
+	stringNameOpModPackedVector3Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector3Array)
+	})
+	stringNameOpModPackedColorArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedColorArray)
+	})
+	stringNameOpModPackedVector4Array = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector4Array)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initStringName)
-}
-
-func initStringName() {
-	stringNameFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeStringName)
-	stringNameToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeStringName)
-	stringNameDtor = gdextension.GetPtrDestructor(gdextension.VariantTypeStringName)
-	stringNameCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 0)
-	stringNameCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 1)
-	stringNameCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeStringName, 2)
-	stringNameMethodCasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("casecmp_to"), 2920860731)
-	stringNameMethodNocasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("nocasecmp_to"), 2920860731)
-	stringNameMethodNaturalcasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("naturalcasecmp_to"), 2920860731)
-	stringNameMethodNaturalnocasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("naturalnocasecmp_to"), 2920860731)
-	stringNameMethodFilecasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("filecasecmp_to"), 2920860731)
-	stringNameMethodFilenocasecmpTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("filenocasecmp_to"), 2920860731)
-	stringNameMethodLength = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("length"), 3173160232)
-	stringNameMethodSubstr = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("substr"), 787537301)
-	stringNameMethodGetSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slice"), 3535100402)
-	stringNameMethodGetSlicec = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slicec"), 787537301)
-	stringNameMethodGetSliceCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_slice_count"), 2920860731)
-	stringNameMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("find"), 1760645412)
-	stringNameMethodFindn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("findn"), 1760645412)
-	stringNameMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("count"), 2343087891)
-	stringNameMethodCountn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("countn"), 2343087891)
-	stringNameMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rfind"), 1760645412)
-	stringNameMethodRfindn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rfindn"), 1760645412)
-	stringNameMethodMatch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("match"), 2566493496)
-	stringNameMethodMatchn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("matchn"), 2566493496)
-	stringNameMethodBeginsWith = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("begins_with"), 2566493496)
-	stringNameMethodEndsWith = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("ends_with"), 2566493496)
-	stringNameMethodIsSubsequenceOf = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_subsequence_of"), 2566493496)
-	stringNameMethodIsSubsequenceOfn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_subsequence_ofn"), 2566493496)
-	stringNameMethodBigrams = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("bigrams"), 747180633)
-	stringNameMethodSimilarity = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("similarity"), 2697460964)
-	stringNameMethodFormat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("format"), 3212199029)
-	stringNameMethodReplace = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace"), 1340436205)
-	stringNameMethodReplacen = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replacen"), 1340436205)
-	stringNameMethodReplaceChar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace_char"), 787537301)
-	stringNameMethodReplaceChars = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("replace_chars"), 3535100402)
-	stringNameMethodRemoveChar = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("remove_char"), 2162347432)
-	stringNameMethodRemoveChars = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("remove_chars"), 3134094431)
-	stringNameMethodRepeat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("repeat"), 2162347432)
-	stringNameMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("reverse"), 3942272618)
-	stringNameMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("insert"), 248737229)
-	stringNameMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("erase"), 787537301)
-	stringNameMethodCapitalize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("capitalize"), 3942272618)
-	stringNameMethodToCamelCase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_camel_case"), 3942272618)
-	stringNameMethodToPascalCase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_pascal_case"), 3942272618)
-	stringNameMethodToSnakeCase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_snake_case"), 3942272618)
-	stringNameMethodToKebabCase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_kebab_case"), 3942272618)
-	stringNameMethodSplit = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("split"), 1252735785)
-	stringNameMethodRsplit = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rsplit"), 1252735785)
-	stringNameMethodSplitFloats = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("split_floats"), 2092079095)
-	stringNameMethodJoin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("join"), 3595973238)
-	stringNameMethodToUpper = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_upper"), 3942272618)
-	stringNameMethodToLower = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_lower"), 3942272618)
-	stringNameMethodLeft = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("left"), 2162347432)
-	stringNameMethodRight = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("right"), 2162347432)
-	stringNameMethodStripEdges = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("strip_edges"), 907855311)
-	stringNameMethodStripEscapes = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("strip_escapes"), 3942272618)
-	stringNameMethodLstrip = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("lstrip"), 3134094431)
-	stringNameMethodRstrip = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rstrip"), 3134094431)
-	stringNameMethodGetExtension = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_extension"), 3942272618)
-	stringNameMethodGetBasename = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_basename"), 3942272618)
-	stringNameMethodPathJoin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("path_join"), 3134094431)
-	stringNameMethodUnicodeAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("unicode_at"), 4103005248)
-	stringNameMethodIndent = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("indent"), 3134094431)
-	stringNameMethodDedent = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("dedent"), 3942272618)
-	stringNameMethodMd5Text = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("md5_text"), 3942272618)
-	stringNameMethodSha1Text = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha1_text"), 3942272618)
-	stringNameMethodSha256Text = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha256_text"), 3942272618)
-	stringNameMethodMd5Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("md5_buffer"), 247621236)
-	stringNameMethodSha1Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha1_buffer"), 247621236)
-	stringNameMethodSha256Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("sha256_buffer"), 247621236)
-	stringNameMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_empty"), 3918633141)
-	stringNameMethodContains = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("contains"), 2566493496)
-	stringNameMethodContainsn = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("containsn"), 2566493496)
-	stringNameMethodIsAbsolutePath = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_absolute_path"), 3918633141)
-	stringNameMethodIsRelativePath = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_relative_path"), 3918633141)
-	stringNameMethodSimplifyPath = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("simplify_path"), 3942272618)
-	stringNameMethodGetBaseDir = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_base_dir"), 3942272618)
-	stringNameMethodGetFile = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("get_file"), 3942272618)
-	stringNameMethodXmlEscape = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("xml_escape"), 3429816538)
-	stringNameMethodXmlUnescape = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("xml_unescape"), 3942272618)
-	stringNameMethodUriEncode = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_encode"), 3942272618)
-	stringNameMethodUriDecode = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_decode"), 3942272618)
-	stringNameMethodUriFileDecode = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("uri_file_decode"), 3942272618)
-	stringNameMethodCEscape = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("c_escape"), 3942272618)
-	stringNameMethodCUnescape = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("c_unescape"), 3942272618)
-	stringNameMethodJsonEscape = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("json_escape"), 3942272618)
-	stringNameMethodValidateNodeName = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("validate_node_name"), 3942272618)
-	stringNameMethodValidateFilename = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("validate_filename"), 3942272618)
-	stringNameMethodIsValidAsciiIdentifier = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_ascii_identifier"), 3918633141)
-	stringNameMethodIsValidUnicodeIdentifier = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_unicode_identifier"), 3918633141)
-	stringNameMethodIsValidIdentifier = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_identifier"), 3918633141)
-	stringNameMethodIsValidInt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_int"), 3918633141)
-	stringNameMethodIsValidFloat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_float"), 3918633141)
-	stringNameMethodIsValidHexNumber = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_hex_number"), 593672999)
-	stringNameMethodIsValidHtmlColor = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_html_color"), 3918633141)
-	stringNameMethodIsValidIpAddress = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_ip_address"), 3918633141)
-	stringNameMethodIsValidFilename = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("is_valid_filename"), 3918633141)
-	stringNameMethodToInt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_int"), 3173160232)
-	stringNameMethodToFloat = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_float"), 466405837)
-	stringNameMethodHexToInt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hex_to_int"), 3173160232)
-	stringNameMethodBinToInt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("bin_to_int"), 3173160232)
-	stringNameMethodLpad = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("lpad"), 248737229)
-	stringNameMethodRpad = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("rpad"), 248737229)
-	stringNameMethodPadDecimals = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("pad_decimals"), 2162347432)
-	stringNameMethodPadZeros = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("pad_zeros"), 2162347432)
-	stringNameMethodTrimPrefix = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("trim_prefix"), 3134094431)
-	stringNameMethodTrimSuffix = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("trim_suffix"), 3134094431)
-	stringNameMethodToAsciiBuffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_ascii_buffer"), 247621236)
-	stringNameMethodToUtf8Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf8_buffer"), 247621236)
-	stringNameMethodToUtf16Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf16_buffer"), 247621236)
-	stringNameMethodToUtf32Buffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_utf32_buffer"), 247621236)
-	stringNameMethodToWcharBuffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_wchar_buffer"), 247621236)
-	stringNameMethodToMultibyteCharBuffer = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("to_multibyte_char_buffer"), 3055765187)
-	stringNameMethodHexDecode = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hex_decode"), 247621236)
-	stringNameMethodHash = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeStringName, internStringName("hash"), 3173160232)
-	stringNameOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeStringName, gdextension.VariantTypeNil)
-	stringNameOpModBool = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeBool)
-	stringNameOpModInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeInt)
-	stringNameOpModFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeFloat)
-	stringNameOpEqString = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
-	stringNameOpNeString = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
-	stringNameOpAddString = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
-	stringNameOpModString = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
-	stringNameOpInString = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeString)
-	stringNameOpModVector2 = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector2)
-	stringNameOpModVector2i = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector2i)
-	stringNameOpModRect2 = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRect2)
-	stringNameOpModRect2i = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRect2i)
-	stringNameOpModVector3 = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector3)
-	stringNameOpModVector3i = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector3i)
-	stringNameOpModTransform2D = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeTransform2D)
-	stringNameOpModVector4 = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector4)
-	stringNameOpModVector4i = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeVector4i)
-	stringNameOpModPlane = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePlane)
-	stringNameOpModQuaternion = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeQuaternion)
-	stringNameOpModAABB = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeAABB)
-	stringNameOpModBasis = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeBasis)
-	stringNameOpModTransform3D = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeTransform3D)
-	stringNameOpModProjection = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeProjection)
-	stringNameOpModColor = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeColor)
-	stringNameOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpLt = gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpLe = gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpGt = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpGe = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpMod = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpIn = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeStringName)
-	stringNameOpModNodePath = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeNodePath)
-	stringNameOpModRID = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeRID)
-	stringNameOpModCallable = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeCallable)
-	stringNameOpModSignal = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeSignal)
-	stringNameOpModDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeDictionary)
-	stringNameOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeDictionary)
-	stringNameOpModArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypeArray)
-	stringNameOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypeArray)
-	stringNameOpModPackedByteArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedByteArray)
-	stringNameOpModPackedInt32Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedInt32Array)
-	stringNameOpModPackedInt64Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedInt64Array)
-	stringNameOpModPackedFloat32Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedFloat32Array)
-	stringNameOpModPackedFloat64Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedFloat64Array)
-	stringNameOpModPackedStringArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedStringArray)
-	stringNameOpInPackedStringArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeStringName, gdextension.VariantTypePackedStringArray)
-	stringNameOpModPackedVector2Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector2Array)
-	stringNameOpModPackedVector3Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector3Array)
-	stringNameOpModPackedColorArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedColorArray)
-	stringNameOpModPackedVector4Array = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeStringName, gdextension.VariantTypePackedVector4Array)
-
-}
 
 // NewStringName constructs a StringName via the host (constructor index 0).
 func NewStringName() StringName {
 	var v StringName
-	gdextension.CallPtrConstructor(stringNameCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(stringNameCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -381,7 +544,7 @@ func NewStringNameFromStringName(from string) StringName {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_from)),
 	}
-	gdextension.CallPtrConstructor(stringNameCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(stringNameCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -395,7 +558,7 @@ func NewStringNameFromString(from string) StringName {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_from)),
 	}
-	gdextension.CallPtrConstructor(stringNameCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(stringNameCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -409,7 +572,7 @@ func (self *StringName) CasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -423,7 +586,7 @@ func (self *StringName) NocasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodNocasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodNocasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -437,7 +600,7 @@ func (self *StringName) NaturalcasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodNaturalcasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodNaturalcasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -451,7 +614,7 @@ func (self *StringName) NaturalnocasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodNaturalnocasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodNaturalnocasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -465,7 +628,7 @@ func (self *StringName) FilecasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodFilecasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodFilecasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -479,14 +642,14 @@ func (self *StringName) FilenocasecmpTo(to string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodFilenocasecmpTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodFilenocasecmpTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Length mirrors the Godot StringName.length method.
 func (self *StringName) Length() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodLength(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -498,7 +661,7 @@ func (self *StringName) Substr(from int64, length int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&length)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSubstr, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSubstr(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -514,7 +677,7 @@ func (self *StringName) GetSlice(delimiter string, slice int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_delimiter)),
 		gdextension.TypePtr(unsafe.Pointer(&slice)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -526,7 +689,7 @@ func (self *StringName) GetSlicec(delimiter int64, slice int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&delimiter)),
 		gdextension.TypePtr(unsafe.Pointer(&slice)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSlicec, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSlicec(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -540,7 +703,7 @@ func (self *StringName) GetSliceCount(delimiter string) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_delimiter)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSliceCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetSliceCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -555,7 +718,7 @@ func (self *StringName) Find(what string, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -570,7 +733,7 @@ func (self *StringName) Findn(what string, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodFindn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodFindn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -586,7 +749,7 @@ func (self *StringName) Count(what string, from int64, to int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -602,7 +765,7 @@ func (self *StringName) Countn(what string, from int64, to int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCountn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCountn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -617,7 +780,7 @@ func (self *StringName) Rfind(what string, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -632,7 +795,7 @@ func (self *StringName) Rfindn(what string, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRfindn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRfindn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -646,7 +809,7 @@ func (self *StringName) Match(expr string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_expr)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodMatch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodMatch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -660,7 +823,7 @@ func (self *StringName) Matchn(expr string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_expr)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodMatchn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodMatchn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -674,7 +837,7 @@ func (self *StringName) BeginsWith(text string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodBeginsWith, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodBeginsWith(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -688,7 +851,7 @@ func (self *StringName) EndsWith(text string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodEndsWith, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodEndsWith(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -702,7 +865,7 @@ func (self *StringName) IsSubsequenceOf(text string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsSubsequenceOf, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsSubsequenceOf(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -716,14 +879,14 @@ func (self *StringName) IsSubsequenceOfn(text string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsSubsequenceOfn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsSubsequenceOfn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Bigrams mirrors the Godot StringName.bigrams method.
 func (self *StringName) Bigrams() PackedStringArray {
 	var ret PackedStringArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodBigrams, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodBigrams(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -737,7 +900,7 @@ func (self *StringName) Similarity(text string) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_text)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSimilarity, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSimilarity(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -753,7 +916,7 @@ func (self *StringName) Format(values Variant, placeholder string) string {
 		gdextension.TypePtr(unsafe.Pointer(&values)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_placeholder)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodFormat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodFormat(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -773,7 +936,7 @@ func (self *StringName) Replace(what string, forwhat string) string {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_forwhat)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodReplace, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodReplace(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -793,7 +956,7 @@ func (self *StringName) Replacen(what string, forwhat string) string {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_forwhat)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodReplacen, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodReplacen(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -805,7 +968,7 @@ func (self *StringName) ReplaceChar(key int64, with int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodReplaceChar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodReplaceChar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -821,7 +984,7 @@ func (self *StringName) ReplaceChars(keys string, with int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_keys)),
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodReplaceChars, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodReplaceChars(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -832,7 +995,7 @@ func (self *StringName) RemoveChar(what int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&what)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRemoveChar, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRemoveChar(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -847,7 +1010,7 @@ func (self *StringName) RemoveChars(chars string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_chars)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRemoveChars, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRemoveChars(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -858,7 +1021,7 @@ func (self *StringName) Repeat(count int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&count)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRepeat, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRepeat(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -866,7 +1029,7 @@ func (self *StringName) Repeat(count int64) string {
 func (self *StringName) Reverse() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -882,7 +1045,7 @@ func (self *StringName) Insert(position int64, what string) string {
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -894,7 +1057,7 @@ func (self *StringName) Erase(position int64, chars int64) string {
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 		gdextension.TypePtr(unsafe.Pointer(&chars)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -902,7 +1065,7 @@ func (self *StringName) Erase(position int64, chars int64) string {
 func (self *StringName) Capitalize() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCapitalize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCapitalize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -910,7 +1073,7 @@ func (self *StringName) Capitalize() string {
 func (self *StringName) ToCamelCase() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToCamelCase, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToCamelCase(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -918,7 +1081,7 @@ func (self *StringName) ToCamelCase() string {
 func (self *StringName) ToPascalCase() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToPascalCase, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToPascalCase(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -926,7 +1089,7 @@ func (self *StringName) ToPascalCase() string {
 func (self *StringName) ToSnakeCase() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToSnakeCase, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToSnakeCase(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -934,7 +1097,7 @@ func (self *StringName) ToSnakeCase() string {
 func (self *StringName) ToKebabCase() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToKebabCase, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToKebabCase(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -950,7 +1113,7 @@ func (self *StringName) Split(delimiter string, allow_empty bool, maxsplit int64
 		gdextension.TypePtr(unsafe.Pointer(&allow_empty)),
 		gdextension.TypePtr(unsafe.Pointer(&maxsplit)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSplit, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSplit(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -966,7 +1129,7 @@ func (self *StringName) Rsplit(delimiter string, allow_empty bool, maxsplit int6
 		gdextension.TypePtr(unsafe.Pointer(&allow_empty)),
 		gdextension.TypePtr(unsafe.Pointer(&maxsplit)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRsplit, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRsplit(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -981,7 +1144,7 @@ func (self *StringName) SplitFloats(delimiter string, allow_empty bool) PackedFl
 		gdextension.TypePtr(unsafe.Pointer(&tmp_delimiter)),
 		gdextension.TypePtr(unsafe.Pointer(&allow_empty)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSplitFloats, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSplitFloats(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -992,7 +1155,7 @@ func (self *StringName) Join(parts PackedStringArray) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&parts)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodJoin, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodJoin(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1000,7 +1163,7 @@ func (self *StringName) Join(parts PackedStringArray) string {
 func (self *StringName) ToUpper() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToUpper, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToUpper(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1008,7 +1171,7 @@ func (self *StringName) ToUpper() string {
 func (self *StringName) ToLower() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToLower, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToLower(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1019,7 +1182,7 @@ func (self *StringName) Left(length int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&length)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodLeft, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodLeft(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1030,7 +1193,7 @@ func (self *StringName) Right(length int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&length)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRight, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRight(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1042,7 +1205,7 @@ func (self *StringName) StripEdges(left bool, right bool) string {
 		gdextension.TypePtr(unsafe.Pointer(&left)),
 		gdextension.TypePtr(unsafe.Pointer(&right)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodStripEdges, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodStripEdges(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1050,7 +1213,7 @@ func (self *StringName) StripEdges(left bool, right bool) string {
 func (self *StringName) StripEscapes() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodStripEscapes, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodStripEscapes(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1065,7 +1228,7 @@ func (self *StringName) Lstrip(chars string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_chars)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodLstrip, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodLstrip(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1080,7 +1243,7 @@ func (self *StringName) Rstrip(chars string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_chars)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRstrip, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRstrip(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1088,7 +1251,7 @@ func (self *StringName) Rstrip(chars string) string {
 func (self *StringName) GetExtension() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetExtension, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetExtension(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1096,7 +1259,7 @@ func (self *StringName) GetExtension() string {
 func (self *StringName) GetBasename() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetBasename, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetBasename(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1111,7 +1274,7 @@ func (self *StringName) PathJoin(path string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_path)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodPathJoin, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodPathJoin(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1121,7 +1284,7 @@ func (self *StringName) UnicodeAt(at int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&at)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodUnicodeAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodUnicodeAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1136,7 +1299,7 @@ func (self *StringName) Indent(prefix string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_prefix)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIndent, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIndent(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1144,7 +1307,7 @@ func (self *StringName) Indent(prefix string) string {
 func (self *StringName) Dedent() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodDedent, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodDedent(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1152,7 +1315,7 @@ func (self *StringName) Dedent() string {
 func (self *StringName) Md5Text() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodMd5Text, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodMd5Text(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1160,7 +1323,7 @@ func (self *StringName) Md5Text() string {
 func (self *StringName) Sha1Text() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSha1Text, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSha1Text(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1168,35 +1331,35 @@ func (self *StringName) Sha1Text() string {
 func (self *StringName) Sha256Text() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSha256Text, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSha256Text(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // Md5Buffer mirrors the Godot StringName.md5_buffer method.
 func (self *StringName) Md5Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodMd5Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodMd5Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sha1Buffer mirrors the Godot StringName.sha1_buffer method.
 func (self *StringName) Sha1Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSha1Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSha1Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sha256Buffer mirrors the Godot StringName.sha256_buffer method.
 func (self *StringName) Sha256Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSha256Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSha256Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot StringName.is_empty method.
 func (self *StringName) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1210,7 +1373,7 @@ func (self *StringName) Contains(what string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodContains, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodContains(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1224,21 +1387,21 @@ func (self *StringName) Containsn(what string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_what)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodContainsn, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodContainsn(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsAbsolutePath mirrors the Godot StringName.is_absolute_path method.
 func (self *StringName) IsAbsolutePath() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsAbsolutePath, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsAbsolutePath(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsRelativePath mirrors the Godot StringName.is_relative_path method.
 func (self *StringName) IsRelativePath() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsRelativePath, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsRelativePath(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1246,7 +1409,7 @@ func (self *StringName) IsRelativePath() bool {
 func (self *StringName) SimplifyPath() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodSimplifyPath, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodSimplifyPath(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1254,7 +1417,7 @@ func (self *StringName) SimplifyPath() string {
 func (self *StringName) GetBaseDir() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetBaseDir, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetBaseDir(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1262,7 +1425,7 @@ func (self *StringName) GetBaseDir() string {
 func (self *StringName) GetFile() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodGetFile, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodGetFile(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1273,7 +1436,7 @@ func (self *StringName) XmlEscape(escape_quotes bool) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&escape_quotes)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodXmlEscape, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodXmlEscape(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1281,7 +1444,7 @@ func (self *StringName) XmlEscape(escape_quotes bool) string {
 func (self *StringName) XmlUnescape() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodXmlUnescape, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodXmlUnescape(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1289,7 +1452,7 @@ func (self *StringName) XmlUnescape() string {
 func (self *StringName) UriEncode() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodUriEncode, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodUriEncode(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1297,7 +1460,7 @@ func (self *StringName) UriEncode() string {
 func (self *StringName) UriDecode() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodUriDecode, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodUriDecode(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1305,7 +1468,7 @@ func (self *StringName) UriDecode() string {
 func (self *StringName) UriFileDecode() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodUriFileDecode, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodUriFileDecode(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1313,7 +1476,7 @@ func (self *StringName) UriFileDecode() string {
 func (self *StringName) CEscape() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCEscape, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCEscape(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1321,7 +1484,7 @@ func (self *StringName) CEscape() string {
 func (self *StringName) CUnescape() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodCUnescape, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodCUnescape(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1329,7 +1492,7 @@ func (self *StringName) CUnescape() string {
 func (self *StringName) JsonEscape() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodJsonEscape, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodJsonEscape(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1337,7 +1500,7 @@ func (self *StringName) JsonEscape() string {
 func (self *StringName) ValidateNodeName() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodValidateNodeName, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodValidateNodeName(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1345,42 +1508,42 @@ func (self *StringName) ValidateNodeName() string {
 func (self *StringName) ValidateFilename() string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(stringNameMethodValidateFilename, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodValidateFilename(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // IsValidAsciiIdentifier mirrors the Godot StringName.is_valid_ascii_identifier method.
 func (self *StringName) IsValidAsciiIdentifier() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidAsciiIdentifier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidAsciiIdentifier(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidUnicodeIdentifier mirrors the Godot StringName.is_valid_unicode_identifier method.
 func (self *StringName) IsValidUnicodeIdentifier() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidUnicodeIdentifier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidUnicodeIdentifier(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidIdentifier mirrors the Godot StringName.is_valid_identifier method.
 func (self *StringName) IsValidIdentifier() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidIdentifier, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidIdentifier(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidInt mirrors the Godot StringName.is_valid_int method.
 func (self *StringName) IsValidInt() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidInt, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidInt(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidFloat mirrors the Godot StringName.is_valid_float method.
 func (self *StringName) IsValidFloat() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidFloat(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1390,56 +1553,56 @@ func (self *StringName) IsValidHexNumber(with_prefix bool) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with_prefix)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidHexNumber, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidHexNumber(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidHtmlColor mirrors the Godot StringName.is_valid_html_color method.
 func (self *StringName) IsValidHtmlColor() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidHtmlColor, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidHtmlColor(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidIpAddress mirrors the Godot StringName.is_valid_ip_address method.
 func (self *StringName) IsValidIpAddress() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidIpAddress, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidIpAddress(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValidFilename mirrors the Godot StringName.is_valid_filename method.
 func (self *StringName) IsValidFilename() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidFilename, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodIsValidFilename(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToInt mirrors the Godot StringName.to_int method.
 func (self *StringName) ToInt() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToInt, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToInt(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToFloat mirrors the Godot StringName.to_float method.
 func (self *StringName) ToFloat() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToFloat, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToFloat(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // HexToInt mirrors the Godot StringName.hex_to_int method.
 func (self *StringName) HexToInt() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodHexToInt, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodHexToInt(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // BinToInt mirrors the Godot StringName.bin_to_int method.
 func (self *StringName) BinToInt() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodBinToInt, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodBinToInt(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1455,7 +1618,7 @@ func (self *StringName) Lpad(min_length int64, character string) string {
 		gdextension.TypePtr(unsafe.Pointer(&min_length)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_character)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodLpad, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodLpad(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1471,7 +1634,7 @@ func (self *StringName) Rpad(min_length int64, character string) string {
 		gdextension.TypePtr(unsafe.Pointer(&min_length)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_character)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodRpad, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodRpad(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1482,7 +1645,7 @@ func (self *StringName) PadDecimals(digits int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&digits)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodPadDecimals, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodPadDecimals(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1493,7 +1656,7 @@ func (self *StringName) PadZeros(digits int64) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&digits)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodPadZeros, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodPadZeros(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1508,7 +1671,7 @@ func (self *StringName) TrimPrefix(prefix string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_prefix)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodTrimPrefix, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodTrimPrefix(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1523,42 +1686,42 @@ func (self *StringName) TrimSuffix(suffix string) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_suffix)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodTrimSuffix, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodTrimSuffix(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // ToAsciiBuffer mirrors the Godot StringName.to_ascii_buffer method.
 func (self *StringName) ToAsciiBuffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToAsciiBuffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToAsciiBuffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToUtf8Buffer mirrors the Godot StringName.to_utf8_buffer method.
 func (self *StringName) ToUtf8Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf8Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf8Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToUtf16Buffer mirrors the Godot StringName.to_utf16_buffer method.
 func (self *StringName) ToUtf16Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf16Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf16Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToUtf32Buffer mirrors the Godot StringName.to_utf32_buffer method.
 func (self *StringName) ToUtf32Buffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf32Buffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToUtf32Buffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToWcharBuffer mirrors the Godot StringName.to_wchar_buffer method.
 func (self *StringName) ToWcharBuffer() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToWcharBuffer, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToWcharBuffer(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1572,28 +1735,28 @@ func (self *StringName) ToMultibyteCharBuffer(encoding string) PackedByteArray {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_encoding)),
 	}
-	gdextension.CallPtrBuiltinMethod(stringNameMethodToMultibyteCharBuffer, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodToMultibyteCharBuffer(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // HexDecode mirrors the Godot StringName.hex_decode method.
 func (self *StringName) HexDecode() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(stringNameMethodHexDecode, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodHexDecode(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Hash mirrors the Godot StringName.hash method.
 func (self *StringName) Hash() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(stringNameMethodHash, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(stringNameMethodHash(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot StringName not operator.
 func (self *StringName) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(stringNameOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1601,7 +1764,7 @@ func (self *StringName) Not() bool {
 func (self *StringName) ModBool(rhs bool) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModBool, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModBool(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1609,7 +1772,7 @@ func (self *StringName) ModBool(rhs bool) string {
 func (self *StringName) ModInt(rhs int64) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1617,7 +1780,7 @@ func (self *StringName) ModInt(rhs int64) string {
 func (self *StringName) ModFloat(rhs float32) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1627,7 +1790,7 @@ func (self *StringName) EqString(rhs string) bool {
 	var tmp_rhs String
 	stringFromGo(&tmp_rhs, rhs)
 	defer stringDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpEqString, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpEqString(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1637,7 +1800,7 @@ func (self *StringName) NeString(rhs string) bool {
 	var tmp_rhs String
 	stringFromGo(&tmp_rhs, rhs)
 	defer stringDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpNeString, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpNeString(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1648,7 +1811,7 @@ func (self *StringName) AddString(rhs string) string {
 	var tmp_rhs String
 	stringFromGo(&tmp_rhs, rhs)
 	defer stringDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpAddString, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpAddString(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1659,7 +1822,7 @@ func (self *StringName) ModString(rhs string) string {
 	var tmp_rhs String
 	stringFromGo(&tmp_rhs, rhs)
 	defer stringDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModString, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModString(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1669,7 +1832,7 @@ func (self *StringName) InString(rhs string) bool {
 	var tmp_rhs String
 	stringFromGo(&tmp_rhs, rhs)
 	defer stringDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpInString, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpInString(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1677,7 +1840,7 @@ func (self *StringName) InString(rhs string) bool {
 func (self *StringName) ModVector2(rhs Vector2) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector2, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector2(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1685,7 +1848,7 @@ func (self *StringName) ModVector2(rhs Vector2) string {
 func (self *StringName) ModVector2i(rhs Vector2i) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector2i, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector2i(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1693,7 +1856,7 @@ func (self *StringName) ModVector2i(rhs Vector2i) string {
 func (self *StringName) ModRect2(rhs Rect2) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModRect2, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModRect2(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1701,7 +1864,7 @@ func (self *StringName) ModRect2(rhs Rect2) string {
 func (self *StringName) ModRect2i(rhs Rect2i) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModRect2i, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModRect2i(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1709,7 +1872,7 @@ func (self *StringName) ModRect2i(rhs Rect2i) string {
 func (self *StringName) ModVector3(rhs Vector3) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector3, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector3(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1717,7 +1880,7 @@ func (self *StringName) ModVector3(rhs Vector3) string {
 func (self *StringName) ModVector3i(rhs Vector3i) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector3i, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector3i(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1725,7 +1888,7 @@ func (self *StringName) ModVector3i(rhs Vector3i) string {
 func (self *StringName) ModTransform2D(rhs Transform2D) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModTransform2D, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModTransform2D(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1733,7 +1896,7 @@ func (self *StringName) ModTransform2D(rhs Transform2D) string {
 func (self *StringName) ModVector4(rhs Vector4) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector4, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector4(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1741,7 +1904,7 @@ func (self *StringName) ModVector4(rhs Vector4) string {
 func (self *StringName) ModVector4i(rhs Vector4i) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector4i, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModVector4i(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1749,7 +1912,7 @@ func (self *StringName) ModVector4i(rhs Vector4i) string {
 func (self *StringName) ModPlane(rhs Plane) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPlane, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPlane(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1757,7 +1920,7 @@ func (self *StringName) ModPlane(rhs Plane) string {
 func (self *StringName) ModQuaternion(rhs Quaternion) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModQuaternion, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModQuaternion(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1765,7 +1928,7 @@ func (self *StringName) ModQuaternion(rhs Quaternion) string {
 func (self *StringName) ModAABB(rhs AABB) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModAABB, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModAABB(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1773,7 +1936,7 @@ func (self *StringName) ModAABB(rhs AABB) string {
 func (self *StringName) ModBasis(rhs Basis) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModBasis, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModBasis(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1781,7 +1944,7 @@ func (self *StringName) ModBasis(rhs Basis) string {
 func (self *StringName) ModTransform3D(rhs Transform3D) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModTransform3D, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModTransform3D(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1789,7 +1952,7 @@ func (self *StringName) ModTransform3D(rhs Transform3D) string {
 func (self *StringName) ModProjection(rhs Projection) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModProjection, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModProjection(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1797,7 +1960,7 @@ func (self *StringName) ModProjection(rhs Projection) string {
 func (self *StringName) ModColor(rhs Color) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModColor, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModColor(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1807,7 +1970,7 @@ func (self *StringName) Eq(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1817,7 +1980,7 @@ func (self *StringName) Ne(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1827,7 +1990,7 @@ func (self *StringName) Lt(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpLt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpLt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1837,7 +2000,7 @@ func (self *StringName) Le(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpLe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpLe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1847,7 +2010,7 @@ func (self *StringName) Gt(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpGt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpGt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1857,7 +2020,7 @@ func (self *StringName) Ge(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpGe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpGe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1868,7 +2031,7 @@ func (self *StringName) Add(rhs string) string {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1879,7 +2042,7 @@ func (self *StringName) Mod(rhs string) string {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpMod, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpMod(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1889,7 +2052,7 @@ func (self *StringName) In(rhs string) bool {
 	var tmp_rhs StringName
 	stringNameFromGo(&tmp_rhs, rhs)
 	defer stringNameDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpIn, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpIn(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1900,7 +2063,7 @@ func (self *StringName) ModNodePath(rhs string) string {
 	var tmp_rhs NodePath
 	nodePathFromGo(&tmp_rhs, rhs)
 	defer nodePathDestroy(&tmp_rhs)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModNodePath, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModNodePath(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&tmp_rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1908,7 +2071,7 @@ func (self *StringName) ModNodePath(rhs string) string {
 func (self *StringName) ModRID(rhs RID) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModRID, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModRID(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1916,7 +2079,7 @@ func (self *StringName) ModRID(rhs RID) string {
 func (self *StringName) ModCallable(rhs Callable) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModCallable, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModCallable(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1924,7 +2087,7 @@ func (self *StringName) ModCallable(rhs Callable) string {
 func (self *StringName) ModSignal(rhs Signal) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModSignal, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModSignal(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1932,14 +2095,14 @@ func (self *StringName) ModSignal(rhs Signal) string {
 func (self *StringName) ModDictionary(rhs Dictionary) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // InDictionary mirrors the Godot StringName in operator.
 func (self *StringName) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(stringNameOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1947,14 +2110,14 @@ func (self *StringName) InDictionary(rhs Dictionary) bool {
 func (self *StringName) ModArray(rhs Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // InArray mirrors the Godot StringName in operator.
 func (self *StringName) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(stringNameOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -1962,7 +2125,7 @@ func (self *StringName) InArray(rhs Array) bool {
 func (self *StringName) ModPackedByteArray(rhs PackedByteArray) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedByteArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedByteArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1970,7 +2133,7 @@ func (self *StringName) ModPackedByteArray(rhs PackedByteArray) string {
 func (self *StringName) ModPackedInt32Array(rhs PackedInt32Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedInt32Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedInt32Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1978,7 +2141,7 @@ func (self *StringName) ModPackedInt32Array(rhs PackedInt32Array) string {
 func (self *StringName) ModPackedInt64Array(rhs PackedInt64Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedInt64Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedInt64Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1986,7 +2149,7 @@ func (self *StringName) ModPackedInt64Array(rhs PackedInt64Array) string {
 func (self *StringName) ModPackedFloat32Array(rhs PackedFloat32Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedFloat32Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedFloat32Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -1994,7 +2157,7 @@ func (self *StringName) ModPackedFloat32Array(rhs PackedFloat32Array) string {
 func (self *StringName) ModPackedFloat64Array(rhs PackedFloat64Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedFloat64Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedFloat64Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -2002,14 +2165,14 @@ func (self *StringName) ModPackedFloat64Array(rhs PackedFloat64Array) string {
 func (self *StringName) ModPackedStringArray(rhs PackedStringArray) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedStringArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedStringArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // InPackedStringArray mirrors the Godot StringName in operator.
 func (self *StringName) InPackedStringArray(rhs PackedStringArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(stringNameOpInPackedStringArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpInPackedStringArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -2017,7 +2180,7 @@ func (self *StringName) InPackedStringArray(rhs PackedStringArray) bool {
 func (self *StringName) ModPackedVector2Array(rhs PackedVector2Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector2Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector2Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -2025,7 +2188,7 @@ func (self *StringName) ModPackedVector2Array(rhs PackedVector2Array) string {
 func (self *StringName) ModPackedVector3Array(rhs PackedVector3Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector3Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector3Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -2033,7 +2196,7 @@ func (self *StringName) ModPackedVector3Array(rhs PackedVector3Array) string {
 func (self *StringName) ModPackedColorArray(rhs PackedColorArray) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedColorArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedColorArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -2041,21 +2204,21 @@ func (self *StringName) ModPackedColorArray(rhs PackedColorArray) string {
 func (self *StringName) ModPackedVector4Array(rhs PackedVector4Array) string {
 	var raw String
 	defer stringDestroy(&raw)
-	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector4Array, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrOperatorEvaluator(stringNameOpModPackedVector4Array(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *StringName) Destroy() {
-	gdextension.CallPtrDestructor(stringNameDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(stringNameDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *StringName) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(stringNameFromType,
+	gdextension.CallVariantFromType(stringNameFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -2065,7 +2228,7 @@ func (self *StringName) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func StringNameFromVariant(src *Variant) StringName {
 	var v StringName
-	gdextension.CallTypeFromVariant(stringNameToType,
+	gdextension.CallTypeFromVariant(stringNameToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

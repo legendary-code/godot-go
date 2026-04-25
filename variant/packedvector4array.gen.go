@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,97 +14,127 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type PackedVector4Array [16]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	packedVector4ArrayFromType          gdextension.VariantFromTypeFunc
-	packedVector4ArrayToType            gdextension.VariantToTypeFunc
-	packedVector4ArrayDtor              gdextension.PtrDestructor
-	packedVector4ArrayCtor0             gdextension.PtrConstructor
-	packedVector4ArrayCtor1             gdextension.PtrConstructor
-	packedVector4ArrayCtor2             gdextension.PtrConstructor
-	packedVector4ArrayMethodGet         gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodSet         gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodSize        gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodIsEmpty     gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodPushBack    gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodAppend      gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodAppendArray gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodRemoveAt    gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodInsert      gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodFill        gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodResize      gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodClear       gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodHas         gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodReverse     gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodSlice       gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodToByteArray gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodSort        gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodBsearch     gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodDuplicate   gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodFind        gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodRfind       gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodCount       gdextension.PtrBuiltInMethod
-	packedVector4ArrayMethodErase       gdextension.PtrBuiltInMethod
-	packedVector4ArrayOpNot             gdextension.PtrOperatorEvaluator
-	packedVector4ArrayOpInDictionary    gdextension.PtrOperatorEvaluator
-	packedVector4ArrayOpInArray         gdextension.PtrOperatorEvaluator
-	packedVector4ArrayOpEq              gdextension.PtrOperatorEvaluator
-	packedVector4ArrayOpNe              gdextension.PtrOperatorEvaluator
-	packedVector4ArrayOpAdd             gdextension.PtrOperatorEvaluator
-	packedVector4ArrayIndexedGetter     gdextension.PtrIndexedGetter
-	packedVector4ArrayIndexedSetter     gdextension.PtrIndexedSetter
+	packedVector4ArrayFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 0)
+	})
+	packedVector4ArrayCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 1)
+	})
+	packedVector4ArrayCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 2)
+	})
+	packedVector4ArrayMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("get"), 1227817084)
+	})
+	packedVector4ArrayMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("set"), 1350366223)
+	})
+	packedVector4ArrayMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("size"), 3173160232)
+	})
+	packedVector4ArrayMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("is_empty"), 3918633141)
+	})
+	packedVector4ArrayMethodPushBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("push_back"), 3289167688)
+	})
+	packedVector4ArrayMethodAppend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("append"), 3289167688)
+	})
+	packedVector4ArrayMethodAppendArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("append_array"), 537428395)
+	})
+	packedVector4ArrayMethodRemoveAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("remove_at"), 2823966027)
+	})
+	packedVector4ArrayMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("insert"), 11085009)
+	})
+	packedVector4ArrayMethodFill = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("fill"), 3761353134)
+	})
+	packedVector4ArrayMethodResize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("resize"), 848867239)
+	})
+	packedVector4ArrayMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("clear"), 3218959716)
+	})
+	packedVector4ArrayMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("has"), 88913544)
+	})
+	packedVector4ArrayMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("reverse"), 3218959716)
+	})
+	packedVector4ArrayMethodSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("slice"), 2942803855)
+	})
+	packedVector4ArrayMethodToByteArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("to_byte_array"), 247621236)
+	})
+	packedVector4ArrayMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("sort"), 3218959716)
+	})
+	packedVector4ArrayMethodBsearch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("bsearch"), 1822067054)
+	})
+	packedVector4ArrayMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("duplicate"), 146203628)
+	})
+	packedVector4ArrayMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("find"), 3091171314)
+	})
+	packedVector4ArrayMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("rfind"), 3091171314)
+	})
+	packedVector4ArrayMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("count"), 3956594488)
+	})
+	packedVector4ArrayMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("erase"), 3289167688)
+	})
+	packedVector4ArrayOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeNil)
+	})
+	packedVector4ArrayOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeDictionary)
+	})
+	packedVector4ArrayOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeArray)
+	})
+	packedVector4ArrayOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedVector4Array)
+	})
+	packedVector4ArrayIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedVector4Array)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initPackedVector4Array)
-}
-
-func initPackedVector4Array() {
-	packedVector4ArrayFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayDtor = gdextension.GetPtrDestructor(gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 0)
-	packedVector4ArrayCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 1)
-	packedVector4ArrayCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedVector4Array, 2)
-	packedVector4ArrayMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("get"), 1227817084)
-	packedVector4ArrayMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("set"), 1350366223)
-	packedVector4ArrayMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("size"), 3173160232)
-	packedVector4ArrayMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("is_empty"), 3918633141)
-	packedVector4ArrayMethodPushBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("push_back"), 3289167688)
-	packedVector4ArrayMethodAppend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("append"), 3289167688)
-	packedVector4ArrayMethodAppendArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("append_array"), 537428395)
-	packedVector4ArrayMethodRemoveAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("remove_at"), 2823966027)
-	packedVector4ArrayMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("insert"), 11085009)
-	packedVector4ArrayMethodFill = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("fill"), 3761353134)
-	packedVector4ArrayMethodResize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("resize"), 848867239)
-	packedVector4ArrayMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("clear"), 3218959716)
-	packedVector4ArrayMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("has"), 88913544)
-	packedVector4ArrayMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("reverse"), 3218959716)
-	packedVector4ArrayMethodSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("slice"), 2942803855)
-	packedVector4ArrayMethodToByteArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("to_byte_array"), 247621236)
-	packedVector4ArrayMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("sort"), 3218959716)
-	packedVector4ArrayMethodBsearch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("bsearch"), 1822067054)
-	packedVector4ArrayMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("duplicate"), 146203628)
-	packedVector4ArrayMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("find"), 3091171314)
-	packedVector4ArrayMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("rfind"), 3091171314)
-	packedVector4ArrayMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("count"), 3956594488)
-	packedVector4ArrayMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedVector4Array, internStringName("erase"), 3289167688)
-	packedVector4ArrayOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeNil)
-	packedVector4ArrayOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeDictionary)
-	packedVector4ArrayOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypeArray)
-	packedVector4ArrayOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedVector4Array, gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedVector4Array)
-	packedVector4ArrayIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedVector4Array)
-
-}
 
 // NewPackedVector4Array constructs a PackedVector4Array via the host (constructor index 0).
 func NewPackedVector4Array() PackedVector4Array {
 	var v PackedVector4Array
-	gdextension.CallPtrConstructor(packedVector4ArrayCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(packedVector4ArrayCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -113,7 +144,7 @@ func NewPackedVector4ArrayFromPackedVector4Array(from PackedVector4Array) Packed
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedVector4ArrayCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedVector4ArrayCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -123,7 +154,7 @@ func NewPackedVector4ArrayFromArray(from Array) PackedVector4Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedVector4ArrayCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedVector4ArrayCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -133,7 +164,7 @@ func (self *PackedVector4Array) Get(index int64) Vector4 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -143,20 +174,20 @@ func (self *PackedVector4Array) Set(index int64, value Vector4) {
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Size mirrors the Godot PackedVector4Array.size method.
 func (self *PackedVector4Array) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot PackedVector4Array.is_empty method.
 func (self *PackedVector4Array) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -166,7 +197,7 @@ func (self *PackedVector4Array) PushBack(value Vector4) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodPushBack(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -176,7 +207,7 @@ func (self *PackedVector4Array) Append(value Vector4) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodAppend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -185,7 +216,7 @@ func (self *PackedVector4Array) AppendArray(array PackedVector4Array) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodAppendArray, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodAppendArray(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // RemoveAt mirrors the Godot PackedVector4Array.remove_at method.
@@ -193,7 +224,7 @@ func (self *PackedVector4Array) RemoveAt(index int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodRemoveAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodRemoveAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Insert mirrors the Godot PackedVector4Array.insert method.
@@ -203,7 +234,7 @@ func (self *PackedVector4Array) Insert(at_index int64, value Vector4) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&at_index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -212,7 +243,7 @@ func (self *PackedVector4Array) Fill(value Vector4) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodFill(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Resize mirrors the Godot PackedVector4Array.resize method.
@@ -221,13 +252,13 @@ func (self *PackedVector4Array) Resize(new_size int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&new_size)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodResize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodResize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot PackedVector4Array.clear method.
 func (self *PackedVector4Array) Clear() {
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Has mirrors the Godot PackedVector4Array.has method.
@@ -236,13 +267,13 @@ func (self *PackedVector4Array) Has(value Vector4) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Reverse mirrors the Godot PackedVector4Array.reverse method.
 func (self *PackedVector4Array) Reverse() {
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Slice mirrors the Godot PackedVector4Array.slice method.
@@ -252,20 +283,20 @@ func (self *PackedVector4Array) Slice(begin int64, end int64) PackedVector4Array
 		gdextension.TypePtr(unsafe.Pointer(&begin)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToByteArray mirrors the Godot PackedVector4Array.to_byte_array method.
 func (self *PackedVector4Array) ToByteArray() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodToByteArray, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodToByteArray(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sort mirrors the Godot PackedVector4Array.sort method.
 func (self *PackedVector4Array) Sort() {
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Bsearch mirrors the Godot PackedVector4Array.bsearch method.
@@ -275,14 +306,14 @@ func (self *PackedVector4Array) Bsearch(value Vector4, before bool) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodBsearch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Duplicate mirrors the Godot PackedVector4Array.duplicate method.
 func (self *PackedVector4Array) Duplicate() PackedVector4Array {
 	var ret PackedVector4Array
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -293,7 +324,7 @@ func (self *PackedVector4Array) Find(value Vector4, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -304,7 +335,7 @@ func (self *PackedVector4Array) Rfind(value Vector4, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -314,7 +345,7 @@ func (self *PackedVector4Array) Count(value Vector4) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -324,75 +355,75 @@ func (self *PackedVector4Array) Erase(value Vector4) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedVector4ArrayMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot PackedVector4Array not operator.
 func (self *PackedVector4Array) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot PackedVector4Array in operator.
 func (self *PackedVector4Array) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot PackedVector4Array in operator.
 func (self *PackedVector4Array) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot PackedVector4Array == operator.
 func (self *PackedVector4Array) Eq(rhs PackedVector4Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot PackedVector4Array != operator.
 func (self *PackedVector4Array) Ne(rhs PackedVector4Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot PackedVector4Array + operator.
 func (self *PackedVector4Array) Add(rhs PackedVector4Array) PackedVector4Array {
 	var ret PackedVector4Array
-	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedVector4ArrayOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *PackedVector4Array) Index(index int64) Vector4 {
 	var ret Vector4
-	gdextension.CallPtrIndexedGetter(packedVector4ArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(packedVector4ArrayIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *PackedVector4Array) SetIndex(index int64, value Vector4) {
-	gdextension.CallPtrIndexedSetter(packedVector4ArrayIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(packedVector4ArrayIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *PackedVector4Array) Destroy() {
-	gdextension.CallPtrDestructor(packedVector4ArrayDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(packedVector4ArrayDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *PackedVector4Array) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(packedVector4ArrayFromType,
+	gdextension.CallVariantFromType(packedVector4ArrayFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -402,7 +433,7 @@ func (self *PackedVector4Array) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func PackedVector4ArrayFromVariant(src *Variant) PackedVector4Array {
 	var v PackedVector4Array
-	gdextension.CallTypeFromVariant(packedVector4ArrayToType,
+	gdextension.CallTypeFromVariant(packedVector4ArrayToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

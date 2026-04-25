@@ -27,9 +27,10 @@ type builtinView struct {
 	Keyed        *keyedView
 
 	// CacheVars carries every cached resolved-fn-ptr we declare at file scope.
+	// Each cacheVar is rendered as `var <Name> <Type>` — for the lazy pattern,
+	// Type starts with "= sync.OnceValue(...)" so the var becomes a
+	// `sync.OnceValue[T]` and call sites invoke it via `<Name>()`.
 	CacheVars []cacheVar
-	// InitLines are the assignments emitted in <name>Init() to populate them.
-	InitLines []string
 }
 
 type memberView struct {
@@ -40,7 +41,10 @@ type memberView struct {
 
 type cacheVar struct {
 	Name string
-	Type string // Go type (e.g. "gdextension.PtrConstructor")
+	// Type is whatever follows the variable name in `var <Name> <Type>`.
+	// For the lazy pattern, this is a `= sync.OnceValue(...)` initializer
+	// (with the type inferred from the closure's return).
+	Type string
 }
 
 // callableView is the shared shape for emitted constructors/methods/operators.
@@ -94,17 +98,14 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 	}
 
 	// Variant from/to type — every emitted builtin gets these.
-	addCacheVar(view, lowerFirst(bc.Name)+"FromType", "gdextension.VariantFromTypeFunc")
-	addCacheVar(view, lowerFirst(bc.Name)+"ToType", "gdextension.VariantToTypeFunc")
-	view.InitLines = append(view.InitLines,
-		fmt.Sprintf("%sFromType = gdextension.GetVariantFromTypeConstructor(gdextension.%s)", lowerFirst(bc.Name), view.VariantType),
-		fmt.Sprintf("%sToType = gdextension.GetVariantToTypeConstructor(gdextension.%s)", lowerFirst(bc.Name), view.VariantType),
-	)
+	addLazyVar(view, lowerFirst(bc.Name)+"FromType", "gdextension.VariantFromTypeFunc",
+		fmt.Sprintf("gdextension.GetVariantFromTypeConstructor(gdextension.%s)", view.VariantType))
+	addLazyVar(view, lowerFirst(bc.Name)+"ToType", "gdextension.VariantToTypeFunc",
+		fmt.Sprintf("gdextension.GetVariantToTypeConstructor(gdextension.%s)", view.VariantType))
 	if bc.HasDestructor {
 		dvar := lowerFirst(bc.Name) + "Dtor"
-		addCacheVar(view, dvar, "gdextension.PtrDestructor")
-		view.InitLines = append(view.InitLines,
-			fmt.Sprintf("%s = gdextension.GetPtrDestructor(gdextension.%s)", dvar, view.VariantType))
+		addLazyVar(view, dvar, "gdextension.PtrDestructor",
+			fmt.Sprintf("gdextension.GetPtrDestructor(gdextension.%s)", view.VariantType))
 	}
 
 	for _, c := range bc.Constructors {
@@ -155,8 +156,12 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 	return os.WriteFile(outPath, formatted, 0o644)
 }
 
-func addCacheVar(view *builtinView, name, typ string) {
-	view.CacheVars = append(view.CacheVars, cacheVar{Name: name, Type: typ})
+// addLazyVar appends a `<name> = sync.OnceValue(func() <retType> { return <body> })`
+// declaration to view.CacheVars. Call sites reference these as `<name>()` so
+// the resolution happens on first use rather than at package init.
+func addLazyVar(view *builtinView, name, retType, body string) {
+	init := "= sync.OnceValue(func() " + retType + " {\n\treturn " + body + "\n})"
+	view.CacheVars = append(view.CacheVars, cacheVar{Name: name, Type: init})
 }
 
 // argPrep returns the (prep, passExpr) pair for an argument. prep is Go code
@@ -347,9 +352,8 @@ func buildConstructorView(api *API, bc *BuiltinClass, c Constructor, view *built
 		}
 	}
 	cacheName := fmt.Sprintf("%sCtor%d", lowerFirst(bc.Name), c.Index)
-	addCacheVar(view, cacheName, "gdextension.PtrConstructor")
-	view.InitLines = append(view.InitLines,
-		fmt.Sprintf("%s = gdextension.GetPtrConstructor(gdextension.%s, %d)", cacheName, view.VariantType, c.Index))
+	addLazyVar(view, cacheName, "gdextension.PtrConstructor",
+		fmt.Sprintf("gdextension.GetPtrConstructor(gdextension.%s, %d)", view.VariantType, c.Index))
 
 	name := ctorGoName(bc.Name, c)
 	sig := fmt.Sprintf("%s(%s) %s", name, paramSig(c.Arguments), bc.Name)
@@ -363,7 +367,7 @@ func buildConstructorView(api *API, bc *BuiltinClass, c Constructor, view *built
 	if prep != "" {
 		b.WriteString(prep)
 	}
-	fmt.Fprintf(&b, "gdextension.CallPtrConstructor(%s, gdextension.TypePtr(unsafe.Pointer(&v)), %s)\n\treturn v",
+	fmt.Fprintf(&b, "gdextension.CallPtrConstructor(%s(), gdextension.TypePtr(unsafe.Pointer(&v)), %s)\n\treturn v",
 		cacheName, argsExpr)
 
 	doc := fmt.Sprintf("// %s constructs a %s via the host (constructor index %d).", name, bc.Name, c.Index)
@@ -385,10 +389,9 @@ func buildMethodView(api *API, bc *BuiltinClass, m Method, view *builtinView) (c
 
 	goMethod := pascal(m.Name)
 	cacheName := fmt.Sprintf("%sMethod%s", lowerFirst(bc.Name), goMethod)
-	addCacheVar(view, cacheName, "gdextension.PtrBuiltInMethod")
-	view.InitLines = append(view.InitLines,
-		fmt.Sprintf("%s = gdextension.GetPtrBuiltinMethod(gdextension.%s, internStringName(%q), %d)",
-			cacheName, view.VariantType, m.Name, m.Hash))
+	addLazyVar(view, cacheName, "gdextension.PtrBuiltInMethod",
+		fmt.Sprintf("gdextension.GetPtrBuiltinMethod(gdextension.%s, internStringName(%q), %d)",
+			view.VariantType, m.Name, m.Hash))
 
 	plan, ok := returnPrep(m.ReturnType)
 	if !ok {
@@ -425,7 +428,7 @@ func buildMethodView(api *API, bc *BuiltinClass, m Method, view *builtinView) (c
 	if prep != "" {
 		b.WriteString(prep)
 	}
-	fmt.Fprintf(&b, "gdextension.CallPtrBuiltinMethod(%s, %s, %s, %s)",
+	fmt.Fprintf(&b, "gdextension.CallPtrBuiltinMethod(%s(), %s, %s, %s)",
 		cacheName, basePtrExpr, argsExpr, plan.RetArg)
 	if plan.RetExpr != "" {
 		b.WriteString("\n\treturn ")
@@ -465,10 +468,9 @@ func buildOperatorView(api *API, bc *BuiltinClass, op Operator, view *builtinVie
 	}
 
 	cacheName := fmt.Sprintf("%sOp%s", lowerFirst(bc.Name), goName)
-	addCacheVar(view, cacheName, "gdextension.PtrOperatorEvaluator")
-	view.InitLines = append(view.InitLines,
-		fmt.Sprintf("%s = gdextension.GetPtrOperatorEvaluator(gdextension.%s, gdextension.%s, gdextension.%s)",
-			cacheName, enum, view.VariantType, rightVariantType))
+	addLazyVar(view, cacheName, "gdextension.PtrOperatorEvaluator",
+		fmt.Sprintf("gdextension.GetPtrOperatorEvaluator(gdextension.%s, gdextension.%s, gdextension.%s)",
+			enum, view.VariantType, rightVariantType))
 
 	plan, ok := returnPrep(op.ReturnType)
 	if !ok {
@@ -523,7 +525,7 @@ func buildOperatorView(api *API, bc *BuiltinClass, op Operator, view *builtinVie
 			b.WriteString("var tmp_rhs NodePath\n\tnodePathFromGo(&tmp_rhs, rhs)\n\tdefer nodePathDestroy(&tmp_rhs)\n\t")
 		}
 	}
-	fmt.Fprintf(&b, "gdextension.CallPtrOperatorEvaluator(%s, gdextension.TypePtr(unsafe.Pointer(self)), %s, %s)\n\treturn %s",
+	fmt.Fprintf(&b, "gdextension.CallPtrOperatorEvaluator(%s(), gdextension.TypePtr(unsafe.Pointer(self)), %s, %s)\n\treturn %s",
 		cacheName, rightExpr, plan.RetArg, plan.RetExpr)
 
 	doc := fmt.Sprintf("// %s mirrors the Godot %s %s operator.", goName, bc.Name, op.Name)
@@ -541,12 +543,10 @@ func buildIndexedView(api *API, bc *BuiltinClass, view *builtinView) (indexedVie
 
 	getCache := lowerFirst(bc.Name) + "IndexedGetter"
 	setCache := lowerFirst(bc.Name) + "IndexedSetter"
-	addCacheVar(view, getCache, "gdextension.PtrIndexedGetter")
-	addCacheVar(view, setCache, "gdextension.PtrIndexedSetter")
-	view.InitLines = append(view.InitLines,
-		fmt.Sprintf("%s = gdextension.GetPtrIndexedGetter(gdextension.%s)", getCache, view.VariantType),
-		fmt.Sprintf("%s = gdextension.GetPtrIndexedSetter(gdextension.%s)", setCache, view.VariantType),
-	)
+	addLazyVar(view, getCache, "gdextension.PtrIndexedGetter",
+		fmt.Sprintf("gdextension.GetPtrIndexedGetter(gdextension.%s)", view.VariantType))
+	addLazyVar(view, setCache, "gdextension.PtrIndexedSetter",
+		fmt.Sprintf("gdextension.GetPtrIndexedSetter(gdextension.%s)", view.VariantType))
 
 	var getB strings.Builder
 	getB.WriteString(plan.DeclRet)
@@ -555,7 +555,7 @@ func buildIndexedView(api *API, bc *BuiltinClass, view *builtinView) (indexedVie
 		getB.WriteString(plan.Finalize)
 		getB.WriteString("\n\t")
 	}
-	fmt.Fprintf(&getB, "gdextension.CallPtrIndexedGetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, %s)\n\treturn %s",
+	fmt.Fprintf(&getB, "gdextension.CallPtrIndexedGetter(%s(), gdextension.TypePtr(unsafe.Pointer(self)), index, %s)\n\treturn %s",
 		getCache, plan.RetArg, plan.RetExpr)
 
 	var setB strings.Builder
@@ -563,18 +563,18 @@ func buildIndexedView(api *API, bc *BuiltinClass, view *builtinView) (indexedVie
 	switch kind {
 	case kindString:
 		setB.WriteString("var tmp_value String\n\tstringFromGo(&tmp_value, value)\n\tdefer stringDestroy(&tmp_value)\n\t")
-		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
 			setCache)
 	case kindStringName:
 		setB.WriteString("var tmp_value StringName\n\tstringNameFromGo(&tmp_value, value)\n\tdefer stringNameDestroy(&tmp_value)\n\t")
-		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
 			setCache)
 	case kindNodePath:
 		setB.WriteString("var tmp_value NodePath\n\tnodePathFromGo(&tmp_value, value)\n\tdefer nodePathDestroy(&tmp_value)\n\t")
-		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
 			setCache)
 	default:
-		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))",
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))",
 			setCache)
 	}
 
@@ -640,6 +640,7 @@ var builtinTmpl = template.Must(template.New("builtin").Funcs(template.FuncMap{
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -662,21 +663,13 @@ func (self *{{$.GoName}}) Set{{.GoName}}(value {{.GoType}}) {
 }
 {{end}}
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
 {{range .CacheVars}}	{{.Name}} {{.Type}}
 {{end}}
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, init{{.GoName}})
-}
-
-func init{{.GoName}}() {
-{{range .InitLines}}	{{.}}
-{{end}}
-}
 
 {{range .Constructors}}
 {{.GoDoc}}
@@ -717,7 +710,7 @@ func {{.SetSig}} {
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *{{.GoName}}) Destroy() {
-	gdextension.CallPtrDestructor({{.GoName | lower}}Dtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor({{.GoName | lower}}Dtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 {{end}}
 
@@ -725,7 +718,7 @@ func (self *{{.GoName}}) Destroy() {
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *{{.GoName}}) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType({{.GoName | lower}}FromType,
+	gdextension.CallVariantFromType({{.GoName | lower}}FromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -735,7 +728,7 @@ func (self *{{.GoName}}) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func {{.GoName}}FromVariant(src *Variant) {{.GoName}} {
 	var v {{.GoName}}
-	gdextension.CallTypeFromVariant({{.GoName | lower}}ToType,
+	gdextension.CallTypeFromVariant({{.GoName | lower}}ToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

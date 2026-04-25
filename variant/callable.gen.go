@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,73 +14,91 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type Callable [16]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	callableFromType                       gdextension.VariantFromTypeFunc
-	callableToType                         gdextension.VariantToTypeFunc
-	callableDtor                           gdextension.PtrDestructor
-	callableCtor0                          gdextension.PtrConstructor
-	callableCtor1                          gdextension.PtrConstructor
-	callableMethodCreate                   gdextension.PtrBuiltInMethod
-	callableMethodCallv                    gdextension.PtrBuiltInMethod
-	callableMethodIsNull                   gdextension.PtrBuiltInMethod
-	callableMethodIsCustom                 gdextension.PtrBuiltInMethod
-	callableMethodIsStandard               gdextension.PtrBuiltInMethod
-	callableMethodIsValid                  gdextension.PtrBuiltInMethod
-	callableMethodGetObjectId              gdextension.PtrBuiltInMethod
-	callableMethodGetMethod                gdextension.PtrBuiltInMethod
-	callableMethodGetArgumentCount         gdextension.PtrBuiltInMethod
-	callableMethodGetBoundArgumentsCount   gdextension.PtrBuiltInMethod
-	callableMethodGetBoundArguments        gdextension.PtrBuiltInMethod
-	callableMethodGetUnboundArgumentsCount gdextension.PtrBuiltInMethod
-	callableMethodHash                     gdextension.PtrBuiltInMethod
-	callableMethodBindv                    gdextension.PtrBuiltInMethod
-	callableMethodUnbind                   gdextension.PtrBuiltInMethod
-	callableOpNot                          gdextension.PtrOperatorEvaluator
-	callableOpEq                           gdextension.PtrOperatorEvaluator
-	callableOpNe                           gdextension.PtrOperatorEvaluator
-	callableOpInDictionary                 gdextension.PtrOperatorEvaluator
-	callableOpInArray                      gdextension.PtrOperatorEvaluator
+	callableFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeCallable)
+	})
+	callableToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeCallable)
+	})
+	callableDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypeCallable)
+	})
+	callableCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeCallable, 0)
+	})
+	callableCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeCallable, 1)
+	})
+	callableMethodCreate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("create"), 1709381114)
+	})
+	callableMethodCallv = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("callv"), 413578926)
+	})
+	callableMethodIsNull = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_null"), 3918633141)
+	})
+	callableMethodIsCustom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_custom"), 3918633141)
+	})
+	callableMethodIsStandard = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_standard"), 3918633141)
+	})
+	callableMethodIsValid = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_valid"), 3918633141)
+	})
+	callableMethodGetObjectId = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_object_id"), 3173160232)
+	})
+	callableMethodGetMethod = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_method"), 1825232092)
+	})
+	callableMethodGetArgumentCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_argument_count"), 3173160232)
+	})
+	callableMethodGetBoundArgumentsCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_bound_arguments_count"), 3173160232)
+	})
+	callableMethodGetBoundArguments = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_bound_arguments"), 4144163970)
+	})
+	callableMethodGetUnboundArgumentsCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_unbound_arguments_count"), 3173160232)
+	})
+	callableMethodHash = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("hash"), 3173160232)
+	})
+	callableMethodBindv = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("bindv"), 3564560322)
+	})
+	callableMethodUnbind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("unbind"), 755001590)
+	})
+	callableOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeCallable, gdextension.VariantTypeNil)
+	})
+	callableOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeCallable, gdextension.VariantTypeCallable)
+	})
+	callableOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeCallable, gdextension.VariantTypeCallable)
+	})
+	callableOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeCallable, gdextension.VariantTypeDictionary)
+	})
+	callableOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeCallable, gdextension.VariantTypeArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initCallable)
-}
-
-func initCallable() {
-	callableFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeCallable)
-	callableToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeCallable)
-	callableDtor = gdextension.GetPtrDestructor(gdextension.VariantTypeCallable)
-	callableCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeCallable, 0)
-	callableCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeCallable, 1)
-	callableMethodCreate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("create"), 1709381114)
-	callableMethodCallv = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("callv"), 413578926)
-	callableMethodIsNull = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_null"), 3918633141)
-	callableMethodIsCustom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_custom"), 3918633141)
-	callableMethodIsStandard = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_standard"), 3918633141)
-	callableMethodIsValid = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("is_valid"), 3918633141)
-	callableMethodGetObjectId = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_object_id"), 3173160232)
-	callableMethodGetMethod = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_method"), 1825232092)
-	callableMethodGetArgumentCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_argument_count"), 3173160232)
-	callableMethodGetBoundArgumentsCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_bound_arguments_count"), 3173160232)
-	callableMethodGetBoundArguments = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_bound_arguments"), 4144163970)
-	callableMethodGetUnboundArgumentsCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("get_unbound_arguments_count"), 3173160232)
-	callableMethodHash = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("hash"), 3173160232)
-	callableMethodBindv = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("bindv"), 3564560322)
-	callableMethodUnbind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeCallable, internStringName("unbind"), 755001590)
-	callableOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeCallable, gdextension.VariantTypeNil)
-	callableOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeCallable, gdextension.VariantTypeCallable)
-	callableOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeCallable, gdextension.VariantTypeCallable)
-	callableOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeCallable, gdextension.VariantTypeDictionary)
-	callableOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeCallable, gdextension.VariantTypeArray)
-
-}
 
 // NewCallable constructs a Callable via the host (constructor index 0).
 func NewCallable() Callable {
 	var v Callable
-	gdextension.CallPtrConstructor(callableCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(callableCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -89,7 +108,7 @@ func NewCallableFromCallable(from Callable) Callable {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(callableCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(callableCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -104,7 +123,7 @@ func CallableCreate(v Variant, method string) Callable {
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_method)),
 	}
-	gdextension.CallPtrBuiltinMethod(callableMethodCreate, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodCreate(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -114,42 +133,42 @@ func (self *Callable) Callv(arguments Array) Variant {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&arguments)),
 	}
-	gdextension.CallPtrBuiltinMethod(callableMethodCallv, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodCallv(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsNull mirrors the Godot Callable.is_null method.
 func (self *Callable) IsNull() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(callableMethodIsNull, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodIsNull(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsCustom mirrors the Godot Callable.is_custom method.
 func (self *Callable) IsCustom() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(callableMethodIsCustom, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodIsCustom(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsStandard mirrors the Godot Callable.is_standard method.
 func (self *Callable) IsStandard() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(callableMethodIsStandard, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodIsStandard(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsValid mirrors the Godot Callable.is_valid method.
 func (self *Callable) IsValid() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(callableMethodIsValid, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodIsValid(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetObjectId mirrors the Godot Callable.get_object_id method.
 func (self *Callable) GetObjectId() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(callableMethodGetObjectId, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetObjectId(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -157,42 +176,42 @@ func (self *Callable) GetObjectId() int64 {
 func (self *Callable) GetMethod() string {
 	var raw StringName
 	defer stringNameDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(callableMethodGetMethod, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetMethod(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringNameToGo(&raw)
 }
 
 // GetArgumentCount mirrors the Godot Callable.get_argument_count method.
 func (self *Callable) GetArgumentCount() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(callableMethodGetArgumentCount, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetArgumentCount(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetBoundArgumentsCount mirrors the Godot Callable.get_bound_arguments_count method.
 func (self *Callable) GetBoundArgumentsCount() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(callableMethodGetBoundArgumentsCount, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetBoundArgumentsCount(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetBoundArguments mirrors the Godot Callable.get_bound_arguments method.
 func (self *Callable) GetBoundArguments() Array {
 	var ret Array
-	gdextension.CallPtrBuiltinMethod(callableMethodGetBoundArguments, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetBoundArguments(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetUnboundArgumentsCount mirrors the Godot Callable.get_unbound_arguments_count method.
 func (self *Callable) GetUnboundArgumentsCount() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(callableMethodGetUnboundArgumentsCount, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodGetUnboundArgumentsCount(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Hash mirrors the Godot Callable.hash method.
 func (self *Callable) Hash() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(callableMethodHash, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodHash(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -202,7 +221,7 @@ func (self *Callable) Bindv(arguments Array) Callable {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&arguments)),
 	}
-	gdextension.CallPtrBuiltinMethod(callableMethodBindv, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodBindv(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -212,56 +231,56 @@ func (self *Callable) Unbind(argcount int64) Callable {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&argcount)),
 	}
-	gdextension.CallPtrBuiltinMethod(callableMethodUnbind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(callableMethodUnbind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Callable not operator.
 func (self *Callable) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(callableOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(callableOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Callable == operator.
 func (self *Callable) Eq(rhs Callable) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(callableOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(callableOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Callable != operator.
 func (self *Callable) Ne(rhs Callable) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(callableOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(callableOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Callable in operator.
 func (self *Callable) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(callableOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(callableOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Callable in operator.
 func (self *Callable) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(callableOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(callableOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *Callable) Destroy() {
-	gdextension.CallPtrDestructor(callableDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(callableDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Callable) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(callableFromType,
+	gdextension.CallVariantFromType(callableFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -271,7 +290,7 @@ func (self *Callable) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func CallableFromVariant(src *Variant) Callable {
 	var v Callable
-	gdextension.CallTypeFromVariant(callableToType,
+	gdextension.CallTypeFromVariant(callableToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

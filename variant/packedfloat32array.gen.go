@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,97 +14,127 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type PackedFloat32Array [16]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	packedFloat32ArrayFromType          gdextension.VariantFromTypeFunc
-	packedFloat32ArrayToType            gdextension.VariantToTypeFunc
-	packedFloat32ArrayDtor              gdextension.PtrDestructor
-	packedFloat32ArrayCtor0             gdextension.PtrConstructor
-	packedFloat32ArrayCtor1             gdextension.PtrConstructor
-	packedFloat32ArrayCtor2             gdextension.PtrConstructor
-	packedFloat32ArrayMethodGet         gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodSet         gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodSize        gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodIsEmpty     gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodPushBack    gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodAppend      gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodAppendArray gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodRemoveAt    gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodInsert      gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodFill        gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodResize      gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodClear       gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodHas         gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodReverse     gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodSlice       gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodToByteArray gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodSort        gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodBsearch     gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodDuplicate   gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodFind        gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodRfind       gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodCount       gdextension.PtrBuiltInMethod
-	packedFloat32ArrayMethodErase       gdextension.PtrBuiltInMethod
-	packedFloat32ArrayOpNot             gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayOpInDictionary    gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayOpInArray         gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayOpEq              gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayOpNe              gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayOpAdd             gdextension.PtrOperatorEvaluator
-	packedFloat32ArrayIndexedGetter     gdextension.PtrIndexedGetter
-	packedFloat32ArrayIndexedSetter     gdextension.PtrIndexedSetter
+	packedFloat32ArrayFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 0)
+	})
+	packedFloat32ArrayCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 1)
+	})
+	packedFloat32ArrayCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 2)
+	})
+	packedFloat32ArrayMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("get"), 1401583798)
+	})
+	packedFloat32ArrayMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("set"), 1113000516)
+	})
+	packedFloat32ArrayMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("size"), 3173160232)
+	})
+	packedFloat32ArrayMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("is_empty"), 3918633141)
+	})
+	packedFloat32ArrayMethodPushBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("push_back"), 4094791666)
+	})
+	packedFloat32ArrayMethodAppend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("append"), 4094791666)
+	})
+	packedFloat32ArrayMethodAppendArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("append_array"), 2981316639)
+	})
+	packedFloat32ArrayMethodRemoveAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("remove_at"), 2823966027)
+	})
+	packedFloat32ArrayMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("insert"), 1379903876)
+	})
+	packedFloat32ArrayMethodFill = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("fill"), 833936903)
+	})
+	packedFloat32ArrayMethodResize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("resize"), 848867239)
+	})
+	packedFloat32ArrayMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("clear"), 3218959716)
+	})
+	packedFloat32ArrayMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("has"), 1296369134)
+	})
+	packedFloat32ArrayMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("reverse"), 3218959716)
+	})
+	packedFloat32ArrayMethodSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("slice"), 1418229160)
+	})
+	packedFloat32ArrayMethodToByteArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("to_byte_array"), 247621236)
+	})
+	packedFloat32ArrayMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("sort"), 3218959716)
+	})
+	packedFloat32ArrayMethodBsearch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("bsearch"), 1175118842)
+	})
+	packedFloat32ArrayMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("duplicate"), 3575107827)
+	})
+	packedFloat32ArrayMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("find"), 1343150241)
+	})
+	packedFloat32ArrayMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("rfind"), 1343150241)
+	})
+	packedFloat32ArrayMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("count"), 2859915090)
+	})
+	packedFloat32ArrayMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("erase"), 4094791666)
+	})
+	packedFloat32ArrayOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeNil)
+	})
+	packedFloat32ArrayOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeDictionary)
+	})
+	packedFloat32ArrayOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeArray)
+	})
+	packedFloat32ArrayOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedFloat32Array)
+	})
+	packedFloat32ArrayIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedFloat32Array)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initPackedFloat32Array)
-}
-
-func initPackedFloat32Array() {
-	packedFloat32ArrayFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayDtor = gdextension.GetPtrDestructor(gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 0)
-	packedFloat32ArrayCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 1)
-	packedFloat32ArrayCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypePackedFloat32Array, 2)
-	packedFloat32ArrayMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("get"), 1401583798)
-	packedFloat32ArrayMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("set"), 1113000516)
-	packedFloat32ArrayMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("size"), 3173160232)
-	packedFloat32ArrayMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("is_empty"), 3918633141)
-	packedFloat32ArrayMethodPushBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("push_back"), 4094791666)
-	packedFloat32ArrayMethodAppend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("append"), 4094791666)
-	packedFloat32ArrayMethodAppendArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("append_array"), 2981316639)
-	packedFloat32ArrayMethodRemoveAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("remove_at"), 2823966027)
-	packedFloat32ArrayMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("insert"), 1379903876)
-	packedFloat32ArrayMethodFill = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("fill"), 833936903)
-	packedFloat32ArrayMethodResize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("resize"), 848867239)
-	packedFloat32ArrayMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("clear"), 3218959716)
-	packedFloat32ArrayMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("has"), 1296369134)
-	packedFloat32ArrayMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("reverse"), 3218959716)
-	packedFloat32ArrayMethodSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("slice"), 1418229160)
-	packedFloat32ArrayMethodToByteArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("to_byte_array"), 247621236)
-	packedFloat32ArrayMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("sort"), 3218959716)
-	packedFloat32ArrayMethodBsearch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("bsearch"), 1175118842)
-	packedFloat32ArrayMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("duplicate"), 3575107827)
-	packedFloat32ArrayMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("find"), 1343150241)
-	packedFloat32ArrayMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("rfind"), 1343150241)
-	packedFloat32ArrayMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("count"), 2859915090)
-	packedFloat32ArrayMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePackedFloat32Array, internStringName("erase"), 4094791666)
-	packedFloat32ArrayOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeNil)
-	packedFloat32ArrayOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeDictionary)
-	packedFloat32ArrayOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypeArray)
-	packedFloat32ArrayOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypePackedFloat32Array, gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypePackedFloat32Array)
-	packedFloat32ArrayIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypePackedFloat32Array)
-
-}
 
 // NewPackedFloat32Array constructs a PackedFloat32Array via the host (constructor index 0).
 func NewPackedFloat32Array() PackedFloat32Array {
 	var v PackedFloat32Array
-	gdextension.CallPtrConstructor(packedFloat32ArrayCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(packedFloat32ArrayCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -113,7 +144,7 @@ func NewPackedFloat32ArrayFromPackedFloat32Array(from PackedFloat32Array) Packed
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedFloat32ArrayCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedFloat32ArrayCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -123,7 +154,7 @@ func NewPackedFloat32ArrayFromArray(from Array) PackedFloat32Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(packedFloat32ArrayCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(packedFloat32ArrayCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -133,7 +164,7 @@ func (self *PackedFloat32Array) Get(index int64) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -145,20 +176,20 @@ func (self *PackedFloat32Array) Set(index int64, value float32) {
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Size mirrors the Godot PackedFloat32Array.size method.
 func (self *PackedFloat32Array) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot PackedFloat32Array.is_empty method.
 func (self *PackedFloat32Array) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -170,7 +201,7 @@ func (self *PackedFloat32Array) PushBack(value float32) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodPushBack(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -182,7 +213,7 @@ func (self *PackedFloat32Array) Append(value float32) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodAppend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -191,7 +222,7 @@ func (self *PackedFloat32Array) AppendArray(array PackedFloat32Array) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodAppendArray, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodAppendArray(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // RemoveAt mirrors the Godot PackedFloat32Array.remove_at method.
@@ -199,7 +230,7 @@ func (self *PackedFloat32Array) RemoveAt(index int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodRemoveAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodRemoveAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Insert mirrors the Godot PackedFloat32Array.insert method.
@@ -211,7 +242,7 @@ func (self *PackedFloat32Array) Insert(at_index int64, value float32) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&at_index)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -222,7 +253,7 @@ func (self *PackedFloat32Array) Fill(value float32) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFill(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Resize mirrors the Godot PackedFloat32Array.resize method.
@@ -231,13 +262,13 @@ func (self *PackedFloat32Array) Resize(new_size int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&new_size)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodResize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodResize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot PackedFloat32Array.clear method.
 func (self *PackedFloat32Array) Clear() {
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Has mirrors the Godot PackedFloat32Array.has method.
@@ -248,13 +279,13 @@ func (self *PackedFloat32Array) Has(value float32) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Reverse mirrors the Godot PackedFloat32Array.reverse method.
 func (self *PackedFloat32Array) Reverse() {
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Slice mirrors the Godot PackedFloat32Array.slice method.
@@ -264,20 +295,20 @@ func (self *PackedFloat32Array) Slice(begin int64, end int64) PackedFloat32Array
 		gdextension.TypePtr(unsafe.Pointer(&begin)),
 		gdextension.TypePtr(unsafe.Pointer(&end)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToByteArray mirrors the Godot PackedFloat32Array.to_byte_array method.
 func (self *PackedFloat32Array) ToByteArray() PackedByteArray {
 	var ret PackedByteArray
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodToByteArray, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodToByteArray(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sort mirrors the Godot PackedFloat32Array.sort method.
 func (self *PackedFloat32Array) Sort() {
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Bsearch mirrors the Godot PackedFloat32Array.bsearch method.
@@ -289,14 +320,14 @@ func (self *PackedFloat32Array) Bsearch(value float32, before bool) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodBsearch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Duplicate mirrors the Godot PackedFloat32Array.duplicate method.
 func (self *PackedFloat32Array) Duplicate() PackedFloat32Array {
 	var ret PackedFloat32Array
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -309,7 +340,7 @@ func (self *PackedFloat32Array) Find(value float32, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -322,7 +353,7 @@ func (self *PackedFloat32Array) Rfind(value float32, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -334,7 +365,7 @@ func (self *PackedFloat32Array) Count(value float32) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -346,75 +377,75 @@ func (self *PackedFloat32Array) Erase(value float32) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value)),
 	}
-	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(packedFloat32ArrayMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot PackedFloat32Array not operator.
 func (self *PackedFloat32Array) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot PackedFloat32Array in operator.
 func (self *PackedFloat32Array) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot PackedFloat32Array in operator.
 func (self *PackedFloat32Array) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot PackedFloat32Array == operator.
 func (self *PackedFloat32Array) Eq(rhs PackedFloat32Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot PackedFloat32Array != operator.
 func (self *PackedFloat32Array) Ne(rhs PackedFloat32Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot PackedFloat32Array + operator.
 func (self *PackedFloat32Array) Add(rhs PackedFloat32Array) PackedFloat32Array {
 	var ret PackedFloat32Array
-	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(packedFloat32ArrayOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *PackedFloat32Array) Index(index int64) float32 {
 	var raw float64
-	gdextension.CallPtrIndexedGetter(packedFloat32ArrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrIndexedGetter(packedFloat32ArrayIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *PackedFloat32Array) SetIndex(index int64, value float32) {
-	gdextension.CallPtrIndexedSetter(packedFloat32ArrayIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(packedFloat32ArrayIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *PackedFloat32Array) Destroy() {
-	gdextension.CallPtrDestructor(packedFloat32ArrayDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(packedFloat32ArrayDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *PackedFloat32Array) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(packedFloat32ArrayFromType,
+	gdextension.CallVariantFromType(packedFloat32ArrayFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -424,7 +455,7 @@ func (self *PackedFloat32Array) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func PackedFloat32ArrayFromVariant(src *Variant) PackedFloat32Array {
 	var v PackedFloat32Array
-	gdextension.CallTypeFromVariant(packedFloat32ArrayToType,
+	gdextension.CallTypeFromVariant(packedFloat32ArrayToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

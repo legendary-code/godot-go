@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -53,129 +54,175 @@ func (self *Color) SetA(value float32) {
 	*(*float32)(unsafe.Pointer(&self[12])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	colorFromType             gdextension.VariantFromTypeFunc
-	colorToType               gdextension.VariantToTypeFunc
-	colorCtor0                gdextension.PtrConstructor
-	colorCtor1                gdextension.PtrConstructor
-	colorCtor2                gdextension.PtrConstructor
-	colorCtor3                gdextension.PtrConstructor
-	colorCtor4                gdextension.PtrConstructor
-	colorCtor5                gdextension.PtrConstructor
-	colorCtor6                gdextension.PtrConstructor
-	colorMethodToArgb32       gdextension.PtrBuiltInMethod
-	colorMethodToAbgr32       gdextension.PtrBuiltInMethod
-	colorMethodToRgba32       gdextension.PtrBuiltInMethod
-	colorMethodToArgb64       gdextension.PtrBuiltInMethod
-	colorMethodToAbgr64       gdextension.PtrBuiltInMethod
-	colorMethodToRgba64       gdextension.PtrBuiltInMethod
-	colorMethodToHtml         gdextension.PtrBuiltInMethod
-	colorMethodClamp          gdextension.PtrBuiltInMethod
-	colorMethodInverted       gdextension.PtrBuiltInMethod
-	colorMethodLerp           gdextension.PtrBuiltInMethod
-	colorMethodLightened      gdextension.PtrBuiltInMethod
-	colorMethodDarkened       gdextension.PtrBuiltInMethod
-	colorMethodBlend          gdextension.PtrBuiltInMethod
-	colorMethodGetLuminance   gdextension.PtrBuiltInMethod
-	colorMethodSrgbToLinear   gdextension.PtrBuiltInMethod
-	colorMethodLinearToSrgb   gdextension.PtrBuiltInMethod
-	colorMethodIsEqualApprox  gdextension.PtrBuiltInMethod
-	colorMethodHex            gdextension.PtrBuiltInMethod
-	colorMethodHex64          gdextension.PtrBuiltInMethod
-	colorMethodHtml           gdextension.PtrBuiltInMethod
-	colorMethodHtmlIsValid    gdextension.PtrBuiltInMethod
-	colorMethodFromString     gdextension.PtrBuiltInMethod
-	colorMethodFromHsv        gdextension.PtrBuiltInMethod
-	colorMethodFromOkHsl      gdextension.PtrBuiltInMethod
-	colorMethodFromRgbe9995   gdextension.PtrBuiltInMethod
-	colorMethodFromRgba8      gdextension.PtrBuiltInMethod
-	colorOpNeg                gdextension.PtrOperatorEvaluator
-	colorOpPos                gdextension.PtrOperatorEvaluator
-	colorOpNot                gdextension.PtrOperatorEvaluator
-	colorOpMulInt             gdextension.PtrOperatorEvaluator
-	colorOpDivInt             gdextension.PtrOperatorEvaluator
-	colorOpMulFloat           gdextension.PtrOperatorEvaluator
-	colorOpDivFloat           gdextension.PtrOperatorEvaluator
-	colorOpEq                 gdextension.PtrOperatorEvaluator
-	colorOpNe                 gdextension.PtrOperatorEvaluator
-	colorOpAdd                gdextension.PtrOperatorEvaluator
-	colorOpSub                gdextension.PtrOperatorEvaluator
-	colorOpMul                gdextension.PtrOperatorEvaluator
-	colorOpDiv                gdextension.PtrOperatorEvaluator
-	colorOpInDictionary       gdextension.PtrOperatorEvaluator
-	colorOpInArray            gdextension.PtrOperatorEvaluator
-	colorOpInPackedColorArray gdextension.PtrOperatorEvaluator
-	colorIndexedGetter        gdextension.PtrIndexedGetter
-	colorIndexedSetter        gdextension.PtrIndexedSetter
+	colorFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeColor)
+	})
+	colorToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeColor)
+	})
+	colorCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 0)
+	})
+	colorCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 1)
+	})
+	colorCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 2)
+	})
+	colorCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 3)
+	})
+	colorCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 4)
+	})
+	colorCtor5 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 5)
+	})
+	colorCtor6 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 6)
+	})
+	colorMethodToArgb32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_argb32"), 3173160232)
+	})
+	colorMethodToAbgr32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_abgr32"), 3173160232)
+	})
+	colorMethodToRgba32 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_rgba32"), 3173160232)
+	})
+	colorMethodToArgb64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_argb64"), 3173160232)
+	})
+	colorMethodToAbgr64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_abgr64"), 3173160232)
+	})
+	colorMethodToRgba64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_rgba64"), 3173160232)
+	})
+	colorMethodToHtml = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_html"), 3429816538)
+	})
+	colorMethodClamp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("clamp"), 105651410)
+	})
+	colorMethodInverted = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("inverted"), 3334027602)
+	})
+	colorMethodLerp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("lerp"), 402949615)
+	})
+	colorMethodLightened = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("lightened"), 1466039168)
+	})
+	colorMethodDarkened = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("darkened"), 1466039168)
+	})
+	colorMethodBlend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("blend"), 3803690977)
+	})
+	colorMethodGetLuminance = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("get_luminance"), 466405837)
+	})
+	colorMethodSrgbToLinear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("srgb_to_linear"), 3334027602)
+	})
+	colorMethodLinearToSrgb = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("linear_to_srgb"), 3334027602)
+	})
+	colorMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("is_equal_approx"), 3167426256)
+	})
+	colorMethodHex = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("hex"), 351421375)
+	})
+	colorMethodHex64 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("hex64"), 351421375)
+	})
+	colorMethodHtml = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("html"), 2500054655)
+	})
+	colorMethodHtmlIsValid = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("html_is_valid"), 2942997125)
+	})
+	colorMethodFromString = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_string"), 3755044230)
+	})
+	colorMethodFromHsv = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_hsv"), 1573799446)
+	})
+	colorMethodFromOkHsl = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_ok_hsl"), 1573799446)
+	})
+	colorMethodFromRgbe9995 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_rgbe9995"), 351421375)
+	})
+	colorMethodFromRgba8 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_rgba8"), 3072934735)
+	})
+	colorOpNeg = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
+	})
+	colorOpPos = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
+	})
+	colorOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
+	})
+	colorOpMulInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeInt)
+	})
+	colorOpDivInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeInt)
+	})
+	colorOpMulFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeFloat)
+	})
+	colorOpDivFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeFloat)
+	})
+	colorOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpSub = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpDiv = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
+	})
+	colorOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypeDictionary)
+	})
+	colorOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypeArray)
+	})
+	colorOpInPackedColorArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypePackedColorArray)
+	})
+	colorIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeColor)
+	})
+	colorIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeColor)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initColor)
-}
-
-func initColor() {
-	colorFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeColor)
-	colorToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeColor)
-	colorCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 0)
-	colorCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 1)
-	colorCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 2)
-	colorCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 3)
-	colorCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 4)
-	colorCtor5 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 5)
-	colorCtor6 = gdextension.GetPtrConstructor(gdextension.VariantTypeColor, 6)
-	colorMethodToArgb32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_argb32"), 3173160232)
-	colorMethodToAbgr32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_abgr32"), 3173160232)
-	colorMethodToRgba32 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_rgba32"), 3173160232)
-	colorMethodToArgb64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_argb64"), 3173160232)
-	colorMethodToAbgr64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_abgr64"), 3173160232)
-	colorMethodToRgba64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_rgba64"), 3173160232)
-	colorMethodToHtml = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("to_html"), 3429816538)
-	colorMethodClamp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("clamp"), 105651410)
-	colorMethodInverted = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("inverted"), 3334027602)
-	colorMethodLerp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("lerp"), 402949615)
-	colorMethodLightened = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("lightened"), 1466039168)
-	colorMethodDarkened = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("darkened"), 1466039168)
-	colorMethodBlend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("blend"), 3803690977)
-	colorMethodGetLuminance = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("get_luminance"), 466405837)
-	colorMethodSrgbToLinear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("srgb_to_linear"), 3334027602)
-	colorMethodLinearToSrgb = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("linear_to_srgb"), 3334027602)
-	colorMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("is_equal_approx"), 3167426256)
-	colorMethodHex = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("hex"), 351421375)
-	colorMethodHex64 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("hex64"), 351421375)
-	colorMethodHtml = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("html"), 2500054655)
-	colorMethodHtmlIsValid = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("html_is_valid"), 2942997125)
-	colorMethodFromString = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_string"), 3755044230)
-	colorMethodFromHsv = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_hsv"), 1573799446)
-	colorMethodFromOkHsl = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_ok_hsl"), 1573799446)
-	colorMethodFromRgbe9995 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_rgbe9995"), 351421375)
-	colorMethodFromRgba8 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeColor, internStringName("from_rgba8"), 3072934735)
-	colorOpNeg = gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
-	colorOpPos = gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
-	colorOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeColor, gdextension.VariantTypeNil)
-	colorOpMulInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeInt)
-	colorOpDivInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeInt)
-	colorOpMulFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeFloat)
-	colorOpDivFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeFloat)
-	colorOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpSub = gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpDiv = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeColor, gdextension.VariantTypeColor)
-	colorOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypeDictionary)
-	colorOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypeArray)
-	colorOpInPackedColorArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeColor, gdextension.VariantTypePackedColorArray)
-	colorIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeColor)
-	colorIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeColor)
-
-}
 
 // NewColor constructs a Color via the host (constructor index 0).
 func NewColor() Color {
 	var v Color
-	gdextension.CallPtrConstructor(colorCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(colorCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -185,7 +232,7 @@ func NewColorFromColor(from Color) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(colorCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -198,7 +245,7 @@ func NewColorFromAlpha(from Color, alpha float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
-	gdextension.CallPtrConstructor(colorCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -216,7 +263,7 @@ func NewColorRGB(r float32, g float32, b float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_g)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_b)),
 	}
-	gdextension.CallPtrConstructor(colorCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -237,7 +284,7 @@ func NewColorRGBA(r float32, g float32, b float32, a float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_b)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_a)),
 	}
-	gdextension.CallPtrConstructor(colorCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -251,7 +298,7 @@ func NewColorFromString(code string) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_code)),
 	}
-	gdextension.CallPtrConstructor(colorCtor5, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor5(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -268,49 +315,49 @@ func NewColorCodeAlpha(code string, alpha float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_code)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
-	gdextension.CallPtrConstructor(colorCtor6, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(colorCtor6(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // ToArgb32 mirrors the Godot Color.to_argb32 method.
 func (self *Color) ToArgb32() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToArgb32, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToArgb32(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToAbgr32 mirrors the Godot Color.to_abgr32 method.
 func (self *Color) ToAbgr32() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToAbgr32, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToAbgr32(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToRgba32 mirrors the Godot Color.to_rgba32 method.
 func (self *Color) ToRgba32() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToRgba32, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToRgba32(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToArgb64 mirrors the Godot Color.to_argb64 method.
 func (self *Color) ToArgb64() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToArgb64, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToArgb64(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToAbgr64 mirrors the Godot Color.to_abgr64 method.
 func (self *Color) ToAbgr64() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToAbgr64, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToAbgr64(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ToRgba64 mirrors the Godot Color.to_rgba64 method.
 func (self *Color) ToRgba64() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(colorMethodToRgba64, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToRgba64(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -321,7 +368,7 @@ func (self *Color) ToHtml(with_alpha bool) string {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with_alpha)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodToHtml, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(colorMethodToHtml(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringToGo(&raw)
 }
 
@@ -332,14 +379,14 @@ func (self *Color) Clamp(min Color, max Color) Color {
 		gdextension.TypePtr(unsafe.Pointer(&min)),
 		gdextension.TypePtr(unsafe.Pointer(&max)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodClamp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodClamp(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Inverted mirrors the Godot Color.inverted method.
 func (self *Color) Inverted() Color {
 	var ret Color
-	gdextension.CallPtrBuiltinMethod(colorMethodInverted, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodInverted(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -352,7 +399,7 @@ func (self *Color) Lerp(to Color, weight float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodLerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodLerp(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -364,7 +411,7 @@ func (self *Color) Lightened(amount float32) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodLightened, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodLightened(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -376,7 +423,7 @@ func (self *Color) Darkened(amount float32) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_amount)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodDarkened, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodDarkened(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -386,28 +433,28 @@ func (self *Color) Blend(over Color) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&over)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodBlend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodBlend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetLuminance mirrors the Godot Color.get_luminance method.
 func (self *Color) GetLuminance() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(colorMethodGetLuminance, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(colorMethodGetLuminance(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // SrgbToLinear mirrors the Godot Color.srgb_to_linear method.
 func (self *Color) SrgbToLinear() Color {
 	var ret Color
-	gdextension.CallPtrBuiltinMethod(colorMethodSrgbToLinear, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodSrgbToLinear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // LinearToSrgb mirrors the Godot Color.linear_to_srgb method.
 func (self *Color) LinearToSrgb() Color {
 	var ret Color
-	gdextension.CallPtrBuiltinMethod(colorMethodLinearToSrgb, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodLinearToSrgb(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -417,7 +464,7 @@ func (self *Color) IsEqualApprox(to Color) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -427,7 +474,7 @@ func ColorHex(hex int64) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&hex)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodHex, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodHex(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -437,7 +484,7 @@ func ColorHex64(hex int64) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&hex)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodHex64, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodHex64(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -451,7 +498,7 @@ func ColorHtml(rgba string) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_rgba)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodHtml, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodHtml(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -465,7 +512,7 @@ func ColorHtmlIsValid(color string) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_color)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodHtmlIsValid, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodHtmlIsValid(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -480,7 +527,7 @@ func ColorFromString(str string, def Color) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_str)),
 		gdextension.TypePtr(unsafe.Pointer(&def)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodFromString, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodFromString(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -501,7 +548,7 @@ func ColorFromHsv(h float32, s float32, v float32, alpha float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_v)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodFromHsv, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodFromHsv(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -522,7 +569,7 @@ func ColorFromOkHsl(h float32, s float32, l float32, alpha float32) Color {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_l)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_alpha)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodFromOkHsl, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodFromOkHsl(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -532,7 +579,7 @@ func ColorFromRgbe9995(rgbe int64) Color {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&rgbe)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodFromRgbe9995, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodFromRgbe9995(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -545,139 +592,139 @@ func ColorFromRgba8(r8 int64, g8 int64, b8 int64, a8 int64) Color {
 		gdextension.TypePtr(unsafe.Pointer(&b8)),
 		gdextension.TypePtr(unsafe.Pointer(&a8)),
 	}
-	gdextension.CallPtrBuiltinMethod(colorMethodFromRgba8, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(colorMethodFromRgba8(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Neg mirrors the Godot Color unary- operator.
 func (self *Color) Neg() Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpNeg, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpNeg(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Pos mirrors the Godot Color unary+ operator.
 func (self *Color) Pos() Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpPos, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpPos(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Color not operator.
 func (self *Color) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulInt mirrors the Godot Color * operator.
 func (self *Color) MulInt(rhs int64) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpMulInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpMulInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivInt mirrors the Godot Color / operator.
 func (self *Color) DivInt(rhs int64) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpDivInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpDivInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulFloat mirrors the Godot Color * operator.
 func (self *Color) MulFloat(rhs float32) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpMulFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpMulFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivFloat mirrors the Godot Color / operator.
 func (self *Color) DivFloat(rhs float32) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpDivFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpDivFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Color == operator.
 func (self *Color) Eq(rhs Color) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Color != operator.
 func (self *Color) Ne(rhs Color) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot Color + operator.
 func (self *Color) Add(rhs Color) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sub mirrors the Godot Color - operator.
 func (self *Color) Sub(rhs Color) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpSub, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpSub(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Color * operator.
 func (self *Color) Mul(rhs Color) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Div mirrors the Godot Color / operator.
 func (self *Color) Div(rhs Color) Color {
 	var ret Color
-	gdextension.CallPtrOperatorEvaluator(colorOpDiv, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpDiv(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Color in operator.
 func (self *Color) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Color in operator.
 func (self *Color) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InPackedColorArray mirrors the Godot Color in operator.
 func (self *Color) InPackedColorArray(rhs PackedColorArray) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(colorOpInPackedColorArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(colorOpInPackedColorArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Color) Index(index int64) float32 {
 	var raw float64
-	gdextension.CallPtrIndexedGetter(colorIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrIndexedGetter(colorIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Color) SetIndex(index int64, value float32) {
-	gdextension.CallPtrIndexedSetter(colorIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(colorIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Color) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(colorFromType,
+	gdextension.CallVariantFromType(colorFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -687,7 +734,7 @@ func (self *Color) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func ColorFromVariant(src *Variant) Color {
 	var v Color
-	gdextension.CallTypeFromVariant(colorToType,
+	gdextension.CallTypeFromVariant(colorToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

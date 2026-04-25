@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,117 +14,157 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type Dictionary [8]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	dictionaryFromType                     gdextension.VariantFromTypeFunc
-	dictionaryToType                       gdextension.VariantToTypeFunc
-	dictionaryDtor                         gdextension.PtrDestructor
-	dictionaryCtor0                        gdextension.PtrConstructor
-	dictionaryCtor1                        gdextension.PtrConstructor
-	dictionaryCtor2                        gdextension.PtrConstructor
-	dictionaryMethodSize                   gdextension.PtrBuiltInMethod
-	dictionaryMethodIsEmpty                gdextension.PtrBuiltInMethod
-	dictionaryMethodClear                  gdextension.PtrBuiltInMethod
-	dictionaryMethodAssign                 gdextension.PtrBuiltInMethod
-	dictionaryMethodSort                   gdextension.PtrBuiltInMethod
-	dictionaryMethodMerge                  gdextension.PtrBuiltInMethod
-	dictionaryMethodMerged                 gdextension.PtrBuiltInMethod
-	dictionaryMethodHas                    gdextension.PtrBuiltInMethod
-	dictionaryMethodHasAll                 gdextension.PtrBuiltInMethod
-	dictionaryMethodFindKey                gdextension.PtrBuiltInMethod
-	dictionaryMethodErase                  gdextension.PtrBuiltInMethod
-	dictionaryMethodHash                   gdextension.PtrBuiltInMethod
-	dictionaryMethodKeys                   gdextension.PtrBuiltInMethod
-	dictionaryMethodValues                 gdextension.PtrBuiltInMethod
-	dictionaryMethodDuplicate              gdextension.PtrBuiltInMethod
-	dictionaryMethodDuplicateDeep          gdextension.PtrBuiltInMethod
-	dictionaryMethodGet                    gdextension.PtrBuiltInMethod
-	dictionaryMethodGetOrAdd               gdextension.PtrBuiltInMethod
-	dictionaryMethodSet                    gdextension.PtrBuiltInMethod
-	dictionaryMethodIsTyped                gdextension.PtrBuiltInMethod
-	dictionaryMethodIsTypedKey             gdextension.PtrBuiltInMethod
-	dictionaryMethodIsTypedValue           gdextension.PtrBuiltInMethod
-	dictionaryMethodIsSameTyped            gdextension.PtrBuiltInMethod
-	dictionaryMethodIsSameTypedKey         gdextension.PtrBuiltInMethod
-	dictionaryMethodIsSameTypedValue       gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedKeyBuiltin     gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedValueBuiltin   gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedKeyClassName   gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedValueClassName gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedKeyScript      gdextension.PtrBuiltInMethod
-	dictionaryMethodGetTypedValueScript    gdextension.PtrBuiltInMethod
-	dictionaryMethodMakeReadOnly           gdextension.PtrBuiltInMethod
-	dictionaryMethodIsReadOnly             gdextension.PtrBuiltInMethod
-	dictionaryMethodRecursiveEqual         gdextension.PtrBuiltInMethod
-	dictionaryOpNot                        gdextension.PtrOperatorEvaluator
-	dictionaryOpEq                         gdextension.PtrOperatorEvaluator
-	dictionaryOpNe                         gdextension.PtrOperatorEvaluator
-	dictionaryOpIn                         gdextension.PtrOperatorEvaluator
-	dictionaryOpInArray                    gdextension.PtrOperatorEvaluator
-	dictionaryIndexedGetter                gdextension.PtrIndexedGetter
-	dictionaryIndexedSetter                gdextension.PtrIndexedSetter
+	dictionaryFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeDictionary)
+	})
+	dictionaryToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeDictionary)
+	})
+	dictionaryDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypeDictionary)
+	})
+	dictionaryCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 0)
+	})
+	dictionaryCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 1)
+	})
+	dictionaryCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 2)
+	})
+	dictionaryMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("size"), 3173160232)
+	})
+	dictionaryMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_empty"), 3918633141)
+	})
+	dictionaryMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("clear"), 3218959716)
+	})
+	dictionaryMethodAssign = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("assign"), 3642266950)
+	})
+	dictionaryMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("sort"), 3218959716)
+	})
+	dictionaryMethodMerge = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("merge"), 2079548978)
+	})
+	dictionaryMethodMerged = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("merged"), 2271165639)
+	})
+	dictionaryMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("has"), 3680194679)
+	})
+	dictionaryMethodHasAll = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("has_all"), 2988181878)
+	})
+	dictionaryMethodFindKey = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("find_key"), 1988825835)
+	})
+	dictionaryMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("erase"), 1776646889)
+	})
+	dictionaryMethodHash = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("hash"), 3173160232)
+	})
+	dictionaryMethodKeys = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("keys"), 4144163970)
+	})
+	dictionaryMethodValues = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("values"), 4144163970)
+	})
+	dictionaryMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("duplicate"), 830099069)
+	})
+	dictionaryMethodDuplicateDeep = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("duplicate_deep"), 2160600714)
+	})
+	dictionaryMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get"), 2205440559)
+	})
+	dictionaryMethodGetOrAdd = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_or_add"), 1052551076)
+	})
+	dictionaryMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("set"), 2175348267)
+	})
+	dictionaryMethodIsTyped = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed"), 3918633141)
+	})
+	dictionaryMethodIsTypedKey = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed_key"), 3918633141)
+	})
+	dictionaryMethodIsTypedValue = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed_value"), 3918633141)
+	})
+	dictionaryMethodIsSameTyped = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed"), 3471775634)
+	})
+	dictionaryMethodIsSameTypedKey = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed_key"), 3471775634)
+	})
+	dictionaryMethodIsSameTypedValue = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed_value"), 3471775634)
+	})
+	dictionaryMethodGetTypedKeyBuiltin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_builtin"), 3173160232)
+	})
+	dictionaryMethodGetTypedValueBuiltin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_builtin"), 3173160232)
+	})
+	dictionaryMethodGetTypedKeyClassName = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_class_name"), 1825232092)
+	})
+	dictionaryMethodGetTypedValueClassName = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_class_name"), 1825232092)
+	})
+	dictionaryMethodGetTypedKeyScript = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_script"), 1460142086)
+	})
+	dictionaryMethodGetTypedValueScript = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_script"), 1460142086)
+	})
+	dictionaryMethodMakeReadOnly = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("make_read_only"), 3218959716)
+	})
+	dictionaryMethodIsReadOnly = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_read_only"), 3918633141)
+	})
+	dictionaryMethodRecursiveEqual = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("recursive_equal"), 1404404751)
+	})
+	dictionaryOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeDictionary, gdextension.VariantTypeNil)
+	})
+	dictionaryOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
+	})
+	dictionaryOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
+	})
+	dictionaryOpIn = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
+	})
+	dictionaryOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeDictionary, gdextension.VariantTypeArray)
+	})
+	dictionaryIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeDictionary)
+	})
+	dictionaryIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeDictionary)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initDictionary)
-}
-
-func initDictionary() {
-	dictionaryFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeDictionary)
-	dictionaryToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeDictionary)
-	dictionaryDtor = gdextension.GetPtrDestructor(gdextension.VariantTypeDictionary)
-	dictionaryCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 0)
-	dictionaryCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 1)
-	dictionaryCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeDictionary, 2)
-	dictionaryMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("size"), 3173160232)
-	dictionaryMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_empty"), 3918633141)
-	dictionaryMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("clear"), 3218959716)
-	dictionaryMethodAssign = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("assign"), 3642266950)
-	dictionaryMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("sort"), 3218959716)
-	dictionaryMethodMerge = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("merge"), 2079548978)
-	dictionaryMethodMerged = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("merged"), 2271165639)
-	dictionaryMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("has"), 3680194679)
-	dictionaryMethodHasAll = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("has_all"), 2988181878)
-	dictionaryMethodFindKey = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("find_key"), 1988825835)
-	dictionaryMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("erase"), 1776646889)
-	dictionaryMethodHash = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("hash"), 3173160232)
-	dictionaryMethodKeys = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("keys"), 4144163970)
-	dictionaryMethodValues = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("values"), 4144163970)
-	dictionaryMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("duplicate"), 830099069)
-	dictionaryMethodDuplicateDeep = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("duplicate_deep"), 2160600714)
-	dictionaryMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get"), 2205440559)
-	dictionaryMethodGetOrAdd = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_or_add"), 1052551076)
-	dictionaryMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("set"), 2175348267)
-	dictionaryMethodIsTyped = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed"), 3918633141)
-	dictionaryMethodIsTypedKey = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed_key"), 3918633141)
-	dictionaryMethodIsTypedValue = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_typed_value"), 3918633141)
-	dictionaryMethodIsSameTyped = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed"), 3471775634)
-	dictionaryMethodIsSameTypedKey = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed_key"), 3471775634)
-	dictionaryMethodIsSameTypedValue = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_same_typed_value"), 3471775634)
-	dictionaryMethodGetTypedKeyBuiltin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_builtin"), 3173160232)
-	dictionaryMethodGetTypedValueBuiltin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_builtin"), 3173160232)
-	dictionaryMethodGetTypedKeyClassName = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_class_name"), 1825232092)
-	dictionaryMethodGetTypedValueClassName = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_class_name"), 1825232092)
-	dictionaryMethodGetTypedKeyScript = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_key_script"), 1460142086)
-	dictionaryMethodGetTypedValueScript = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("get_typed_value_script"), 1460142086)
-	dictionaryMethodMakeReadOnly = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("make_read_only"), 3218959716)
-	dictionaryMethodIsReadOnly = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("is_read_only"), 3918633141)
-	dictionaryMethodRecursiveEqual = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeDictionary, internStringName("recursive_equal"), 1404404751)
-	dictionaryOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeDictionary, gdextension.VariantTypeNil)
-	dictionaryOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
-	dictionaryOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
-	dictionaryOpIn = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeDictionary, gdextension.VariantTypeDictionary)
-	dictionaryOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeDictionary, gdextension.VariantTypeArray)
-	dictionaryIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeDictionary)
-	dictionaryIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeDictionary)
-
-}
 
 // NewDictionary constructs a Dictionary via the host (constructor index 0).
 func NewDictionary() Dictionary {
 	var v Dictionary
-	gdextension.CallPtrConstructor(dictionaryCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(dictionaryCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -133,7 +174,7 @@ func NewDictionaryFromDictionary(from Dictionary) Dictionary {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(dictionaryCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(dictionaryCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -157,27 +198,27 @@ func NewDictionaryBaseKeyTypeKeyClassNameKeyScriptValueTypeValueClassNameValueSc
 		gdextension.TypePtr(unsafe.Pointer(&tmp_value_class_name)),
 		gdextension.TypePtr(unsafe.Pointer(&value_script)),
 	}
-	gdextension.CallPtrConstructor(dictionaryCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(dictionaryCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Size mirrors the Godot Dictionary.size method.
 func (self *Dictionary) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot Dictionary.is_empty method.
 func (self *Dictionary) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot Dictionary.clear method.
 func (self *Dictionary) Clear() {
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Assign mirrors the Godot Dictionary.assign method.
@@ -185,12 +226,12 @@ func (self *Dictionary) Assign(dictionary Dictionary) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodAssign, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodAssign(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Sort mirrors the Godot Dictionary.sort method.
 func (self *Dictionary) Sort() {
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Merge mirrors the Godot Dictionary.merge method.
@@ -199,7 +240,7 @@ func (self *Dictionary) Merge(dictionary Dictionary, overwrite bool) {
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 		gdextension.TypePtr(unsafe.Pointer(&overwrite)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodMerge, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodMerge(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Merged mirrors the Godot Dictionary.merged method.
@@ -209,7 +250,7 @@ func (self *Dictionary) Merged(dictionary Dictionary, overwrite bool) Dictionary
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 		gdextension.TypePtr(unsafe.Pointer(&overwrite)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodMerged, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodMerged(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -219,7 +260,7 @@ func (self *Dictionary) Has(key Variant) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -229,7 +270,7 @@ func (self *Dictionary) HasAll(keys Array) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&keys)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodHasAll, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodHasAll(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -239,7 +280,7 @@ func (self *Dictionary) FindKey(value Variant) Variant {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodFindKey, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodFindKey(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -249,28 +290,28 @@ func (self *Dictionary) Erase(key Variant) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Hash mirrors the Godot Dictionary.hash method.
 func (self *Dictionary) Hash() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodHash, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodHash(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Keys mirrors the Godot Dictionary.keys method.
 func (self *Dictionary) Keys() Array {
 	var ret Array
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodKeys, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodKeys(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Values mirrors the Godot Dictionary.values method.
 func (self *Dictionary) Values() Array {
 	var ret Array
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodValues, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodValues(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -280,7 +321,7 @@ func (self *Dictionary) Duplicate(deep bool) Dictionary {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&deep)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -290,7 +331,7 @@ func (self *Dictionary) DuplicateDeep(deep_subresources_mode int64) Dictionary {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&deep_subresources_mode)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodDuplicateDeep, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodDuplicateDeep(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -301,7 +342,7 @@ func (self *Dictionary) Get(key Variant, def Variant) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 		gdextension.TypePtr(unsafe.Pointer(&def)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -312,7 +353,7 @@ func (self *Dictionary) GetOrAdd(key Variant, def Variant) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 		gdextension.TypePtr(unsafe.Pointer(&def)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetOrAdd, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetOrAdd(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -323,28 +364,28 @@ func (self *Dictionary) Set(key Variant, value Variant) bool {
 		gdextension.TypePtr(unsafe.Pointer(&key)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsTyped mirrors the Godot Dictionary.is_typed method.
 func (self *Dictionary) IsTyped() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTyped, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTyped(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsTypedKey mirrors the Godot Dictionary.is_typed_key method.
 func (self *Dictionary) IsTypedKey() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTypedKey, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTypedKey(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsTypedValue mirrors the Godot Dictionary.is_typed_value method.
 func (self *Dictionary) IsTypedValue() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTypedValue, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsTypedValue(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -354,7 +395,7 @@ func (self *Dictionary) IsSameTyped(dictionary Dictionary) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTyped, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTyped(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -364,7 +405,7 @@ func (self *Dictionary) IsSameTypedKey(dictionary Dictionary) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTypedKey, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTypedKey(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -374,21 +415,21 @@ func (self *Dictionary) IsSameTypedValue(dictionary Dictionary) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTypedValue, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsSameTypedValue(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetTypedKeyBuiltin mirrors the Godot Dictionary.get_typed_key_builtin method.
 func (self *Dictionary) GetTypedKeyBuiltin() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyBuiltin, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyBuiltin(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetTypedValueBuiltin mirrors the Godot Dictionary.get_typed_value_builtin method.
 func (self *Dictionary) GetTypedValueBuiltin() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueBuiltin, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueBuiltin(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -396,7 +437,7 @@ func (self *Dictionary) GetTypedValueBuiltin() int64 {
 func (self *Dictionary) GetTypedKeyClassName() string {
 	var raw StringName
 	defer stringNameDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyClassName, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyClassName(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringNameToGo(&raw)
 }
 
@@ -404,33 +445,33 @@ func (self *Dictionary) GetTypedKeyClassName() string {
 func (self *Dictionary) GetTypedValueClassName() string {
 	var raw StringName
 	defer stringNameDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueClassName, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueClassName(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringNameToGo(&raw)
 }
 
 // GetTypedKeyScript mirrors the Godot Dictionary.get_typed_key_script method.
 func (self *Dictionary) GetTypedKeyScript() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyScript, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedKeyScript(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetTypedValueScript mirrors the Godot Dictionary.get_typed_value_script method.
 func (self *Dictionary) GetTypedValueScript() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueScript, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodGetTypedValueScript(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MakeReadOnly mirrors the Godot Dictionary.make_read_only method.
 func (self *Dictionary) MakeReadOnly() {
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodMakeReadOnly, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodMakeReadOnly(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // IsReadOnly mirrors the Godot Dictionary.is_read_only method.
 func (self *Dictionary) IsReadOnly() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsReadOnly, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodIsReadOnly(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -441,68 +482,68 @@ func (self *Dictionary) RecursiveEqual(dictionary Dictionary, recursion_count in
 		gdextension.TypePtr(unsafe.Pointer(&dictionary)),
 		gdextension.TypePtr(unsafe.Pointer(&recursion_count)),
 	}
-	gdextension.CallPtrBuiltinMethod(dictionaryMethodRecursiveEqual, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(dictionaryMethodRecursiveEqual(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Dictionary not operator.
 func (self *Dictionary) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(dictionaryOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(dictionaryOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Dictionary == operator.
 func (self *Dictionary) Eq(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(dictionaryOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(dictionaryOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Dictionary != operator.
 func (self *Dictionary) Ne(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(dictionaryOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(dictionaryOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // In mirrors the Godot Dictionary in operator.
 func (self *Dictionary) In(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(dictionaryOpIn, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(dictionaryOpIn(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Dictionary in operator.
 func (self *Dictionary) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(dictionaryOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(dictionaryOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Dictionary) Index(index int64) Variant {
 	var ret Variant
-	gdextension.CallPtrIndexedGetter(dictionaryIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(dictionaryIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Dictionary) SetIndex(index int64, value Variant) {
-	gdextension.CallPtrIndexedSetter(dictionaryIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(dictionaryIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *Dictionary) Destroy() {
-	gdextension.CallPtrDestructor(dictionaryDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(dictionaryDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Dictionary) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(dictionaryFromType,
+	gdextension.CallVariantFromType(dictionaryFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -512,7 +553,7 @@ func (self *Dictionary) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func DictionaryFromVariant(src *Variant) Dictionary {
 	var v Dictionary
-	gdextension.CallTypeFromVariant(dictionaryToType,
+	gdextension.CallTypeFromVariant(dictionaryToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

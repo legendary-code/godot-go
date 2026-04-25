@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -43,103 +44,136 @@ func (self *Basis) SetZ(value Vector3) {
 	*(*Vector3)(unsafe.Pointer(&self[24])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	basisFromType                    gdextension.VariantFromTypeFunc
-	basisToType                      gdextension.VariantToTypeFunc
-	basisCtor0                       gdextension.PtrConstructor
-	basisCtor1                       gdextension.PtrConstructor
-	basisCtor2                       gdextension.PtrConstructor
-	basisCtor3                       gdextension.PtrConstructor
-	basisCtor4                       gdextension.PtrConstructor
-	basisMethodInverse               gdextension.PtrBuiltInMethod
-	basisMethodTransposed            gdextension.PtrBuiltInMethod
-	basisMethodOrthonormalized       gdextension.PtrBuiltInMethod
-	basisMethodDeterminant           gdextension.PtrBuiltInMethod
-	basisMethodRotated               gdextension.PtrBuiltInMethod
-	basisMethodScaled                gdextension.PtrBuiltInMethod
-	basisMethodScaledLocal           gdextension.PtrBuiltInMethod
-	basisMethodGetScale              gdextension.PtrBuiltInMethod
-	basisMethodGetEuler              gdextension.PtrBuiltInMethod
-	basisMethodTdotx                 gdextension.PtrBuiltInMethod
-	basisMethodTdoty                 gdextension.PtrBuiltInMethod
-	basisMethodTdotz                 gdextension.PtrBuiltInMethod
-	basisMethodSlerp                 gdextension.PtrBuiltInMethod
-	basisMethodIsConformal           gdextension.PtrBuiltInMethod
-	basisMethodIsEqualApprox         gdextension.PtrBuiltInMethod
-	basisMethodIsFinite              gdextension.PtrBuiltInMethod
-	basisMethodGetRotationQuaternion gdextension.PtrBuiltInMethod
-	basisMethodLookingAt             gdextension.PtrBuiltInMethod
-	basisMethodFromScale             gdextension.PtrBuiltInMethod
-	basisMethodFromEuler             gdextension.PtrBuiltInMethod
-	basisOpNot                       gdextension.PtrOperatorEvaluator
-	basisOpMulInt                    gdextension.PtrOperatorEvaluator
-	basisOpDivInt                    gdextension.PtrOperatorEvaluator
-	basisOpMulFloat                  gdextension.PtrOperatorEvaluator
-	basisOpDivFloat                  gdextension.PtrOperatorEvaluator
-	basisOpMulVector3                gdextension.PtrOperatorEvaluator
-	basisOpEq                        gdextension.PtrOperatorEvaluator
-	basisOpNe                        gdextension.PtrOperatorEvaluator
-	basisOpMul                       gdextension.PtrOperatorEvaluator
-	basisOpInDictionary              gdextension.PtrOperatorEvaluator
-	basisOpInArray                   gdextension.PtrOperatorEvaluator
-	basisIndexedGetter               gdextension.PtrIndexedGetter
-	basisIndexedSetter               gdextension.PtrIndexedSetter
+	basisFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeBasis)
+	})
+	basisToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeBasis)
+	})
+	basisCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 0)
+	})
+	basisCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 1)
+	})
+	basisCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 2)
+	})
+	basisCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 3)
+	})
+	basisCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 4)
+	})
+	basisMethodInverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("inverse"), 594669093)
+	})
+	basisMethodTransposed = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("transposed"), 594669093)
+	})
+	basisMethodOrthonormalized = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("orthonormalized"), 594669093)
+	})
+	basisMethodDeterminant = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("determinant"), 466405837)
+	})
+	basisMethodRotated = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("rotated"), 1998708965)
+	})
+	basisMethodScaled = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("scaled"), 3934786792)
+	})
+	basisMethodScaledLocal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("scaled_local"), 3934786792)
+	})
+	basisMethodGetScale = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_scale"), 1776574132)
+	})
+	basisMethodGetEuler = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_euler"), 1394941017)
+	})
+	basisMethodTdotx = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdotx"), 1047977935)
+	})
+	basisMethodTdoty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdoty"), 1047977935)
+	})
+	basisMethodTdotz = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdotz"), 1047977935)
+	})
+	basisMethodSlerp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("slerp"), 3118673011)
+	})
+	basisMethodIsConformal = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_conformal"), 3918633141)
+	})
+	basisMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_equal_approx"), 3165333982)
+	})
+	basisMethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_finite"), 3918633141)
+	})
+	basisMethodGetRotationQuaternion = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_rotation_quaternion"), 4274879941)
+	})
+	basisMethodLookingAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("looking_at"), 3728732505)
+	})
+	basisMethodFromScale = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("from_scale"), 3703240166)
+	})
+	basisMethodFromEuler = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("from_euler"), 2802321791)
+	})
+	basisOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeBasis, gdextension.VariantTypeNil)
+	})
+	basisOpMulInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeInt)
+	})
+	basisOpDivInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeBasis, gdextension.VariantTypeInt)
+	})
+	basisOpMulFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeFloat)
+	})
+	basisOpDivFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeBasis, gdextension.VariantTypeFloat)
+	})
+	basisOpMulVector3 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeVector3)
+	})
+	basisOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
+	})
+	basisOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
+	})
+	basisOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
+	})
+	basisOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeBasis, gdextension.VariantTypeDictionary)
+	})
+	basisOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeBasis, gdextension.VariantTypeArray)
+	})
+	basisIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeBasis)
+	})
+	basisIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeBasis)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initBasis)
-}
-
-func initBasis() {
-	basisFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeBasis)
-	basisToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeBasis)
-	basisCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 0)
-	basisCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 1)
-	basisCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 2)
-	basisCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 3)
-	basisCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeBasis, 4)
-	basisMethodInverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("inverse"), 594669093)
-	basisMethodTransposed = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("transposed"), 594669093)
-	basisMethodOrthonormalized = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("orthonormalized"), 594669093)
-	basisMethodDeterminant = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("determinant"), 466405837)
-	basisMethodRotated = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("rotated"), 1998708965)
-	basisMethodScaled = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("scaled"), 3934786792)
-	basisMethodScaledLocal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("scaled_local"), 3934786792)
-	basisMethodGetScale = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_scale"), 1776574132)
-	basisMethodGetEuler = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_euler"), 1394941017)
-	basisMethodTdotx = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdotx"), 1047977935)
-	basisMethodTdoty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdoty"), 1047977935)
-	basisMethodTdotz = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("tdotz"), 1047977935)
-	basisMethodSlerp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("slerp"), 3118673011)
-	basisMethodIsConformal = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_conformal"), 3918633141)
-	basisMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_equal_approx"), 3165333982)
-	basisMethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("is_finite"), 3918633141)
-	basisMethodGetRotationQuaternion = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("get_rotation_quaternion"), 4274879941)
-	basisMethodLookingAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("looking_at"), 3728732505)
-	basisMethodFromScale = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("from_scale"), 3703240166)
-	basisMethodFromEuler = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeBasis, internStringName("from_euler"), 2802321791)
-	basisOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeBasis, gdextension.VariantTypeNil)
-	basisOpMulInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeInt)
-	basisOpDivInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeBasis, gdextension.VariantTypeInt)
-	basisOpMulFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeFloat)
-	basisOpDivFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeBasis, gdextension.VariantTypeFloat)
-	basisOpMulVector3 = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeVector3)
-	basisOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
-	basisOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
-	basisOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeBasis, gdextension.VariantTypeBasis)
-	basisOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeBasis, gdextension.VariantTypeDictionary)
-	basisOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeBasis, gdextension.VariantTypeArray)
-	basisIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeBasis)
-	basisIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeBasis)
-
-}
 
 // NewBasis constructs a Basis via the host (constructor index 0).
 func NewBasis() Basis {
 	var v Basis
-	gdextension.CallPtrConstructor(basisCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(basisCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -149,7 +183,7 @@ func NewBasisFromBasis(from Basis) Basis {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(basisCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(basisCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -159,7 +193,7 @@ func NewBasisFromQuaternion(from Quaternion) Basis {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(basisCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(basisCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -172,7 +206,7 @@ func NewBasisAxisAngle(axis Vector3, angle float32) Basis {
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
-	gdextension.CallPtrConstructor(basisCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(basisCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -184,35 +218,35 @@ func NewBasisXAxisYAxisZAxis(x_axis Vector3, y_axis Vector3, z_axis Vector3) Bas
 		gdextension.TypePtr(unsafe.Pointer(&y_axis)),
 		gdextension.TypePtr(unsafe.Pointer(&z_axis)),
 	}
-	gdextension.CallPtrConstructor(basisCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(basisCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Inverse mirrors the Godot Basis.inverse method.
 func (self *Basis) Inverse() Basis {
 	var ret Basis
-	gdextension.CallPtrBuiltinMethod(basisMethodInverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodInverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Transposed mirrors the Godot Basis.transposed method.
 func (self *Basis) Transposed() Basis {
 	var ret Basis
-	gdextension.CallPtrBuiltinMethod(basisMethodTransposed, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodTransposed(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Orthonormalized mirrors the Godot Basis.orthonormalized method.
 func (self *Basis) Orthonormalized() Basis {
 	var ret Basis
-	gdextension.CallPtrBuiltinMethod(basisMethodOrthonormalized, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodOrthonormalized(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Determinant mirrors the Godot Basis.determinant method.
 func (self *Basis) Determinant() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(basisMethodDeterminant, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(basisMethodDeterminant(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -225,7 +259,7 @@ func (self *Basis) Rotated(axis Vector3, angle float32) Basis {
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodRotated, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodRotated(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -235,7 +269,7 @@ func (self *Basis) Scaled(scale Vector3) Basis {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodScaled, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodScaled(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -245,14 +279,14 @@ func (self *Basis) ScaledLocal(scale Vector3) Basis {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodScaledLocal, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodScaledLocal(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetScale mirrors the Godot Basis.get_scale method.
 func (self *Basis) GetScale() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(basisMethodGetScale, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodGetScale(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -262,7 +296,7 @@ func (self *Basis) GetEuler(order int64) Vector3 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&order)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodGetEuler, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodGetEuler(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -272,7 +306,7 @@ func (self *Basis) Tdotx(with Vector3) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdotx, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(basisMethodTdotx(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -282,7 +316,7 @@ func (self *Basis) Tdoty(with Vector3) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdoty, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(basisMethodTdoty(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -292,7 +326,7 @@ func (self *Basis) Tdotz(with Vector3) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodTdotz, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(basisMethodTdotz(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -305,14 +339,14 @@ func (self *Basis) Slerp(to Basis, weight float32) Basis {
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodSlerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodSlerp(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsConformal mirrors the Godot Basis.is_conformal method.
 func (self *Basis) IsConformal() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(basisMethodIsConformal, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodIsConformal(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -322,21 +356,21 @@ func (self *Basis) IsEqualApprox(b Basis) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot Basis.is_finite method.
 func (self *Basis) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(basisMethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetRotationQuaternion mirrors the Godot Basis.get_rotation_quaternion method.
 func (self *Basis) GetRotationQuaternion() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrBuiltinMethod(basisMethodGetRotationQuaternion, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodGetRotationQuaternion(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -348,7 +382,7 @@ func BasisLookingAt(target Vector3, up Vector3, use_model_front bool) Basis {
 		gdextension.TypePtr(unsafe.Pointer(&up)),
 		gdextension.TypePtr(unsafe.Pointer(&use_model_front)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodLookingAt, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodLookingAt(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -358,7 +392,7 @@ func BasisFromScale(scale Vector3) Basis {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&scale)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodFromScale, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodFromScale(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -369,104 +403,104 @@ func BasisFromEuler(euler Vector3, order int64) Basis {
 		gdextension.TypePtr(unsafe.Pointer(&euler)),
 		gdextension.TypePtr(unsafe.Pointer(&order)),
 	}
-	gdextension.CallPtrBuiltinMethod(basisMethodFromEuler, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(basisMethodFromEuler(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Basis not operator.
 func (self *Basis) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(basisOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulInt mirrors the Godot Basis * operator.
 func (self *Basis) MulInt(rhs int64) Basis {
 	var ret Basis
-	gdextension.CallPtrOperatorEvaluator(basisOpMulInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpMulInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivInt mirrors the Godot Basis / operator.
 func (self *Basis) DivInt(rhs int64) Basis {
 	var ret Basis
-	gdextension.CallPtrOperatorEvaluator(basisOpDivInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpDivInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulFloat mirrors the Godot Basis * operator.
 func (self *Basis) MulFloat(rhs float32) Basis {
 	var ret Basis
-	gdextension.CallPtrOperatorEvaluator(basisOpMulFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpMulFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivFloat mirrors the Godot Basis / operator.
 func (self *Basis) DivFloat(rhs float32) Basis {
 	var ret Basis
-	gdextension.CallPtrOperatorEvaluator(basisOpDivFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpDivFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulVector3 mirrors the Godot Basis * operator.
 func (self *Basis) MulVector3(rhs Vector3) Vector3 {
 	var ret Vector3
-	gdextension.CallPtrOperatorEvaluator(basisOpMulVector3, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpMulVector3(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Basis == operator.
 func (self *Basis) Eq(rhs Basis) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(basisOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Basis != operator.
 func (self *Basis) Ne(rhs Basis) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(basisOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Basis * operator.
 func (self *Basis) Mul(rhs Basis) Basis {
 	var ret Basis
-	gdextension.CallPtrOperatorEvaluator(basisOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Basis in operator.
 func (self *Basis) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(basisOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Basis in operator.
 func (self *Basis) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(basisOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(basisOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Basis) Index(index int64) Vector3 {
 	var ret Vector3
-	gdextension.CallPtrIndexedGetter(basisIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(basisIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Basis) SetIndex(index int64, value Vector3) {
-	gdextension.CallPtrIndexedSetter(basisIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(basisIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Basis) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(basisFromType,
+	gdextension.CallVariantFromType(basisFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -476,7 +510,7 @@ func (self *Basis) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func BasisFromVariant(src *Variant) Basis {
 	var v Basis
-	gdextension.CallTypeFromVariant(basisToType,
+	gdextension.CallTypeFromVariant(basisToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

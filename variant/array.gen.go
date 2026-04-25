@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -13,181 +14,253 @@ import (
 // byte array; field reads/writes go through offset accessors below.
 type Array [8]byte
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	arrayFromType                gdextension.VariantFromTypeFunc
-	arrayToType                  gdextension.VariantToTypeFunc
-	arrayDtor                    gdextension.PtrDestructor
-	arrayCtor0                   gdextension.PtrConstructor
-	arrayCtor1                   gdextension.PtrConstructor
-	arrayCtor2                   gdextension.PtrConstructor
-	arrayCtor3                   gdextension.PtrConstructor
-	arrayCtor4                   gdextension.PtrConstructor
-	arrayCtor5                   gdextension.PtrConstructor
-	arrayCtor6                   gdextension.PtrConstructor
-	arrayCtor7                   gdextension.PtrConstructor
-	arrayCtor8                   gdextension.PtrConstructor
-	arrayCtor9                   gdextension.PtrConstructor
-	arrayCtor10                  gdextension.PtrConstructor
-	arrayCtor11                  gdextension.PtrConstructor
-	arrayCtor12                  gdextension.PtrConstructor
-	arrayMethodSize              gdextension.PtrBuiltInMethod
-	arrayMethodIsEmpty           gdextension.PtrBuiltInMethod
-	arrayMethodClear             gdextension.PtrBuiltInMethod
-	arrayMethodHash              gdextension.PtrBuiltInMethod
-	arrayMethodAssign            gdextension.PtrBuiltInMethod
-	arrayMethodGet               gdextension.PtrBuiltInMethod
-	arrayMethodSet               gdextension.PtrBuiltInMethod
-	arrayMethodPushBack          gdextension.PtrBuiltInMethod
-	arrayMethodPushFront         gdextension.PtrBuiltInMethod
-	arrayMethodAppend            gdextension.PtrBuiltInMethod
-	arrayMethodAppendArray       gdextension.PtrBuiltInMethod
-	arrayMethodResize            gdextension.PtrBuiltInMethod
-	arrayMethodInsert            gdextension.PtrBuiltInMethod
-	arrayMethodRemoveAt          gdextension.PtrBuiltInMethod
-	arrayMethodFill              gdextension.PtrBuiltInMethod
-	arrayMethodErase             gdextension.PtrBuiltInMethod
-	arrayMethodFront             gdextension.PtrBuiltInMethod
-	arrayMethodBack              gdextension.PtrBuiltInMethod
-	arrayMethodPickRandom        gdextension.PtrBuiltInMethod
-	arrayMethodFind              gdextension.PtrBuiltInMethod
-	arrayMethodFindCustom        gdextension.PtrBuiltInMethod
-	arrayMethodRfind             gdextension.PtrBuiltInMethod
-	arrayMethodRfindCustom       gdextension.PtrBuiltInMethod
-	arrayMethodCount             gdextension.PtrBuiltInMethod
-	arrayMethodHas               gdextension.PtrBuiltInMethod
-	arrayMethodPopBack           gdextension.PtrBuiltInMethod
-	arrayMethodPopFront          gdextension.PtrBuiltInMethod
-	arrayMethodPopAt             gdextension.PtrBuiltInMethod
-	arrayMethodSort              gdextension.PtrBuiltInMethod
-	arrayMethodSortCustom        gdextension.PtrBuiltInMethod
-	arrayMethodShuffle           gdextension.PtrBuiltInMethod
-	arrayMethodBsearch           gdextension.PtrBuiltInMethod
-	arrayMethodBsearchCustom     gdextension.PtrBuiltInMethod
-	arrayMethodReverse           gdextension.PtrBuiltInMethod
-	arrayMethodDuplicate         gdextension.PtrBuiltInMethod
-	arrayMethodDuplicateDeep     gdextension.PtrBuiltInMethod
-	arrayMethodSlice             gdextension.PtrBuiltInMethod
-	arrayMethodFilter            gdextension.PtrBuiltInMethod
-	arrayMethodMap               gdextension.PtrBuiltInMethod
-	arrayMethodReduce            gdextension.PtrBuiltInMethod
-	arrayMethodAny               gdextension.PtrBuiltInMethod
-	arrayMethodAll               gdextension.PtrBuiltInMethod
-	arrayMethodMax               gdextension.PtrBuiltInMethod
-	arrayMethodMin               gdextension.PtrBuiltInMethod
-	arrayMethodIsTyped           gdextension.PtrBuiltInMethod
-	arrayMethodIsSameTyped       gdextension.PtrBuiltInMethod
-	arrayMethodGetTypedBuiltin   gdextension.PtrBuiltInMethod
-	arrayMethodGetTypedClassName gdextension.PtrBuiltInMethod
-	arrayMethodGetTypedScript    gdextension.PtrBuiltInMethod
-	arrayMethodMakeReadOnly      gdextension.PtrBuiltInMethod
-	arrayMethodIsReadOnly        gdextension.PtrBuiltInMethod
-	arrayOpNot                   gdextension.PtrOperatorEvaluator
-	arrayOpInDictionary          gdextension.PtrOperatorEvaluator
-	arrayOpEq                    gdextension.PtrOperatorEvaluator
-	arrayOpNe                    gdextension.PtrOperatorEvaluator
-	arrayOpLt                    gdextension.PtrOperatorEvaluator
-	arrayOpLe                    gdextension.PtrOperatorEvaluator
-	arrayOpGt                    gdextension.PtrOperatorEvaluator
-	arrayOpGe                    gdextension.PtrOperatorEvaluator
-	arrayOpAdd                   gdextension.PtrOperatorEvaluator
-	arrayOpIn                    gdextension.PtrOperatorEvaluator
-	arrayIndexedGetter           gdextension.PtrIndexedGetter
-	arrayIndexedSetter           gdextension.PtrIndexedSetter
+	arrayFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeArray)
+	})
+	arrayToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeArray)
+	})
+	arrayDtor = sync.OnceValue(func() gdextension.PtrDestructor {
+		return gdextension.GetPtrDestructor(gdextension.VariantTypeArray)
+	})
+	arrayCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 0)
+	})
+	arrayCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 1)
+	})
+	arrayCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 2)
+	})
+	arrayCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 3)
+	})
+	arrayCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 4)
+	})
+	arrayCtor5 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 5)
+	})
+	arrayCtor6 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 6)
+	})
+	arrayCtor7 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 7)
+	})
+	arrayCtor8 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 8)
+	})
+	arrayCtor9 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 9)
+	})
+	arrayCtor10 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 10)
+	})
+	arrayCtor11 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 11)
+	})
+	arrayCtor12 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 12)
+	})
+	arrayMethodSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("size"), 3173160232)
+	})
+	arrayMethodIsEmpty = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_empty"), 3918633141)
+	})
+	arrayMethodClear = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("clear"), 3218959716)
+	})
+	arrayMethodHash = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("hash"), 3173160232)
+	})
+	arrayMethodAssign = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("assign"), 2307260970)
+	})
+	arrayMethodGet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get"), 708700221)
+	})
+	arrayMethodSet = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("set"), 3798478031)
+	})
+	arrayMethodPushBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("push_back"), 3316032543)
+	})
+	arrayMethodPushFront = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("push_front"), 3316032543)
+	})
+	arrayMethodAppend = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("append"), 3316032543)
+	})
+	arrayMethodAppendArray = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("append_array"), 2307260970)
+	})
+	arrayMethodResize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("resize"), 848867239)
+	})
+	arrayMethodInsert = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("insert"), 3176316662)
+	})
+	arrayMethodRemoveAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("remove_at"), 2823966027)
+	})
+	arrayMethodFill = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("fill"), 3316032543)
+	})
+	arrayMethodErase = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("erase"), 3316032543)
+	})
+	arrayMethodFront = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("front"), 1460142086)
+	})
+	arrayMethodBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("back"), 1460142086)
+	})
+	arrayMethodPickRandom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pick_random"), 1460142086)
+	})
+	arrayMethodFind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("find"), 2336346817)
+	})
+	arrayMethodFindCustom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("find_custom"), 2145562546)
+	})
+	arrayMethodRfind = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("rfind"), 2336346817)
+	})
+	arrayMethodRfindCustom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("rfind_custom"), 2145562546)
+	})
+	arrayMethodCount = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("count"), 1481661226)
+	})
+	arrayMethodHas = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("has"), 3680194679)
+	})
+	arrayMethodPopBack = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_back"), 1321915136)
+	})
+	arrayMethodPopFront = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_front"), 1321915136)
+	})
+	arrayMethodPopAt = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_at"), 3518259424)
+	})
+	arrayMethodSort = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("sort"), 3218959716)
+	})
+	arrayMethodSortCustom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("sort_custom"), 3470848906)
+	})
+	arrayMethodShuffle = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("shuffle"), 3218959716)
+	})
+	arrayMethodBsearch = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("bsearch"), 3372222236)
+	})
+	arrayMethodBsearchCustom = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("bsearch_custom"), 161317131)
+	})
+	arrayMethodReverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("reverse"), 3218959716)
+	})
+	arrayMethodDuplicate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("duplicate"), 636440122)
+	})
+	arrayMethodDuplicateDeep = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("duplicate_deep"), 1949240801)
+	})
+	arrayMethodSlice = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("slice"), 1393718243)
+	})
+	arrayMethodFilter = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("filter"), 4075186556)
+	})
+	arrayMethodMap = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("map"), 4075186556)
+	})
+	arrayMethodReduce = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("reduce"), 4272450342)
+	})
+	arrayMethodAny = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("any"), 4129521963)
+	})
+	arrayMethodAll = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("all"), 4129521963)
+	})
+	arrayMethodMax = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("max"), 1460142086)
+	})
+	arrayMethodMin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("min"), 1460142086)
+	})
+	arrayMethodIsTyped = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_typed"), 3918633141)
+	})
+	arrayMethodIsSameTyped = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_same_typed"), 2988181878)
+	})
+	arrayMethodGetTypedBuiltin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_builtin"), 3173160232)
+	})
+	arrayMethodGetTypedClassName = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_class_name"), 1825232092)
+	})
+	arrayMethodGetTypedScript = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_script"), 1460142086)
+	})
+	arrayMethodMakeReadOnly = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("make_read_only"), 3218959716)
+	})
+	arrayMethodIsReadOnly = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_read_only"), 3918633141)
+	})
+	arrayOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeArray, gdextension.VariantTypeNil)
+	})
+	arrayOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeArray, gdextension.VariantTypeDictionary)
+	})
+	arrayOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpLt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpLe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpGt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpGe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayOpIn = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
+	})
+	arrayIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeArray)
+	})
+	arrayIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initArray)
-}
-
-func initArray() {
-	arrayFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeArray)
-	arrayToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeArray)
-	arrayDtor = gdextension.GetPtrDestructor(gdextension.VariantTypeArray)
-	arrayCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 0)
-	arrayCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 1)
-	arrayCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 2)
-	arrayCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 3)
-	arrayCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 4)
-	arrayCtor5 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 5)
-	arrayCtor6 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 6)
-	arrayCtor7 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 7)
-	arrayCtor8 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 8)
-	arrayCtor9 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 9)
-	arrayCtor10 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 10)
-	arrayCtor11 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 11)
-	arrayCtor12 = gdextension.GetPtrConstructor(gdextension.VariantTypeArray, 12)
-	arrayMethodSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("size"), 3173160232)
-	arrayMethodIsEmpty = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_empty"), 3918633141)
-	arrayMethodClear = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("clear"), 3218959716)
-	arrayMethodHash = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("hash"), 3173160232)
-	arrayMethodAssign = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("assign"), 2307260970)
-	arrayMethodGet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get"), 708700221)
-	arrayMethodSet = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("set"), 3798478031)
-	arrayMethodPushBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("push_back"), 3316032543)
-	arrayMethodPushFront = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("push_front"), 3316032543)
-	arrayMethodAppend = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("append"), 3316032543)
-	arrayMethodAppendArray = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("append_array"), 2307260970)
-	arrayMethodResize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("resize"), 848867239)
-	arrayMethodInsert = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("insert"), 3176316662)
-	arrayMethodRemoveAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("remove_at"), 2823966027)
-	arrayMethodFill = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("fill"), 3316032543)
-	arrayMethodErase = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("erase"), 3316032543)
-	arrayMethodFront = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("front"), 1460142086)
-	arrayMethodBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("back"), 1460142086)
-	arrayMethodPickRandom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pick_random"), 1460142086)
-	arrayMethodFind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("find"), 2336346817)
-	arrayMethodFindCustom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("find_custom"), 2145562546)
-	arrayMethodRfind = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("rfind"), 2336346817)
-	arrayMethodRfindCustom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("rfind_custom"), 2145562546)
-	arrayMethodCount = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("count"), 1481661226)
-	arrayMethodHas = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("has"), 3680194679)
-	arrayMethodPopBack = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_back"), 1321915136)
-	arrayMethodPopFront = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_front"), 1321915136)
-	arrayMethodPopAt = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("pop_at"), 3518259424)
-	arrayMethodSort = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("sort"), 3218959716)
-	arrayMethodSortCustom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("sort_custom"), 3470848906)
-	arrayMethodShuffle = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("shuffle"), 3218959716)
-	arrayMethodBsearch = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("bsearch"), 3372222236)
-	arrayMethodBsearchCustom = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("bsearch_custom"), 161317131)
-	arrayMethodReverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("reverse"), 3218959716)
-	arrayMethodDuplicate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("duplicate"), 636440122)
-	arrayMethodDuplicateDeep = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("duplicate_deep"), 1949240801)
-	arrayMethodSlice = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("slice"), 1393718243)
-	arrayMethodFilter = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("filter"), 4075186556)
-	arrayMethodMap = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("map"), 4075186556)
-	arrayMethodReduce = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("reduce"), 4272450342)
-	arrayMethodAny = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("any"), 4129521963)
-	arrayMethodAll = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("all"), 4129521963)
-	arrayMethodMax = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("max"), 1460142086)
-	arrayMethodMin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("min"), 1460142086)
-	arrayMethodIsTyped = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_typed"), 3918633141)
-	arrayMethodIsSameTyped = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_same_typed"), 2988181878)
-	arrayMethodGetTypedBuiltin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_builtin"), 3173160232)
-	arrayMethodGetTypedClassName = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_class_name"), 1825232092)
-	arrayMethodGetTypedScript = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("get_typed_script"), 1460142086)
-	arrayMethodMakeReadOnly = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("make_read_only"), 3218959716)
-	arrayMethodIsReadOnly = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeArray, internStringName("is_read_only"), 3918633141)
-	arrayOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeArray, gdextension.VariantTypeNil)
-	arrayOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeArray, gdextension.VariantTypeDictionary)
-	arrayOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpLt = gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpLe = gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpGt = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpGe = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayOpIn = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeArray, gdextension.VariantTypeArray)
-	arrayIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeArray)
-	arrayIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeArray)
-
-}
 
 // NewArray constructs a Array via the host (constructor index 0).
 func NewArray() Array {
 	var v Array
-	gdextension.CallPtrConstructor(arrayCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(arrayCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -197,7 +270,7 @@ func NewArrayFromArray(from Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -214,7 +287,7 @@ func NewArrayBaseTypeClassNameScript(base Array, typ int64, class_name string, s
 		gdextension.TypePtr(unsafe.Pointer(&tmp_class_name)),
 		gdextension.TypePtr(unsafe.Pointer(&script)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -224,7 +297,7 @@ func NewArrayFromPackedByteArray(from PackedByteArray) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -234,7 +307,7 @@ func NewArrayFromPackedInt32Array(from PackedInt32Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -244,7 +317,7 @@ func NewArrayFromPackedInt64Array(from PackedInt64Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor5, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor5(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -254,7 +327,7 @@ func NewArrayFromPackedFloat32Array(from PackedFloat32Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor6, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor6(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -264,7 +337,7 @@ func NewArrayFromPackedFloat64Array(from PackedFloat64Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor7, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor7(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -274,7 +347,7 @@ func NewArrayFromPackedStringArray(from PackedStringArray) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor8, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor8(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -284,7 +357,7 @@ func NewArrayFromPackedVector2Array(from PackedVector2Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor9, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor9(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -294,7 +367,7 @@ func NewArrayFromPackedVector3Array(from PackedVector3Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor10, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor10(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -304,7 +377,7 @@ func NewArrayFromPackedColorArray(from PackedColorArray) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor11, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor11(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -314,33 +387,33 @@ func NewArrayFromPackedVector4Array(from PackedVector4Array) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(arrayCtor12, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(arrayCtor12(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Size mirrors the Godot Array.size method.
 func (self *Array) Size() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(arrayMethodSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsEmpty mirrors the Godot Array.is_empty method.
 func (self *Array) IsEmpty() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(arrayMethodIsEmpty, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodIsEmpty(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Clear mirrors the Godot Array.clear method.
 func (self *Array) Clear() {
-	gdextension.CallPtrBuiltinMethod(arrayMethodClear, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodClear(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Hash mirrors the Godot Array.hash method.
 func (self *Array) Hash() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(arrayMethodHash, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodHash(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -349,7 +422,7 @@ func (self *Array) Assign(array Array) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodAssign, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodAssign(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Get mirrors the Godot Array.get method.
@@ -358,7 +431,7 @@ func (self *Array) Get(index int64) Variant {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodGet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodGet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -368,7 +441,7 @@ func (self *Array) Set(index int64, value Variant) {
 		gdextension.TypePtr(unsafe.Pointer(&index)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodSet, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodSet(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // PushBack mirrors the Godot Array.push_back method.
@@ -376,7 +449,7 @@ func (self *Array) PushBack(value Variant) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodPushBack, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodPushBack(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // PushFront mirrors the Godot Array.push_front method.
@@ -384,7 +457,7 @@ func (self *Array) PushFront(value Variant) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodPushFront, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodPushFront(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Append mirrors the Godot Array.append method.
@@ -392,7 +465,7 @@ func (self *Array) Append(value Variant) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodAppend, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodAppend(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // AppendArray mirrors the Godot Array.append_array method.
@@ -400,7 +473,7 @@ func (self *Array) AppendArray(array Array) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodAppendArray, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodAppendArray(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Resize mirrors the Godot Array.resize method.
@@ -409,7 +482,7 @@ func (self *Array) Resize(size int64) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&size)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodResize, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodResize(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -420,7 +493,7 @@ func (self *Array) Insert(position int64, value Variant) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodInsert, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodInsert(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -429,7 +502,7 @@ func (self *Array) RemoveAt(position int64) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodRemoveAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodRemoveAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Fill mirrors the Godot Array.fill method.
@@ -437,7 +510,7 @@ func (self *Array) Fill(value Variant) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodFill, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodFill(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Erase mirrors the Godot Array.erase method.
@@ -445,27 +518,27 @@ func (self *Array) Erase(value Variant) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodErase, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodErase(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Front mirrors the Godot Array.front method.
 func (self *Array) Front() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodFront, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodFront(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Back mirrors the Godot Array.back method.
 func (self *Array) Back() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodBack, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodBack(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // PickRandom mirrors the Godot Array.pick_random method.
 func (self *Array) PickRandom() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodPickRandom, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodPickRandom(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -476,7 +549,7 @@ func (self *Array) Find(what Variant, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodFind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodFind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -487,7 +560,7 @@ func (self *Array) FindCustom(method Callable, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodFindCustom, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodFindCustom(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -498,7 +571,7 @@ func (self *Array) Rfind(what Variant, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&what)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodRfind, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodRfind(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -509,7 +582,7 @@ func (self *Array) RfindCustom(method Callable, from int64) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodRfindCustom, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodRfindCustom(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -519,7 +592,7 @@ func (self *Array) Count(value Variant) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodCount, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodCount(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -529,21 +602,21 @@ func (self *Array) Has(value Variant) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodHas, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodHas(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // PopBack mirrors the Godot Array.pop_back method.
 func (self *Array) PopBack() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodPopBack, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodPopBack(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // PopFront mirrors the Godot Array.pop_front method.
 func (self *Array) PopFront() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodPopFront, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodPopFront(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -553,13 +626,13 @@ func (self *Array) PopAt(position int64) Variant {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodPopAt, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodPopAt(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sort mirrors the Godot Array.sort method.
 func (self *Array) Sort() {
-	gdextension.CallPtrBuiltinMethod(arrayMethodSort, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodSort(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // SortCustom mirrors the Godot Array.sort_custom method.
@@ -567,12 +640,12 @@ func (self *Array) SortCustom(fn Callable) {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&fn)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodSortCustom, gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodSortCustom(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], nil)
 }
 
 // Shuffle mirrors the Godot Array.shuffle method.
 func (self *Array) Shuffle() {
-	gdextension.CallPtrBuiltinMethod(arrayMethodShuffle, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodShuffle(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Bsearch mirrors the Godot Array.bsearch method.
@@ -582,7 +655,7 @@ func (self *Array) Bsearch(value Variant, before bool) int64 {
 		gdextension.TypePtr(unsafe.Pointer(&value)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodBsearch, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodBsearch(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -594,13 +667,13 @@ func (self *Array) BsearchCustom(value Variant, fn Callable, before bool) int64 
 		gdextension.TypePtr(unsafe.Pointer(&fn)),
 		gdextension.TypePtr(unsafe.Pointer(&before)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodBsearchCustom, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodBsearchCustom(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Reverse mirrors the Godot Array.reverse method.
 func (self *Array) Reverse() {
-	gdextension.CallPtrBuiltinMethod(arrayMethodReverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodReverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // Duplicate mirrors the Godot Array.duplicate method.
@@ -609,7 +682,7 @@ func (self *Array) Duplicate(deep bool) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&deep)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodDuplicate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodDuplicate(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -619,7 +692,7 @@ func (self *Array) DuplicateDeep(deep_subresources_mode int64) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&deep_subresources_mode)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodDuplicateDeep, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodDuplicateDeep(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -632,7 +705,7 @@ func (self *Array) Slice(begin int64, end int64, step int64, deep bool) Array {
 		gdextension.TypePtr(unsafe.Pointer(&step)),
 		gdextension.TypePtr(unsafe.Pointer(&deep)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodSlice, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodSlice(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -642,7 +715,7 @@ func (self *Array) Filter(method Callable) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodFilter, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodFilter(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -652,7 +725,7 @@ func (self *Array) Map(method Callable) Array {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodMap, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodMap(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -663,7 +736,7 @@ func (self *Array) Reduce(method Callable, accum Variant) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 		gdextension.TypePtr(unsafe.Pointer(&accum)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodReduce, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodReduce(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -673,7 +746,7 @@ func (self *Array) Any(method Callable) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodAny, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodAny(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -683,28 +756,28 @@ func (self *Array) All(method Callable) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&method)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodAll, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodAll(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Max mirrors the Godot Array.max method.
 func (self *Array) Max() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodMax, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodMax(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Min mirrors the Godot Array.min method.
 func (self *Array) Min() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodMin, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodMin(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsTyped mirrors the Godot Array.is_typed method.
 func (self *Array) IsTyped() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(arrayMethodIsTyped, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodIsTyped(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -714,14 +787,14 @@ func (self *Array) IsSameTyped(array Array) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&array)),
 	}
-	gdextension.CallPtrBuiltinMethod(arrayMethodIsSameTyped, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodIsSameTyped(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetTypedBuiltin mirrors the Godot Array.get_typed_builtin method.
 func (self *Array) GetTypedBuiltin() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedBuiltin, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedBuiltin(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -729,122 +802,122 @@ func (self *Array) GetTypedBuiltin() int64 {
 func (self *Array) GetTypedClassName() string {
 	var raw StringName
 	defer stringNameDestroy(&raw)
-	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedClassName, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedClassName(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return stringNameToGo(&raw)
 }
 
 // GetTypedScript mirrors the Godot Array.get_typed_script method.
 func (self *Array) GetTypedScript() Variant {
 	var ret Variant
-	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedScript, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodGetTypedScript(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MakeReadOnly mirrors the Godot Array.make_read_only method.
 func (self *Array) MakeReadOnly() {
-	gdextension.CallPtrBuiltinMethod(arrayMethodMakeReadOnly, gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
+	gdextension.CallPtrBuiltinMethod(arrayMethodMakeReadOnly(), gdextension.TypePtr(unsafe.Pointer(self)), nil, nil)
 }
 
 // IsReadOnly mirrors the Godot Array.is_read_only method.
 func (self *Array) IsReadOnly() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(arrayMethodIsReadOnly, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(arrayMethodIsReadOnly(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Array not operator.
 func (self *Array) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Array in operator.
 func (self *Array) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Array == operator.
 func (self *Array) Eq(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Array != operator.
 func (self *Array) Ne(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Lt mirrors the Godot Array < operator.
 func (self *Array) Lt(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpLt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpLt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Le mirrors the Godot Array <= operator.
 func (self *Array) Le(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpLe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpLe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Gt mirrors the Godot Array > operator.
 func (self *Array) Gt(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpGt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpGt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ge mirrors the Godot Array >= operator.
 func (self *Array) Ge(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpGe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpGe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot Array + operator.
 func (self *Array) Add(rhs Array) Array {
 	var ret Array
-	gdextension.CallPtrOperatorEvaluator(arrayOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // In mirrors the Godot Array in operator.
 func (self *Array) In(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(arrayOpIn, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(arrayOpIn(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Array) Index(index int64) Variant {
 	var ret Variant
-	gdextension.CallPtrIndexedGetter(arrayIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(arrayIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Array) SetIndex(index int64, value Variant) {
-	gdextension.CallPtrIndexedSetter(arrayIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(arrayIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // Destroy releases the resources owned by the receiver. Safe to call on a
 // zero value.
 func (self *Array) Destroy() {
-	gdextension.CallPtrDestructor(arrayDtor, gdextension.TypePtr(unsafe.Pointer(self)))
+	gdextension.CallPtrDestructor(arrayDtor(), gdextension.TypePtr(unsafe.Pointer(self)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Array) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(arrayFromType,
+	gdextension.CallVariantFromType(arrayFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -854,7 +927,7 @@ func (self *Array) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func ArrayFromVariant(src *Variant) Array {
 	var v Array
-	gdextension.CallTypeFromVariant(arrayToType,
+	gdextension.CallTypeFromVariant(arrayToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

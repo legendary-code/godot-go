@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -33,79 +34,100 @@ func (self *Plane) SetD(value float32) {
 	*(*float32)(unsafe.Pointer(&self[12])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	planeFromType                gdextension.VariantFromTypeFunc
-	planeToType                  gdextension.VariantToTypeFunc
-	planeCtor0                   gdextension.PtrConstructor
-	planeCtor1                   gdextension.PtrConstructor
-	planeCtor2                   gdextension.PtrConstructor
-	planeCtor3                   gdextension.PtrConstructor
-	planeCtor4                   gdextension.PtrConstructor
-	planeCtor5                   gdextension.PtrConstructor
-	planeCtor6                   gdextension.PtrConstructor
-	planeMethodNormalized        gdextension.PtrBuiltInMethod
-	planeMethodGetCenter         gdextension.PtrBuiltInMethod
-	planeMethodIsEqualApprox     gdextension.PtrBuiltInMethod
-	planeMethodIsFinite          gdextension.PtrBuiltInMethod
-	planeMethodIsPointOver       gdextension.PtrBuiltInMethod
-	planeMethodDistanceTo        gdextension.PtrBuiltInMethod
-	planeMethodHasPoint          gdextension.PtrBuiltInMethod
-	planeMethodProject           gdextension.PtrBuiltInMethod
-	planeMethodIntersect3        gdextension.PtrBuiltInMethod
-	planeMethodIntersectsRay     gdextension.PtrBuiltInMethod
-	planeMethodIntersectsSegment gdextension.PtrBuiltInMethod
-	planeOpNeg                   gdextension.PtrOperatorEvaluator
-	planeOpPos                   gdextension.PtrOperatorEvaluator
-	planeOpNot                   gdextension.PtrOperatorEvaluator
-	planeOpEq                    gdextension.PtrOperatorEvaluator
-	planeOpNe                    gdextension.PtrOperatorEvaluator
-	planeOpMulTransform3D        gdextension.PtrOperatorEvaluator
-	planeOpInDictionary          gdextension.PtrOperatorEvaluator
-	planeOpInArray               gdextension.PtrOperatorEvaluator
+	planeFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePlane)
+	})
+	planeToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePlane)
+	})
+	planeCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 0)
+	})
+	planeCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 1)
+	})
+	planeCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 2)
+	})
+	planeCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 3)
+	})
+	planeCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 4)
+	})
+	planeCtor5 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 5)
+	})
+	planeCtor6 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 6)
+	})
+	planeMethodNormalized = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("normalized"), 1051796340)
+	})
+	planeMethodGetCenter = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("get_center"), 1776574132)
+	})
+	planeMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_equal_approx"), 1150170233)
+	})
+	planeMethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_finite"), 3918633141)
+	})
+	planeMethodIsPointOver = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_point_over"), 1749054343)
+	})
+	planeMethodDistanceTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("distance_to"), 1047977935)
+	})
+	planeMethodHasPoint = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("has_point"), 1258189072)
+	})
+	planeMethodProject = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("project"), 2923479887)
+	})
+	planeMethodIntersect3 = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersect_3"), 2012052692)
+	})
+	planeMethodIntersectsRay = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersects_ray"), 2048133369)
+	})
+	planeMethodIntersectsSegment = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersects_segment"), 2048133369)
+	})
+	planeOpNeg = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
+	})
+	planeOpPos = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
+	})
+	planeOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
+	})
+	planeOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePlane, gdextension.VariantTypePlane)
+	})
+	planeOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePlane, gdextension.VariantTypePlane)
+	})
+	planeOpMulTransform3D = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypePlane, gdextension.VariantTypeTransform3D)
+	})
+	planeOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePlane, gdextension.VariantTypeDictionary)
+	})
+	planeOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePlane, gdextension.VariantTypeArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initPlane)
-}
-
-func initPlane() {
-	planeFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypePlane)
-	planeToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypePlane)
-	planeCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 0)
-	planeCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 1)
-	planeCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 2)
-	planeCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 3)
-	planeCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 4)
-	planeCtor5 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 5)
-	planeCtor6 = gdextension.GetPtrConstructor(gdextension.VariantTypePlane, 6)
-	planeMethodNormalized = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("normalized"), 1051796340)
-	planeMethodGetCenter = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("get_center"), 1776574132)
-	planeMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_equal_approx"), 1150170233)
-	planeMethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_finite"), 3918633141)
-	planeMethodIsPointOver = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("is_point_over"), 1749054343)
-	planeMethodDistanceTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("distance_to"), 1047977935)
-	planeMethodHasPoint = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("has_point"), 1258189072)
-	planeMethodProject = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("project"), 2923479887)
-	planeMethodIntersect3 = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersect_3"), 2012052692)
-	planeMethodIntersectsRay = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersects_ray"), 2048133369)
-	planeMethodIntersectsSegment = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypePlane, internStringName("intersects_segment"), 2048133369)
-	planeOpNeg = gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
-	planeOpPos = gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
-	planeOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypePlane, gdextension.VariantTypeNil)
-	planeOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypePlane, gdextension.VariantTypePlane)
-	planeOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypePlane, gdextension.VariantTypePlane)
-	planeOpMulTransform3D = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypePlane, gdextension.VariantTypeTransform3D)
-	planeOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePlane, gdextension.VariantTypeDictionary)
-	planeOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypePlane, gdextension.VariantTypeArray)
-
-}
 
 // NewPlane constructs a Plane via the host (constructor index 0).
 func NewPlane() Plane {
 	var v Plane
-	gdextension.CallPtrConstructor(planeCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(planeCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -115,7 +137,7 @@ func NewPlaneFromPlane(from Plane) Plane {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(planeCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -125,7 +147,7 @@ func NewPlaneFromVector3(normal Vector3) Plane {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&normal)),
 	}
-	gdextension.CallPtrConstructor(planeCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -138,7 +160,7 @@ func NewPlaneNormalD(normal Vector3, d float32) Plane {
 		gdextension.TypePtr(unsafe.Pointer(&normal)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_d)),
 	}
-	gdextension.CallPtrConstructor(planeCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -149,7 +171,7 @@ func NewPlaneNormalPoint(normal Vector3, point Vector3) Plane {
 		gdextension.TypePtr(unsafe.Pointer(&normal)),
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrConstructor(planeCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -161,7 +183,7 @@ func NewPlanePoint1Point2Point3(point1 Vector3, point2 Vector3, point3 Vector3) 
 		gdextension.TypePtr(unsafe.Pointer(&point2)),
 		gdextension.TypePtr(unsafe.Pointer(&point3)),
 	}
-	gdextension.CallPtrConstructor(planeCtor5, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor5(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -182,21 +204,21 @@ func NewPlaneABCD(a float32, b float32, c float32, d float32) Plane {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_c)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_d)),
 	}
-	gdextension.CallPtrConstructor(planeCtor6, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(planeCtor6(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Normalized mirrors the Godot Plane.normalized method.
 func (self *Plane) Normalized() Plane {
 	var ret Plane
-	gdextension.CallPtrBuiltinMethod(planeMethodNormalized, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodNormalized(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetCenter mirrors the Godot Plane.get_center method.
 func (self *Plane) GetCenter() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(planeMethodGetCenter, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodGetCenter(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -206,14 +228,14 @@ func (self *Plane) IsEqualApprox(to_plane Plane) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to_plane)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot Plane.is_finite method.
 func (self *Plane) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(planeMethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -223,7 +245,7 @@ func (self *Plane) IsPointOver(point Vector3) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodIsPointOver, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIsPointOver(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -233,7 +255,7 @@ func (self *Plane) DistanceTo(point Vector3) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(planeMethodDistanceTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -246,7 +268,7 @@ func (self *Plane) HasPoint(point Vector3, tolerance float32) bool {
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_tolerance)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodHasPoint, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodHasPoint(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -256,7 +278,7 @@ func (self *Plane) Project(point Vector3) Vector3 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodProject, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodProject(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -267,7 +289,7 @@ func (self *Plane) Intersect3(b Plane, c Plane) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&b)),
 		gdextension.TypePtr(unsafe.Pointer(&c)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodIntersect3, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIntersect3(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -278,7 +300,7 @@ func (self *Plane) IntersectsRay(from Vector3, dir Vector3) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&dir)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodIntersectsRay, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIntersectsRay(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -289,63 +311,63 @@ func (self *Plane) IntersectsSegment(from Vector3, to Vector3) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(planeMethodIntersectsSegment, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(planeMethodIntersectsSegment(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Neg mirrors the Godot Plane unary- operator.
 func (self *Plane) Neg() Plane {
 	var ret Plane
-	gdextension.CallPtrOperatorEvaluator(planeOpNeg, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpNeg(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Pos mirrors the Godot Plane unary+ operator.
 func (self *Plane) Pos() Plane {
 	var ret Plane
-	gdextension.CallPtrOperatorEvaluator(planeOpPos, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpPos(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Plane not operator.
 func (self *Plane) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(planeOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Plane == operator.
 func (self *Plane) Eq(rhs Plane) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(planeOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Plane != operator.
 func (self *Plane) Ne(rhs Plane) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(planeOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulTransform3D mirrors the Godot Plane * operator.
 func (self *Plane) MulTransform3D(rhs Transform3D) Plane {
 	var ret Plane
-	gdextension.CallPtrOperatorEvaluator(planeOpMulTransform3D, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpMulTransform3D(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Plane in operator.
 func (self *Plane) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(planeOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Plane in operator.
 func (self *Plane) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(planeOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(planeOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -353,7 +375,7 @@ func (self *Plane) InArray(rhs Array) bool {
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Plane) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(planeFromType,
+	gdextension.CallVariantFromType(planeFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -363,7 +385,7 @@ func (self *Plane) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func PlaneFromVariant(src *Variant) Plane {
 	var v Plane
-	gdextension.CallTypeFromVariant(planeToType,
+	gdextension.CallTypeFromVariant(planeToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

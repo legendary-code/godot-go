@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -43,113 +44,151 @@ func (self *Vector3i) SetZ(value int32) {
 	*(*int32)(unsafe.Pointer(&self[8])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	vector3iFromType                gdextension.VariantFromTypeFunc
-	vector3iToType                  gdextension.VariantToTypeFunc
-	vector3iCtor0                   gdextension.PtrConstructor
-	vector3iCtor1                   gdextension.PtrConstructor
-	vector3iCtor2                   gdextension.PtrConstructor
-	vector3iCtor3                   gdextension.PtrConstructor
-	vector3iMethodMinAxisIndex      gdextension.PtrBuiltInMethod
-	vector3iMethodMaxAxisIndex      gdextension.PtrBuiltInMethod
-	vector3iMethodDistanceTo        gdextension.PtrBuiltInMethod
-	vector3iMethodDistanceSquaredTo gdextension.PtrBuiltInMethod
-	vector3iMethodLength            gdextension.PtrBuiltInMethod
-	vector3iMethodLengthSquared     gdextension.PtrBuiltInMethod
-	vector3iMethodSign              gdextension.PtrBuiltInMethod
-	vector3iMethodAbs               gdextension.PtrBuiltInMethod
-	vector3iMethodClamp             gdextension.PtrBuiltInMethod
-	vector3iMethodClampi            gdextension.PtrBuiltInMethod
-	vector3iMethodSnapped           gdextension.PtrBuiltInMethod
-	vector3iMethodSnappedi          gdextension.PtrBuiltInMethod
-	vector3iMethodMin               gdextension.PtrBuiltInMethod
-	vector3iMethodMini              gdextension.PtrBuiltInMethod
-	vector3iMethodMax               gdextension.PtrBuiltInMethod
-	vector3iMethodMaxi              gdextension.PtrBuiltInMethod
-	vector3iOpNeg                   gdextension.PtrOperatorEvaluator
-	vector3iOpPos                   gdextension.PtrOperatorEvaluator
-	vector3iOpNot                   gdextension.PtrOperatorEvaluator
-	vector3iOpMulInt                gdextension.PtrOperatorEvaluator
-	vector3iOpDivInt                gdextension.PtrOperatorEvaluator
-	vector3iOpModInt                gdextension.PtrOperatorEvaluator
-	vector3iOpMulFloat              gdextension.PtrOperatorEvaluator
-	vector3iOpDivFloat              gdextension.PtrOperatorEvaluator
-	vector3iOpEq                    gdextension.PtrOperatorEvaluator
-	vector3iOpNe                    gdextension.PtrOperatorEvaluator
-	vector3iOpLt                    gdextension.PtrOperatorEvaluator
-	vector3iOpLe                    gdextension.PtrOperatorEvaluator
-	vector3iOpGt                    gdextension.PtrOperatorEvaluator
-	vector3iOpGe                    gdextension.PtrOperatorEvaluator
-	vector3iOpAdd                   gdextension.PtrOperatorEvaluator
-	vector3iOpSub                   gdextension.PtrOperatorEvaluator
-	vector3iOpMul                   gdextension.PtrOperatorEvaluator
-	vector3iOpDiv                   gdextension.PtrOperatorEvaluator
-	vector3iOpMod                   gdextension.PtrOperatorEvaluator
-	vector3iOpInDictionary          gdextension.PtrOperatorEvaluator
-	vector3iOpInArray               gdextension.PtrOperatorEvaluator
-	vector3iIndexedGetter           gdextension.PtrIndexedGetter
-	vector3iIndexedSetter           gdextension.PtrIndexedSetter
+	vector3iFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeVector3i)
+	})
+	vector3iToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeVector3i)
+	})
+	vector3iCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 0)
+	})
+	vector3iCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 1)
+	})
+	vector3iCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 2)
+	})
+	vector3iCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 3)
+	})
+	vector3iMethodMinAxisIndex = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("min_axis_index"), 3173160232)
+	})
+	vector3iMethodMaxAxisIndex = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("max_axis_index"), 3173160232)
+	})
+	vector3iMethodDistanceTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("distance_to"), 1975170430)
+	})
+	vector3iMethodDistanceSquaredTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("distance_squared_to"), 2947717320)
+	})
+	vector3iMethodLength = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("length"), 466405837)
+	})
+	vector3iMethodLengthSquared = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("length_squared"), 3173160232)
+	})
+	vector3iMethodSign = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("sign"), 3729604559)
+	})
+	vector3iMethodAbs = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("abs"), 3729604559)
+	})
+	vector3iMethodClamp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("clamp"), 1086892323)
+	})
+	vector3iMethodClampi = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("clampi"), 1077216921)
+	})
+	vector3iMethodSnapped = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("snapped"), 1989319750)
+	})
+	vector3iMethodSnappedi = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("snappedi"), 2377625641)
+	})
+	vector3iMethodMin = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("min"), 1989319750)
+	})
+	vector3iMethodMini = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("mini"), 2377625641)
+	})
+	vector3iMethodMax = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("max"), 1989319750)
+	})
+	vector3iMethodMaxi = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("maxi"), 2377625641)
+	})
+	vector3iOpNeg = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
+	})
+	vector3iOpPos = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
+	})
+	vector3iOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
+	})
+	vector3iOpMulInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
+	})
+	vector3iOpDivInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
+	})
+	vector3iOpModInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
+	})
+	vector3iOpMulFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeFloat)
+	})
+	vector3iOpDivFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeFloat)
+	})
+	vector3iOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpLt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpLe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpGt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpGe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpSub = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpDiv = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpMod = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
+	})
+	vector3iOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeVector3i, gdextension.VariantTypeDictionary)
+	})
+	vector3iOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeVector3i, gdextension.VariantTypeArray)
+	})
+	vector3iIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeVector3i)
+	})
+	vector3iIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeVector3i)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initVector3i)
-}
-
-func initVector3i() {
-	vector3iFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeVector3i)
-	vector3iToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeVector3i)
-	vector3iCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 0)
-	vector3iCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 1)
-	vector3iCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 2)
-	vector3iCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeVector3i, 3)
-	vector3iMethodMinAxisIndex = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("min_axis_index"), 3173160232)
-	vector3iMethodMaxAxisIndex = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("max_axis_index"), 3173160232)
-	vector3iMethodDistanceTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("distance_to"), 1975170430)
-	vector3iMethodDistanceSquaredTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("distance_squared_to"), 2947717320)
-	vector3iMethodLength = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("length"), 466405837)
-	vector3iMethodLengthSquared = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("length_squared"), 3173160232)
-	vector3iMethodSign = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("sign"), 3729604559)
-	vector3iMethodAbs = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("abs"), 3729604559)
-	vector3iMethodClamp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("clamp"), 1086892323)
-	vector3iMethodClampi = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("clampi"), 1077216921)
-	vector3iMethodSnapped = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("snapped"), 1989319750)
-	vector3iMethodSnappedi = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("snappedi"), 2377625641)
-	vector3iMethodMin = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("min"), 1989319750)
-	vector3iMethodMini = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("mini"), 2377625641)
-	vector3iMethodMax = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("max"), 1989319750)
-	vector3iMethodMaxi = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeVector3i, internStringName("maxi"), 2377625641)
-	vector3iOpNeg = gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
-	vector3iOpPos = gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
-	vector3iOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeVector3i, gdextension.VariantTypeNil)
-	vector3iOpMulInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
-	vector3iOpDivInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
-	vector3iOpModInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeVector3i, gdextension.VariantTypeInt)
-	vector3iOpMulFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeFloat)
-	vector3iOpDivFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeFloat)
-	vector3iOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpLt = gdextension.GetPtrOperatorEvaluator(gdextension.OpLess, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpLe = gdextension.GetPtrOperatorEvaluator(gdextension.OpLessEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpGt = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreater, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpGe = gdextension.GetPtrOperatorEvaluator(gdextension.OpGreaterEqual, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpSub = gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpDiv = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpMod = gdextension.GetPtrOperatorEvaluator(gdextension.OpModule, gdextension.VariantTypeVector3i, gdextension.VariantTypeVector3i)
-	vector3iOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeVector3i, gdextension.VariantTypeDictionary)
-	vector3iOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeVector3i, gdextension.VariantTypeArray)
-	vector3iIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeVector3i)
-	vector3iIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeVector3i)
-
-}
 
 // NewVector3i constructs a Vector3i via the host (constructor index 0).
 func NewVector3i() Vector3i {
 	var v Vector3i
-	gdextension.CallPtrConstructor(vector3iCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(vector3iCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -159,7 +198,7 @@ func NewVector3iFromVector3i(from Vector3i) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(vector3iCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(vector3iCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -169,7 +208,7 @@ func NewVector3iFromVector3(from Vector3) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(vector3iCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(vector3iCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -181,21 +220,21 @@ func NewVector3iXYZ(x int64, y int64, z int64) Vector3i {
 		gdextension.TypePtr(unsafe.Pointer(&y)),
 		gdextension.TypePtr(unsafe.Pointer(&z)),
 	}
-	gdextension.CallPtrConstructor(vector3iCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(vector3iCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // MinAxisIndex mirrors the Godot Vector3i.min_axis_index method.
 func (self *Vector3i) MinAxisIndex() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMinAxisIndex, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMinAxisIndex(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MaxAxisIndex mirrors the Godot Vector3i.max_axis_index method.
 func (self *Vector3i) MaxAxisIndex() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMaxAxisIndex, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMaxAxisIndex(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -205,7 +244,7 @@ func (self *Vector3i) DistanceTo(to Vector3i) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -215,35 +254,35 @@ func (self *Vector3i) DistanceSquaredTo(to Vector3i) int64 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceSquaredTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodDistanceSquaredTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Length mirrors the Godot Vector3i.length method.
 func (self *Vector3i) Length() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(vector3iMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodLength(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Vector3i.length_squared method.
 func (self *Vector3i) LengthSquared() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(vector3iMethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodLengthSquared(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sign mirrors the Godot Vector3i.sign method.
 func (self *Vector3i) Sign() Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrBuiltinMethod(vector3iMethodSign, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodSign(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Abs mirrors the Godot Vector3i.abs method.
 func (self *Vector3i) Abs() Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrBuiltinMethod(vector3iMethodAbs, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodAbs(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -254,7 +293,7 @@ func (self *Vector3i) Clamp(min Vector3i, max Vector3i) Vector3i {
 		gdextension.TypePtr(unsafe.Pointer(&min)),
 		gdextension.TypePtr(unsafe.Pointer(&max)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodClamp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodClamp(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -265,7 +304,7 @@ func (self *Vector3i) Clampi(min int64, max int64) Vector3i {
 		gdextension.TypePtr(unsafe.Pointer(&min)),
 		gdextension.TypePtr(unsafe.Pointer(&max)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodClampi, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodClampi(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -275,7 +314,7 @@ func (self *Vector3i) Snapped(step Vector3i) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&step)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodSnapped, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodSnapped(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -285,7 +324,7 @@ func (self *Vector3i) Snappedi(step int64) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&step)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodSnappedi, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodSnappedi(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -295,7 +334,7 @@ func (self *Vector3i) Min(with Vector3i) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMin, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMin(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -305,7 +344,7 @@ func (self *Vector3i) Mini(with int64) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMini, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMini(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -315,7 +354,7 @@ func (self *Vector3i) Max(with Vector3i) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMax, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMax(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -325,174 +364,174 @@ func (self *Vector3i) Maxi(with int64) Vector3i {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(vector3iMethodMaxi, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(vector3iMethodMaxi(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Neg mirrors the Godot Vector3i unary- operator.
 func (self *Vector3i) Neg() Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpNeg, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpNeg(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Pos mirrors the Godot Vector3i unary+ operator.
 func (self *Vector3i) Pos() Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpPos, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpPos(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Vector3i not operator.
 func (self *Vector3i) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulInt mirrors the Godot Vector3i * operator.
 func (self *Vector3i) MulInt(rhs int64) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpMulInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpMulInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivInt mirrors the Godot Vector3i / operator.
 func (self *Vector3i) DivInt(rhs int64) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpDivInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpDivInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // ModInt mirrors the Godot Vector3i % operator.
 func (self *Vector3i) ModInt(rhs int64) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpModInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpModInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulFloat mirrors the Godot Vector3i * operator.
 func (self *Vector3i) MulFloat(rhs float32) Vector3 {
 	var ret Vector3
-	gdextension.CallPtrOperatorEvaluator(vector3iOpMulFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpMulFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivFloat mirrors the Godot Vector3i / operator.
 func (self *Vector3i) DivFloat(rhs float32) Vector3 {
 	var ret Vector3
-	gdextension.CallPtrOperatorEvaluator(vector3iOpDivFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpDivFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Vector3i == operator.
 func (self *Vector3i) Eq(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Vector3i != operator.
 func (self *Vector3i) Ne(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Lt mirrors the Godot Vector3i < operator.
 func (self *Vector3i) Lt(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpLt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpLt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Le mirrors the Godot Vector3i <= operator.
 func (self *Vector3i) Le(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpLe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpLe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Gt mirrors the Godot Vector3i > operator.
 func (self *Vector3i) Gt(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpGt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpGt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ge mirrors the Godot Vector3i >= operator.
 func (self *Vector3i) Ge(rhs Vector3i) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpGe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpGe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot Vector3i + operator.
 func (self *Vector3i) Add(rhs Vector3i) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sub mirrors the Godot Vector3i - operator.
 func (self *Vector3i) Sub(rhs Vector3i) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpSub, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpSub(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Vector3i * operator.
 func (self *Vector3i) Mul(rhs Vector3i) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Div mirrors the Godot Vector3i / operator.
 func (self *Vector3i) Div(rhs Vector3i) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpDiv, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpDiv(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mod mirrors the Godot Vector3i % operator.
 func (self *Vector3i) Mod(rhs Vector3i) Vector3i {
 	var ret Vector3i
-	gdextension.CallPtrOperatorEvaluator(vector3iOpMod, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpMod(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Vector3i in operator.
 func (self *Vector3i) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Vector3i in operator.
 func (self *Vector3i) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(vector3iOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(vector3iOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Vector3i) Index(index int64) int64 {
 	var ret int64
-	gdextension.CallPtrIndexedGetter(vector3iIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrIndexedGetter(vector3iIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Vector3i) SetIndex(index int64, value int64) {
-	gdextension.CallPtrIndexedSetter(vector3iIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(vector3iIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Vector3i) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(vector3iFromType,
+	gdextension.CallVariantFromType(vector3iFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -502,7 +541,7 @@ func (self *Vector3i) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func Vector3iFromVariant(src *Variant) Vector3i {
 	var v Vector3i
-	gdextension.CallTypeFromVariant(vector3iToType,
+	gdextension.CallTypeFromVariant(vector3iToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

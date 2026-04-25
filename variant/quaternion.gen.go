@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -53,111 +54,148 @@ func (self *Quaternion) SetW(value float32) {
 	*(*float32)(unsafe.Pointer(&self[12])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	quaternionFromType                              gdextension.VariantFromTypeFunc
-	quaternionToType                                gdextension.VariantToTypeFunc
-	quaternionCtor0                                 gdextension.PtrConstructor
-	quaternionCtor1                                 gdextension.PtrConstructor
-	quaternionCtor2                                 gdextension.PtrConstructor
-	quaternionCtor3                                 gdextension.PtrConstructor
-	quaternionCtor4                                 gdextension.PtrConstructor
-	quaternionCtor5                                 gdextension.PtrConstructor
-	quaternionMethodLength                          gdextension.PtrBuiltInMethod
-	quaternionMethodLengthSquared                   gdextension.PtrBuiltInMethod
-	quaternionMethodNormalized                      gdextension.PtrBuiltInMethod
-	quaternionMethodIsNormalized                    gdextension.PtrBuiltInMethod
-	quaternionMethodIsEqualApprox                   gdextension.PtrBuiltInMethod
-	quaternionMethodIsFinite                        gdextension.PtrBuiltInMethod
-	quaternionMethodInverse                         gdextension.PtrBuiltInMethod
-	quaternionMethodLog                             gdextension.PtrBuiltInMethod
-	quaternionMethodExp                             gdextension.PtrBuiltInMethod
-	quaternionMethodAngleTo                         gdextension.PtrBuiltInMethod
-	quaternionMethodDot                             gdextension.PtrBuiltInMethod
-	quaternionMethodSlerp                           gdextension.PtrBuiltInMethod
-	quaternionMethodSlerpni                         gdextension.PtrBuiltInMethod
-	quaternionMethodSphericalCubicInterpolate       gdextension.PtrBuiltInMethod
-	quaternionMethodSphericalCubicInterpolateInTime gdextension.PtrBuiltInMethod
-	quaternionMethodGetEuler                        gdextension.PtrBuiltInMethod
-	quaternionMethodFromEuler                       gdextension.PtrBuiltInMethod
-	quaternionMethodGetAxis                         gdextension.PtrBuiltInMethod
-	quaternionMethodGetAngle                        gdextension.PtrBuiltInMethod
-	quaternionOpNeg                                 gdextension.PtrOperatorEvaluator
-	quaternionOpPos                                 gdextension.PtrOperatorEvaluator
-	quaternionOpNot                                 gdextension.PtrOperatorEvaluator
-	quaternionOpMulInt                              gdextension.PtrOperatorEvaluator
-	quaternionOpDivInt                              gdextension.PtrOperatorEvaluator
-	quaternionOpMulFloat                            gdextension.PtrOperatorEvaluator
-	quaternionOpDivFloat                            gdextension.PtrOperatorEvaluator
-	quaternionOpMulVector3                          gdextension.PtrOperatorEvaluator
-	quaternionOpEq                                  gdextension.PtrOperatorEvaluator
-	quaternionOpNe                                  gdextension.PtrOperatorEvaluator
-	quaternionOpAdd                                 gdextension.PtrOperatorEvaluator
-	quaternionOpSub                                 gdextension.PtrOperatorEvaluator
-	quaternionOpMul                                 gdextension.PtrOperatorEvaluator
-	quaternionOpInDictionary                        gdextension.PtrOperatorEvaluator
-	quaternionOpInArray                             gdextension.PtrOperatorEvaluator
-	quaternionIndexedGetter                         gdextension.PtrIndexedGetter
-	quaternionIndexedSetter                         gdextension.PtrIndexedSetter
+	quaternionFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeQuaternion)
+	})
+	quaternionToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeQuaternion)
+	})
+	quaternionCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 0)
+	})
+	quaternionCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 1)
+	})
+	quaternionCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 2)
+	})
+	quaternionCtor3 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 3)
+	})
+	quaternionCtor4 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 4)
+	})
+	quaternionCtor5 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 5)
+	})
+	quaternionMethodLength = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("length"), 466405837)
+	})
+	quaternionMethodLengthSquared = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("length_squared"), 466405837)
+	})
+	quaternionMethodNormalized = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("normalized"), 4274879941)
+	})
+	quaternionMethodIsNormalized = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_normalized"), 3918633141)
+	})
+	quaternionMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_equal_approx"), 1682156903)
+	})
+	quaternionMethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_finite"), 3918633141)
+	})
+	quaternionMethodInverse = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("inverse"), 4274879941)
+	})
+	quaternionMethodLog = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("log"), 4274879941)
+	})
+	quaternionMethodExp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("exp"), 4274879941)
+	})
+	quaternionMethodAngleTo = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("angle_to"), 3244682419)
+	})
+	quaternionMethodDot = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("dot"), 3244682419)
+	})
+	quaternionMethodSlerp = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("slerp"), 1773590316)
+	})
+	quaternionMethodSlerpni = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("slerpni"), 1773590316)
+	})
+	quaternionMethodSphericalCubicInterpolate = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("spherical_cubic_interpolate"), 2150967576)
+	})
+	quaternionMethodSphericalCubicInterpolateInTime = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("spherical_cubic_interpolate_in_time"), 1436023539)
+	})
+	quaternionMethodGetEuler = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_euler"), 1394941017)
+	})
+	quaternionMethodFromEuler = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("from_euler"), 4053467903)
+	})
+	quaternionMethodGetAxis = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_axis"), 1776574132)
+	})
+	quaternionMethodGetAngle = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_angle"), 466405837)
+	})
+	quaternionOpNeg = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
+	})
+	quaternionOpPos = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
+	})
+	quaternionOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
+	})
+	quaternionOpMulInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeInt)
+	})
+	quaternionOpDivInt = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeQuaternion, gdextension.VariantTypeInt)
+	})
+	quaternionOpMulFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeFloat)
+	})
+	quaternionOpDivFloat = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeQuaternion, gdextension.VariantTypeFloat)
+	})
+	quaternionOpMulVector3 = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeVector3)
+	})
+	quaternionOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
+	})
+	quaternionOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
+	})
+	quaternionOpAdd = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
+	})
+	quaternionOpSub = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
+	})
+	quaternionOpMul = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
+	})
+	quaternionOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeQuaternion, gdextension.VariantTypeDictionary)
+	})
+	quaternionOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeQuaternion, gdextension.VariantTypeArray)
+	})
+	quaternionIndexedGetter = sync.OnceValue(func() gdextension.PtrIndexedGetter {
+		return gdextension.GetPtrIndexedGetter(gdextension.VariantTypeQuaternion)
+	})
+	quaternionIndexedSetter = sync.OnceValue(func() gdextension.PtrIndexedSetter {
+		return gdextension.GetPtrIndexedSetter(gdextension.VariantTypeQuaternion)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initQuaternion)
-}
-
-func initQuaternion() {
-	quaternionFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeQuaternion)
-	quaternionToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeQuaternion)
-	quaternionCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 0)
-	quaternionCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 1)
-	quaternionCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 2)
-	quaternionCtor3 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 3)
-	quaternionCtor4 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 4)
-	quaternionCtor5 = gdextension.GetPtrConstructor(gdextension.VariantTypeQuaternion, 5)
-	quaternionMethodLength = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("length"), 466405837)
-	quaternionMethodLengthSquared = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("length_squared"), 466405837)
-	quaternionMethodNormalized = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("normalized"), 4274879941)
-	quaternionMethodIsNormalized = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_normalized"), 3918633141)
-	quaternionMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_equal_approx"), 1682156903)
-	quaternionMethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("is_finite"), 3918633141)
-	quaternionMethodInverse = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("inverse"), 4274879941)
-	quaternionMethodLog = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("log"), 4274879941)
-	quaternionMethodExp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("exp"), 4274879941)
-	quaternionMethodAngleTo = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("angle_to"), 3244682419)
-	quaternionMethodDot = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("dot"), 3244682419)
-	quaternionMethodSlerp = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("slerp"), 1773590316)
-	quaternionMethodSlerpni = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("slerpni"), 1773590316)
-	quaternionMethodSphericalCubicInterpolate = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("spherical_cubic_interpolate"), 2150967576)
-	quaternionMethodSphericalCubicInterpolateInTime = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("spherical_cubic_interpolate_in_time"), 1436023539)
-	quaternionMethodGetEuler = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_euler"), 1394941017)
-	quaternionMethodFromEuler = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("from_euler"), 4053467903)
-	quaternionMethodGetAxis = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_axis"), 1776574132)
-	quaternionMethodGetAngle = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeQuaternion, internStringName("get_angle"), 466405837)
-	quaternionOpNeg = gdextension.GetPtrOperatorEvaluator(gdextension.OpNegate, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
-	quaternionOpPos = gdextension.GetPtrOperatorEvaluator(gdextension.OpPositive, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
-	quaternionOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeQuaternion, gdextension.VariantTypeNil)
-	quaternionOpMulInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeInt)
-	quaternionOpDivInt = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeQuaternion, gdextension.VariantTypeInt)
-	quaternionOpMulFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeFloat)
-	quaternionOpDivFloat = gdextension.GetPtrOperatorEvaluator(gdextension.OpDivide, gdextension.VariantTypeQuaternion, gdextension.VariantTypeFloat)
-	quaternionOpMulVector3 = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeVector3)
-	quaternionOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
-	quaternionOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
-	quaternionOpAdd = gdextension.GetPtrOperatorEvaluator(gdextension.OpAdd, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
-	quaternionOpSub = gdextension.GetPtrOperatorEvaluator(gdextension.OpSubtract, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
-	quaternionOpMul = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeQuaternion, gdextension.VariantTypeQuaternion)
-	quaternionOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeQuaternion, gdextension.VariantTypeDictionary)
-	quaternionOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeQuaternion, gdextension.VariantTypeArray)
-	quaternionIndexedGetter = gdextension.GetPtrIndexedGetter(gdextension.VariantTypeQuaternion)
-	quaternionIndexedSetter = gdextension.GetPtrIndexedSetter(gdextension.VariantTypeQuaternion)
-
-}
 
 // NewQuaternion constructs a Quaternion via the host (constructor index 0).
 func NewQuaternion() Quaternion {
 	var v Quaternion
-	gdextension.CallPtrConstructor(quaternionCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(quaternionCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -167,7 +205,7 @@ func NewQuaternionFromQuaternion(from Quaternion) Quaternion {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(quaternionCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(quaternionCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -177,7 +215,7 @@ func NewQuaternionFromBasis(from Basis) Quaternion {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(quaternionCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(quaternionCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -190,7 +228,7 @@ func NewQuaternionAxisAngle(axis Vector3, angle float32) Quaternion {
 		gdextension.TypePtr(unsafe.Pointer(&axis)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_angle)),
 	}
-	gdextension.CallPtrConstructor(quaternionCtor3, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(quaternionCtor3(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -201,7 +239,7 @@ func NewQuaternionArcFromArcTo(arc_from Vector3, arc_to Vector3) Quaternion {
 		gdextension.TypePtr(unsafe.Pointer(&arc_from)),
 		gdextension.TypePtr(unsafe.Pointer(&arc_to)),
 	}
-	gdextension.CallPtrConstructor(quaternionCtor4, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(quaternionCtor4(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -222,35 +260,35 @@ func NewQuaternionXYZW(x float32, y float32, z float32, w float32) Quaternion {
 		gdextension.TypePtr(unsafe.Pointer(&tmp_z)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_w)),
 	}
-	gdextension.CallPtrConstructor(quaternionCtor5, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(quaternionCtor5(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Length mirrors the Godot Quaternion.length method.
 func (self *Quaternion) Length() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(quaternionMethodLength, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodLength(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // LengthSquared mirrors the Godot Quaternion.length_squared method.
 func (self *Quaternion) LengthSquared() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(quaternionMethodLengthSquared, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodLengthSquared(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // Normalized mirrors the Godot Quaternion.normalized method.
 func (self *Quaternion) Normalized() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrBuiltinMethod(quaternionMethodNormalized, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodNormalized(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsNormalized mirrors the Godot Quaternion.is_normalized method.
 func (self *Quaternion) IsNormalized() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(quaternionMethodIsNormalized, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodIsNormalized(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -260,35 +298,35 @@ func (self *Quaternion) IsEqualApprox(to Quaternion) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot Quaternion.is_finite method.
 func (self *Quaternion) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(quaternionMethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Inverse mirrors the Godot Quaternion.inverse method.
 func (self *Quaternion) Inverse() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrBuiltinMethod(quaternionMethodInverse, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodInverse(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Log mirrors the Godot Quaternion.log method.
 func (self *Quaternion) Log() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrBuiltinMethod(quaternionMethodLog, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodLog(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Exp mirrors the Godot Quaternion.exp method.
 func (self *Quaternion) Exp() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrBuiltinMethod(quaternionMethodExp, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodExp(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -298,7 +336,7 @@ func (self *Quaternion) AngleTo(to Quaternion) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodAngleTo, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodAngleTo(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -308,7 +346,7 @@ func (self *Quaternion) Dot(with Quaternion) float32 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodDot, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodDot(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -321,7 +359,7 @@ func (self *Quaternion) Slerp(to Quaternion, weight float32) Quaternion {
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerp, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerp(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -334,7 +372,7 @@ func (self *Quaternion) Slerpni(to Quaternion, weight float32) Quaternion {
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerpni, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodSlerpni(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -349,7 +387,7 @@ func (self *Quaternion) SphericalCubicInterpolate(b Quaternion, pre_a Quaternion
 		gdextension.TypePtr(unsafe.Pointer(&post_b)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_weight)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolate, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolate(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -373,7 +411,7 @@ func (self *Quaternion) SphericalCubicInterpolateInTime(b Quaternion, pre_a Quat
 		gdextension.TypePtr(unsafe.Pointer(&tmp_pre_a_t)),
 		gdextension.TypePtr(unsafe.Pointer(&tmp_post_b_t)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolateInTime, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodSphericalCubicInterpolateInTime(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -383,7 +421,7 @@ func (self *Quaternion) GetEuler(order int64) Vector3 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&order)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodGetEuler, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodGetEuler(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -393,146 +431,146 @@ func QuaternionFromEuler(euler Vector3) Quaternion {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&euler)),
 	}
-	gdextension.CallPtrBuiltinMethod(quaternionMethodFromEuler, nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodFromEuler(), nil, args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetAxis mirrors the Godot Quaternion.get_axis method.
 func (self *Quaternion) GetAxis() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAxis, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAxis(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetAngle mirrors the Godot Quaternion.get_angle method.
 func (self *Quaternion) GetAngle() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAngle, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(quaternionMethodGetAngle(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // Neg mirrors the Godot Quaternion unary- operator.
 func (self *Quaternion) Neg() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpNeg, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpNeg(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Pos mirrors the Godot Quaternion unary+ operator.
 func (self *Quaternion) Pos() Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpPos, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpPos(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot Quaternion not operator.
 func (self *Quaternion) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(quaternionOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulInt mirrors the Godot Quaternion * operator.
 func (self *Quaternion) MulInt(rhs int64) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpMulInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpMulInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivInt mirrors the Godot Quaternion / operator.
 func (self *Quaternion) DivInt(rhs int64) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpDivInt, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpDivInt(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulFloat mirrors the Godot Quaternion * operator.
 func (self *Quaternion) MulFloat(rhs float32) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpMulFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpMulFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // DivFloat mirrors the Godot Quaternion / operator.
 func (self *Quaternion) DivFloat(rhs float32) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpDivFloat, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpDivFloat(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulVector3 mirrors the Godot Quaternion * operator.
 func (self *Quaternion) MulVector3(rhs Vector3) Vector3 {
 	var ret Vector3
-	gdextension.CallPtrOperatorEvaluator(quaternionOpMulVector3, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpMulVector3(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot Quaternion == operator.
 func (self *Quaternion) Eq(rhs Quaternion) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(quaternionOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot Quaternion != operator.
 func (self *Quaternion) Ne(rhs Quaternion) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(quaternionOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Add mirrors the Godot Quaternion + operator.
 func (self *Quaternion) Add(rhs Quaternion) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpAdd, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpAdd(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Sub mirrors the Godot Quaternion - operator.
 func (self *Quaternion) Sub(rhs Quaternion) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpSub, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpSub(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Mul mirrors the Godot Quaternion * operator.
 func (self *Quaternion) Mul(rhs Quaternion) Quaternion {
 	var ret Quaternion
-	gdextension.CallPtrOperatorEvaluator(quaternionOpMul, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpMul(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot Quaternion in operator.
 func (self *Quaternion) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(quaternionOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot Quaternion in operator.
 func (self *Quaternion) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(quaternionOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(quaternionOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Index reads element [index] from the receiver.
 func (self *Quaternion) Index(index int64) float32 {
 	var raw float64
-	gdextension.CallPtrIndexedGetter(quaternionIndexedGetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrIndexedGetter(quaternionIndexedGetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // SetIndex writes value into element [index] of the receiver.
 func (self *Quaternion) SetIndex(index int64, value float32) {
-	gdextension.CallPtrIndexedSetter(quaternionIndexedSetter, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
+	gdextension.CallPtrIndexedSetter(quaternionIndexedSetter(), gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))
 }
 
 // ToVariant copies the receiver into a freshly-initialized Variant slot. The
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *Quaternion) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(quaternionFromType,
+	gdextension.CallVariantFromType(quaternionFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -542,7 +580,7 @@ func (self *Quaternion) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func QuaternionFromVariant(src *Variant) Quaternion {
 	var v Quaternion
-	gdextension.CallTypeFromVariant(quaternionToType,
+	gdextension.CallTypeFromVariant(quaternionToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v

@@ -3,6 +3,7 @@
 package variant
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -33,95 +34,124 @@ func (self *AABB) SetSize(value Vector3) {
 	*(*Vector3)(unsafe.Pointer(&self[12])) = value
 }
 
-// Cached resolved function pointers. Populated at CORE init level (the
-// host's interface table is loaded before then).
+// Lazily-resolved function pointers. Each is a sync.OnceValue that performs
+// the host lookup on first call — the host's interface table is loaded by
+// the time any user code runs, so the lookup always succeeds.
 var (
-	aABBFromType                   gdextension.VariantFromTypeFunc
-	aABBToType                     gdextension.VariantToTypeFunc
-	aABBCtor0                      gdextension.PtrConstructor
-	aABBCtor1                      gdextension.PtrConstructor
-	aABBCtor2                      gdextension.PtrConstructor
-	aABBMethodAbs                  gdextension.PtrBuiltInMethod
-	aABBMethodGetCenter            gdextension.PtrBuiltInMethod
-	aABBMethodGetVolume            gdextension.PtrBuiltInMethod
-	aABBMethodHasVolume            gdextension.PtrBuiltInMethod
-	aABBMethodHasSurface           gdextension.PtrBuiltInMethod
-	aABBMethodHasPoint             gdextension.PtrBuiltInMethod
-	aABBMethodIsEqualApprox        gdextension.PtrBuiltInMethod
-	aABBMethodIsFinite             gdextension.PtrBuiltInMethod
-	aABBMethodIntersects           gdextension.PtrBuiltInMethod
-	aABBMethodEncloses             gdextension.PtrBuiltInMethod
-	aABBMethodIntersectsPlane      gdextension.PtrBuiltInMethod
-	aABBMethodIntersection         gdextension.PtrBuiltInMethod
-	aABBMethodMerge                gdextension.PtrBuiltInMethod
-	aABBMethodExpand               gdextension.PtrBuiltInMethod
-	aABBMethodGrow                 gdextension.PtrBuiltInMethod
-	aABBMethodGetSupport           gdextension.PtrBuiltInMethod
-	aABBMethodGetLongestAxis       gdextension.PtrBuiltInMethod
-	aABBMethodGetLongestAxisIndex  gdextension.PtrBuiltInMethod
-	aABBMethodGetLongestAxisSize   gdextension.PtrBuiltInMethod
-	aABBMethodGetShortestAxis      gdextension.PtrBuiltInMethod
-	aABBMethodGetShortestAxisIndex gdextension.PtrBuiltInMethod
-	aABBMethodGetShortestAxisSize  gdextension.PtrBuiltInMethod
-	aABBMethodGetEndpoint          gdextension.PtrBuiltInMethod
-	aABBMethodIntersectsSegment    gdextension.PtrBuiltInMethod
-	aABBMethodIntersectsRay        gdextension.PtrBuiltInMethod
-	aABBOpNot                      gdextension.PtrOperatorEvaluator
-	aABBOpEq                       gdextension.PtrOperatorEvaluator
-	aABBOpNe                       gdextension.PtrOperatorEvaluator
-	aABBOpMulTransform3D           gdextension.PtrOperatorEvaluator
-	aABBOpInDictionary             gdextension.PtrOperatorEvaluator
-	aABBOpInArray                  gdextension.PtrOperatorEvaluator
+	aABBFromType = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeAABB)
+	})
+	aABBToType = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeAABB)
+	})
+	aABBCtor0 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 0)
+	})
+	aABBCtor1 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 1)
+	})
+	aABBCtor2 = sync.OnceValue(func() gdextension.PtrConstructor {
+		return gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 2)
+	})
+	aABBMethodAbs = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("abs"), 1576868580)
+	})
+	aABBMethodGetCenter = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_center"), 1776574132)
+	})
+	aABBMethodGetVolume = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_volume"), 466405837)
+	})
+	aABBMethodHasVolume = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_volume"), 3918633141)
+	})
+	aABBMethodHasSurface = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_surface"), 3918633141)
+	})
+	aABBMethodHasPoint = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_point"), 1749054343)
+	})
+	aABBMethodIsEqualApprox = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("is_equal_approx"), 299946684)
+	})
+	aABBMethodIsFinite = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("is_finite"), 3918633141)
+	})
+	aABBMethodIntersects = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects"), 299946684)
+	})
+	aABBMethodEncloses = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("encloses"), 299946684)
+	})
+	aABBMethodIntersectsPlane = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_plane"), 1150170233)
+	})
+	aABBMethodIntersection = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersection"), 1271470306)
+	})
+	aABBMethodMerge = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("merge"), 1271470306)
+	})
+	aABBMethodExpand = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("expand"), 2851643018)
+	})
+	aABBMethodGrow = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("grow"), 239217291)
+	})
+	aABBMethodGetSupport = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_support"), 2923479887)
+	})
+	aABBMethodGetLongestAxis = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis"), 1776574132)
+	})
+	aABBMethodGetLongestAxisIndex = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis_index"), 3173160232)
+	})
+	aABBMethodGetLongestAxisSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis_size"), 466405837)
+	})
+	aABBMethodGetShortestAxis = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis"), 1776574132)
+	})
+	aABBMethodGetShortestAxisIndex = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis_index"), 3173160232)
+	})
+	aABBMethodGetShortestAxisSize = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis_size"), 466405837)
+	})
+	aABBMethodGetEndpoint = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_endpoint"), 1394941017)
+	})
+	aABBMethodIntersectsSegment = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_segment"), 2048133369)
+	})
+	aABBMethodIntersectsRay = sync.OnceValue(func() gdextension.PtrBuiltInMethod {
+		return gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_ray"), 2048133369)
+	})
+	aABBOpNot = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeAABB, gdextension.VariantTypeNil)
+	})
+	aABBOpEq = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeAABB, gdextension.VariantTypeAABB)
+	})
+	aABBOpNe = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeAABB, gdextension.VariantTypeAABB)
+	})
+	aABBOpMulTransform3D = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeAABB, gdextension.VariantTypeTransform3D)
+	})
+	aABBOpInDictionary = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeAABB, gdextension.VariantTypeDictionary)
+	})
+	aABBOpInArray = sync.OnceValue(func() gdextension.PtrOperatorEvaluator {
+		return gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeAABB, gdextension.VariantTypeArray)
+	})
 )
-
-func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, initAABB)
-}
-
-func initAABB() {
-	aABBFromType = gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeAABB)
-	aABBToType = gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeAABB)
-	aABBCtor0 = gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 0)
-	aABBCtor1 = gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 1)
-	aABBCtor2 = gdextension.GetPtrConstructor(gdextension.VariantTypeAABB, 2)
-	aABBMethodAbs = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("abs"), 1576868580)
-	aABBMethodGetCenter = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_center"), 1776574132)
-	aABBMethodGetVolume = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_volume"), 466405837)
-	aABBMethodHasVolume = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_volume"), 3918633141)
-	aABBMethodHasSurface = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_surface"), 3918633141)
-	aABBMethodHasPoint = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("has_point"), 1749054343)
-	aABBMethodIsEqualApprox = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("is_equal_approx"), 299946684)
-	aABBMethodIsFinite = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("is_finite"), 3918633141)
-	aABBMethodIntersects = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects"), 299946684)
-	aABBMethodEncloses = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("encloses"), 299946684)
-	aABBMethodIntersectsPlane = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_plane"), 1150170233)
-	aABBMethodIntersection = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersection"), 1271470306)
-	aABBMethodMerge = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("merge"), 1271470306)
-	aABBMethodExpand = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("expand"), 2851643018)
-	aABBMethodGrow = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("grow"), 239217291)
-	aABBMethodGetSupport = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_support"), 2923479887)
-	aABBMethodGetLongestAxis = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis"), 1776574132)
-	aABBMethodGetLongestAxisIndex = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis_index"), 3173160232)
-	aABBMethodGetLongestAxisSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_longest_axis_size"), 466405837)
-	aABBMethodGetShortestAxis = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis"), 1776574132)
-	aABBMethodGetShortestAxisIndex = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis_index"), 3173160232)
-	aABBMethodGetShortestAxisSize = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_shortest_axis_size"), 466405837)
-	aABBMethodGetEndpoint = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("get_endpoint"), 1394941017)
-	aABBMethodIntersectsSegment = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_segment"), 2048133369)
-	aABBMethodIntersectsRay = gdextension.GetPtrBuiltinMethod(gdextension.VariantTypeAABB, internStringName("intersects_ray"), 2048133369)
-	aABBOpNot = gdextension.GetPtrOperatorEvaluator(gdextension.OpNot, gdextension.VariantTypeAABB, gdextension.VariantTypeNil)
-	aABBOpEq = gdextension.GetPtrOperatorEvaluator(gdextension.OpEqual, gdextension.VariantTypeAABB, gdextension.VariantTypeAABB)
-	aABBOpNe = gdextension.GetPtrOperatorEvaluator(gdextension.OpNotEqual, gdextension.VariantTypeAABB, gdextension.VariantTypeAABB)
-	aABBOpMulTransform3D = gdextension.GetPtrOperatorEvaluator(gdextension.OpMultiply, gdextension.VariantTypeAABB, gdextension.VariantTypeTransform3D)
-	aABBOpInDictionary = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeAABB, gdextension.VariantTypeDictionary)
-	aABBOpInArray = gdextension.GetPtrOperatorEvaluator(gdextension.OpIn, gdextension.VariantTypeAABB, gdextension.VariantTypeArray)
-
-}
 
 // NewAABB constructs a AABB via the host (constructor index 0).
 func NewAABB() AABB {
 	var v AABB
-	gdextension.CallPtrConstructor(aABBCtor0, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
+	gdextension.CallPtrConstructor(aABBCtor0(), gdextension.TypePtr(unsafe.Pointer(&v)), nil)
 	return v
 }
 
@@ -131,7 +161,7 @@ func NewAABBFromAABB(from AABB) AABB {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 	}
-	gdextension.CallPtrConstructor(aABBCtor1, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(aABBCtor1(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
@@ -142,42 +172,42 @@ func NewAABBPositionSize(position Vector3, size Vector3) AABB {
 		gdextension.TypePtr(unsafe.Pointer(&position)),
 		gdextension.TypePtr(unsafe.Pointer(&size)),
 	}
-	gdextension.CallPtrConstructor(aABBCtor2, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
+	gdextension.CallPtrConstructor(aABBCtor2(), gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
 	return v
 }
 
 // Abs mirrors the Godot AABB.abs method.
 func (self *AABB) Abs() AABB {
 	var ret AABB
-	gdextension.CallPtrBuiltinMethod(aABBMethodAbs, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodAbs(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetCenter mirrors the Godot AABB.get_center method.
 func (self *AABB) GetCenter() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetCenter, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetCenter(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetVolume mirrors the Godot AABB.get_volume method.
 func (self *AABB) GetVolume() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetVolume, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetVolume(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // HasVolume mirrors the Godot AABB.has_volume method.
 func (self *AABB) HasVolume() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(aABBMethodHasVolume, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodHasVolume(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // HasSurface mirrors the Godot AABB.has_surface method.
 func (self *AABB) HasSurface() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(aABBMethodHasSurface, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodHasSurface(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -187,7 +217,7 @@ func (self *AABB) HasPoint(point Vector3) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&point)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodHasPoint, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodHasPoint(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -197,14 +227,14 @@ func (self *AABB) IsEqualApprox(aabb AABB) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&aabb)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIsEqualApprox, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIsEqualApprox(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // IsFinite mirrors the Godot AABB.is_finite method.
 func (self *AABB) IsFinite() bool {
 	var ret bool
-	gdextension.CallPtrBuiltinMethod(aABBMethodIsFinite, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIsFinite(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -214,7 +244,7 @@ func (self *AABB) Intersects(with AABB) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIntersects, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIntersects(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -224,7 +254,7 @@ func (self *AABB) Encloses(with AABB) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodEncloses, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodEncloses(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -234,7 +264,7 @@ func (self *AABB) IntersectsPlane(plane Plane) bool {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&plane)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsPlane, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsPlane(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -244,7 +274,7 @@ func (self *AABB) Intersection(with AABB) AABB {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIntersection, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIntersection(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -254,7 +284,7 @@ func (self *AABB) Merge(with AABB) AABB {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&with)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodMerge, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodMerge(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -264,7 +294,7 @@ func (self *AABB) Expand(to_point Vector3) AABB {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&to_point)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodExpand, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodExpand(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -276,7 +306,7 @@ func (self *AABB) Grow(by float32) AABB {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&tmp_by)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodGrow, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGrow(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -286,49 +316,49 @@ func (self *AABB) GetSupport(direction Vector3) Vector3 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&direction)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetSupport, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetSupport(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetLongestAxis mirrors the Godot AABB.get_longest_axis method.
 func (self *AABB) GetLongestAxis() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxis, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxis(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetLongestAxisIndex mirrors the Godot AABB.get_longest_axis_index method.
 func (self *AABB) GetLongestAxisIndex() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisIndex, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisIndex(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetLongestAxisSize mirrors the Godot AABB.get_longest_axis_size method.
 func (self *AABB) GetLongestAxisSize() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetLongestAxisSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
 // GetShortestAxis mirrors the Godot AABB.get_shortest_axis method.
 func (self *AABB) GetShortestAxis() Vector3 {
 	var ret Vector3
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxis, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxis(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetShortestAxisIndex mirrors the Godot AABB.get_shortest_axis_index method.
 func (self *AABB) GetShortestAxisIndex() int64 {
 	var ret int64
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisIndex, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisIndex(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // GetShortestAxisSize mirrors the Godot AABB.get_shortest_axis_size method.
 func (self *AABB) GetShortestAxisSize() float32 {
 	var raw float64
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisSize, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetShortestAxisSize(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&raw)))
 	return float32(raw)
 }
 
@@ -338,7 +368,7 @@ func (self *AABB) GetEndpoint(idx int64) Vector3 {
 	args := [...]gdextension.TypePtr{
 		gdextension.TypePtr(unsafe.Pointer(&idx)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodGetEndpoint, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodGetEndpoint(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -349,7 +379,7 @@ func (self *AABB) IntersectsSegment(from Vector3, to Vector3) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&to)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsSegment, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsSegment(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -360,49 +390,49 @@ func (self *AABB) IntersectsRay(from Vector3, dir Vector3) Variant {
 		gdextension.TypePtr(unsafe.Pointer(&from)),
 		gdextension.TypePtr(unsafe.Pointer(&dir)),
 	}
-	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsRay, gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrBuiltinMethod(aABBMethodIntersectsRay(), gdextension.TypePtr(unsafe.Pointer(self)), args[:], gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Not mirrors the Godot AABB not operator.
 func (self *AABB) Not() bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(aABBOpNot, gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpNot(), gdextension.TypePtr(unsafe.Pointer(self)), nil, gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Eq mirrors the Godot AABB == operator.
 func (self *AABB) Eq(rhs AABB) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(aABBOpEq, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpEq(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // Ne mirrors the Godot AABB != operator.
 func (self *AABB) Ne(rhs AABB) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(aABBOpNe, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpNe(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // MulTransform3D mirrors the Godot AABB * operator.
 func (self *AABB) MulTransform3D(rhs Transform3D) AABB {
 	var ret AABB
-	gdextension.CallPtrOperatorEvaluator(aABBOpMulTransform3D, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpMulTransform3D(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InDictionary mirrors the Godot AABB in operator.
 func (self *AABB) InDictionary(rhs Dictionary) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(aABBOpInDictionary, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpInDictionary(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
 // InArray mirrors the Godot AABB in operator.
 func (self *AABB) InArray(rhs Array) bool {
 	var ret bool
-	gdextension.CallPtrOperatorEvaluator(aABBOpInArray, gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
+	gdextension.CallPtrOperatorEvaluator(aABBOpInArray(), gdextension.TypePtr(unsafe.Pointer(self)), gdextension.TypePtr(unsafe.Pointer(&rhs)), gdextension.TypePtr(unsafe.Pointer(&ret)))
 	return ret
 }
 
@@ -410,7 +440,7 @@ func (self *AABB) InArray(rhs Array) bool {
 // caller owns the returned slot and must call (*Variant).Destroy() once done.
 func (self *AABB) ToVariant() *Variant {
 	ret := new(Variant)
-	gdextension.CallVariantFromType(aABBFromType,
+	gdextension.CallVariantFromType(aABBFromType(),
 		gdextension.VariantPtr(unsafe.Pointer(ret)),
 		gdextension.TypePtr(unsafe.Pointer(self)))
 	return ret
@@ -420,7 +450,7 @@ func (self *AABB) ToVariant() *Variant {
 // source slot is not destroyed; the caller still owns it.
 func AABBFromVariant(src *Variant) AABB {
 	var v AABB
-	gdextension.CallTypeFromVariant(aABBToType,
+	gdextension.CallTypeFromVariant(aABBToType(),
 		gdextension.TypePtr(unsafe.Pointer(&v)),
 		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v
