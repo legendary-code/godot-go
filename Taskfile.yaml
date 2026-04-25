@@ -25,7 +25,7 @@ tasks:
   generate:types:
     desc: Regenerate framework bindings from godot/extension_api.json into variant/, core/, etc.
     cmds:
-      - go run ./cmd/godot-go-bindgen -api godot/extension_api.json -out . -build-config float_32
+      - go run ./cmd/godot-go-bindgen -api godot/extension_api.json -out . -build-config float_64
     sources:
       - godot/extension_api.json
       - cmd/godot-go-bindgen/**/*.go

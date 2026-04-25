@@ -10,53 +10,67 @@ import (
 	"text/template"
 )
 
-// builtinView is the data the builtin-class template consumes. It's a
-// flattened, name-mangled projection of BuiltinClass + size + offsets so the
-// template stays free of business logic.
+// builtinView is the data the builtin-class template consumes. Each entry's
+// Body is pre-rendered into Go source by the build* helpers below — the
+// template only stitches the file together.
 type builtinView struct {
-	GoName       string // e.g. "Vector2"
-	Size         int    // bytes (per builtin_class_sizes for the target build_config)
-	VariantType  string // e.g. "VariantTypeVector2"
+	GoName        string // e.g. "Vector2"
+	Size          int    // bytes (per builtin_class_sizes)
+	VariantType   string // e.g. "VariantTypeVector2"
 	HasDestructor bool
 
 	Members      []memberView
-	Constructors []constructorView
-	Methods      []methodView
+	Constructors []callableView
+	Methods      []callableView
+	Operators    []callableView
+	Indexed      *indexedView
+	Keyed        *keyedView
+
+	// CacheVars carries every cached resolved-fn-ptr we declare at file scope.
+	CacheVars []cacheVar
+	// InitLines are the assignments emitted in <name>Init() to populate them.
+	InitLines []string
 }
 
 type memberView struct {
-	GoName    string // PascalCase
-	Offset    int
-	GoType    string // Go type for the field accessor (float32, int32, etc.)
+	GoName string // PascalCase
+	Offset int
+	GoType string // Go type for the field accessor
 }
 
-type constructorView struct {
-	GoName string // e.g. "NewVector2", "NewVector2FromXY"
-	Index  int
-	VarID  string // unique Go identifier to cache the resolved fn pointer
-	Args   []paramView
+type cacheVar struct {
+	Name string
+	Type string // Go type (e.g. "gdextension.PtrConstructor")
 }
 
-type methodView struct {
-	GoName        string // PascalCase
-	GodotName     string // original snake_case name (used to resolve via StringName)
-	Hash          int64
-	IsStatic      bool
-	IsConst       bool
-	VarID         string // unique Go identifier for the cached fn pointer
-	ReturnGoType  string // Go return type, "" if void
-	ReturnZero    string // zero-value expression for the return type, "" if void
-	Args          []paramView
+// callableView is the shared shape for emitted constructors/methods/operators.
+// Sig is the Go function signature *without* `func` and *with* the receiver
+// (or empty for package-level functions). Body is the function body without
+// the surrounding braces.
+type callableView struct {
+	GoDoc string
+	Sig   string
+	Body  string
 }
 
-type paramView struct {
-	GoName string // Go-friendly param name
-	GoType string // Go param type
+type indexedView struct {
+	GoName    string // emitted Get/Set names
+	GoType    string // Go return type of Get / arg type of Set
+	GetSig    string
+	GetBody   string
+	HasSetter bool
+	SetSig    string
+	SetBody   string
+}
+
+type keyedView struct {
+	GetBody string
+	SetBody string
 }
 
 // emitBuiltinClass writes <outDir>/<lower(name)>.gen.go for the given builtin
-// class. The chosen subset of methods/constructors/operators is curated for
-// Phase 2b — Phase 2c lifts that restriction.
+// class. Methods/constructors/operators that reference unsupported types
+// (Object, missing builtins) are silently skipped; the rest are emitted.
 func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir string) error {
 	size, ok := api.SizeFor(buildConfig, bc.Name)
 	if !ok {
@@ -64,7 +78,7 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 	}
 	offsets := api.OffsetsFor(buildConfig, bc.Name)
 
-	view := builtinView{
+	view := &builtinView{
 		GoName:        bc.Name,
 		Size:          size,
 		VariantType:   "VariantType" + bc.Name,
@@ -79,53 +93,51 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 		})
 	}
 
+	// Variant from/to type — every emitted builtin gets these.
+	addCacheVar(view, lowerFirst(bc.Name)+"FromType", "gdextension.VariantFromTypeFunc")
+	addCacheVar(view, lowerFirst(bc.Name)+"ToType", "gdextension.VariantToTypeFunc")
+	view.InitLines = append(view.InitLines,
+		fmt.Sprintf("%sFromType = gdextension.GetVariantFromTypeConstructor(gdextension.%s)", lowerFirst(bc.Name), view.VariantType),
+		fmt.Sprintf("%sToType = gdextension.GetVariantToTypeConstructor(gdextension.%s)", lowerFirst(bc.Name), view.VariantType),
+	)
+	if bc.HasDestructor {
+		dvar := lowerFirst(bc.Name) + "Dtor"
+		addCacheVar(view, dvar, "gdextension.PtrDestructor")
+		view.InitLines = append(view.InitLines,
+			fmt.Sprintf("%s = gdextension.GetPtrDestructor(gdextension.%s)", dvar, view.VariantType))
+	}
+
 	for _, c := range bc.Constructors {
-		if !shouldEmitConstructor(bc.Name, c) {
+		cv, ok := buildConstructorView(api, bc, c, view)
+		if !ok {
 			continue
 		}
-		args := make([]paramView, 0, len(c.Arguments))
-		for _, a := range c.Arguments {
-			args = append(args, paramView{
-				GoName: safeGoIdent(a.Name),
-				GoType: goTypeForGodot(a.Type),
-			})
-		}
-		view.Constructors = append(view.Constructors, constructorView{
-			GoName: ctorGoName(bc.Name, c),
-			Index:  c.Index,
-			VarID:  fmt.Sprintf("ctor%d", c.Index),
-			Args:   args,
-		})
+		view.Constructors = append(view.Constructors, cv)
 	}
 
 	for _, m := range bc.Methods {
-		if !shouldEmitMethod(bc.Name, m) {
+		if m.IsVararg {
 			continue
 		}
-		args := make([]paramView, 0, len(m.Arguments))
-		for _, a := range m.Arguments {
-			args = append(args, paramView{
-				GoName: safeGoIdent(a.Name),
-				GoType: goTypeForGodot(a.Type),
-			})
+		mv, ok := buildMethodView(api, bc, m, view)
+		if !ok {
+			continue
 		}
-		retGo := ""
-		retZero := ""
-		if m.ReturnType != "" && m.ReturnType != "void" {
-			retGo = goTypeForGodot(m.ReturnType)
-			retZero = goZeroForGodot(m.ReturnType)
+		view.Methods = append(view.Methods, mv)
+	}
+
+	for _, op := range bc.Operators {
+		ov, ok := buildOperatorView(api, bc, op, view)
+		if !ok {
+			continue
 		}
-		view.Methods = append(view.Methods, methodView{
-			GoName:       pascal(m.Name),
-			GodotName:    m.Name,
-			Hash:         m.Hash,
-			IsStatic:     m.IsStatic,
-			IsConst:      m.IsConst,
-			VarID:        "method" + pascal(m.Name),
-			ReturnGoType: retGo,
-			ReturnZero:   retZero,
-			Args:         args,
-		})
+		view.Operators = append(view.Operators, ov)
+	}
+
+	if bc.IndexingReturnType != "" && isSupportedType(api, bc.IndexingReturnType) {
+		if iv, ok := buildIndexedView(api, bc, view); ok {
+			view.Indexed = &iv
+		}
 	}
 
 	var buf bytes.Buffer
@@ -135,7 +147,6 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
-		// Write the unformatted output for debugging when formatting fails.
 		_ = os.WriteFile(filepath.Join(outDir, strings.ToLower(bc.Name)+".gen.go.broken"), buf.Bytes(), 0o644)
 		return fmt.Errorf("gofmt: %w", err)
 	}
@@ -144,36 +155,167 @@ func emitBuiltinClass(api *API, buildConfig string, bc *BuiltinClass, outDir str
 	return os.WriteFile(outPath, formatted, 0o644)
 }
 
-// Phase 2b method/constructor curation. These predicates exist only to keep
-// the first emitted file small enough to eyeball; Phase 2c removes them and
-// emits everything in extension_api.json.
-func shouldEmitConstructor(class string, c Constructor) bool {
-	switch class {
-	case "Vector2":
-		return c.Index == 0 || c.Index == 3 // default + (x,y) — skips copy/Vector2i
+func addCacheVar(view *builtinView, name, typ string) {
+	view.CacheVars = append(view.CacheVars, cacheVar{Name: name, Type: typ})
+}
+
+// argPrep returns the (prep, passExpr) pair for an argument. prep is Go code
+// that declares any temp boundary value and arranges destruction; passExpr
+// is the expression handed to `gdextension.TypePtr(...)`.
+func argPrep(godotType, goName string) (prep, passExpr string) {
+	_, kind := goType(godotType)
+	switch kind {
+	case kindString:
+		tmp := "tmp_" + goName
+		prep = fmt.Sprintf("var %s String\n\tstringFromGo(&%s, %s)\n\tdefer stringDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
+		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
+	case kindStringName:
+		tmp := "tmp_" + goName
+		prep = fmt.Sprintf("var %s StringName\n\tstringNameFromGo(&%s, %s)\n\tdefer stringNameDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
+		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
+	case kindNodePath:
+		tmp := "tmp_" + goName
+		prep = fmt.Sprintf("var %s NodePath\n\tnodePathFromGo(&%s, %s)\n\tdefer nodePathDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
+		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
+	default:
+		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
+	}
+	return
+}
+
+// returnPrep computes the prologue/epilogue for a return value. retGoType is
+// the user-facing Go return type (empty for void). retArgExpr is the pointer
+// passed to the call; it's "nil" for void. For boundary types, declRet
+// declares the raw temp, finalize converts/destroys, and retExpr is the
+// final return expression.
+type retPlan struct {
+	GoType    string // "" for void
+	DeclRet   string // e.g. "var ret float32" or "var raw String"
+	RetArg    string // pointer expression passed to the call, or "nil"
+	Finalize  string // any defer/cleanup line(s) before the return, or ""
+	RetExpr   string // expression returned, "" for void
+	IsVoid    bool
+}
+
+func returnPrep(godotType string) (retPlan, bool) {
+	if godotType == "" || godotType == "void" {
+		return retPlan{IsVoid: true, RetArg: "nil"}, true
+	}
+	g, kind := goType(godotType)
+	if kind == kindUnsupported {
+		return retPlan{}, false
+	}
+	switch kind {
+	case kindBool:
+		return retPlan{GoType: "bool", DeclRet: "var ret bool", RetArg: "gdextension.TypePtr(unsafe.Pointer(&ret))", RetExpr: "ret"}, true
+	case kindInt:
+		return retPlan{GoType: "int64", DeclRet: "var ret int64", RetArg: "gdextension.TypePtr(unsafe.Pointer(&ret))", RetExpr: "ret"}, true
+	case kindFloat:
+		return retPlan{GoType: "float32", DeclRet: "var ret float32", RetArg: "gdextension.TypePtr(unsafe.Pointer(&ret))", RetExpr: "ret"}, true
+	case kindString:
+		return retPlan{GoType: "string",
+			DeclRet:  "var raw String",
+			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
+			Finalize: "defer stringDestroy(&raw)",
+			RetExpr:  "stringToGo(&raw)"}, true
+	case kindStringName:
+		return retPlan{GoType: "string",
+			DeclRet:  "var raw StringName",
+			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
+			Finalize: "defer stringNameDestroy(&raw)",
+			RetExpr:  "stringNameToGo(&raw)"}, true
+	case kindNodePath:
+		return retPlan{GoType: "string",
+			DeclRet:  "var raw NodePath",
+			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
+			Finalize: "defer nodePathDestroy(&raw)",
+			RetExpr:  "nodePathToGo(&raw)"}, true
+	case kindVariant:
+		return retPlan{GoType: "Variant",
+			DeclRet: "var ret Variant",
+			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&ret))",
+			RetExpr: "ret"}, true
+	case kindBuiltin:
+		return retPlan{GoType: g,
+			DeclRet: "var ret " + g,
+			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&ret))",
+			RetExpr: "ret"}, true
+	}
+	return retPlan{}, false
+}
+
+// isSupportedType returns true if the bindgen can emit code referencing this
+// Godot type. For builtin classes it confirms the class is also in
+// extension_api.json#builtin_classes — we don't emit references to engine
+// classes (Object, etc.) until Phase 3.
+func isSupportedType(api *API, godotType string) bool {
+	g, kind := goType(godotType)
+	if kind == kindUnsupported {
+		return false
+	}
+	if kind == kindBuiltin {
+		// Strip array element types — typed arrays collapse to "Array" which
+		// is itself a builtin. The "Array" class exists, so this is fine.
+		return api.FindBuiltin(g) != nil
 	}
 	return true
 }
 
-func shouldEmitMethod(class string, m Method) bool {
-	if m.IsVararg {
-		return false
+// buildArgs renders prep code and the args[...] literal for a list of
+// arguments. Returns ("", "nil", true) for the empty list. The third return
+// value is false if any argument is unsupported.
+func buildArgs(api *API, args []Argument) (string, string, bool) {
+	if len(args) == 0 {
+		return "", "nil", true
 	}
-	switch class {
-	case "Vector2":
-		switch m.Name {
-		case "length", "length_squared", "is_normalized", "normalized", "dot", "distance_to":
-			return true
-		default:
-			return false
+	for _, a := range args {
+		if !isSupportedType(api, a.Type) {
+			return "", "", false
 		}
 	}
-	return true
+	var prepB strings.Builder
+	var elemsB strings.Builder
+	elemsB.WriteString("args := [...]gdextension.TypePtr{\n")
+	for _, a := range args {
+		gname := safeIdent(a.Name)
+		prep, expr := argPrep(a.Type, gname)
+		if prep != "" {
+			prepB.WriteString(prep)
+			prepB.WriteString("\n\t")
+		}
+		fmt.Fprintf(&elemsB, "\t\t%s,\n", expr)
+	}
+	elemsB.WriteString("\t}\n\t")
+	return prepB.String() + elemsB.String(), "args[:]", true
+}
+
+// paramSig builds the Go parameter list for a function signature.
+func paramSig(args []Argument) string {
+	if len(args) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(args))
+	for _, a := range args {
+		gtype, _ := goType(a.Type)
+		parts = append(parts, safeIdent(a.Name)+" "+gtype)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func ctorGoName(class string, c Constructor) string {
 	if len(c.Arguments) == 0 {
 		return "New" + class
+	}
+	// Single-arg ctors are named after the arg type ("NewArrayFromPackedByteArray"
+	// rather than "NewArrayFrom") because Godot reuses "from" as the arg name
+	// across overloads — the type is what distinguishes them. Multi-arg
+	// ctors stick with arg names ("NewVector2XY") since named axes read better.
+	if len(c.Arguments) == 1 {
+		// Use the *Godot* type, not the mapped Go type — "String", "StringName",
+		// and "NodePath" all flatten to Go's "string" in the user-facing API,
+		// so the function name has to carry the original distinction to remain
+		// unique.
+		return "New" + class + "From" + suffixFor(c.Arguments[0].Type)
 	}
 	parts := []string{"New", class}
 	for _, a := range c.Arguments {
@@ -182,9 +324,265 @@ func ctorGoName(class string, c Constructor) string {
 	return strings.Join(parts, "")
 }
 
-// goTypeForMeta maps a member-offset `meta` field to a Go type. Members of
-// composite types (other Vector*, etc.) are returned as the Go type name —
-// the template emits raw `unsafe.Pointer`-cast accessors for them later.
+func buildConstructorView(api *API, bc *BuiltinClass, c Constructor, view *builtinView) (callableView, bool) {
+	for _, a := range c.Arguments {
+		if !isSupportedType(api, a.Type) {
+			return callableView{}, false
+		}
+	}
+	cacheName := fmt.Sprintf("%sCtor%d", lowerFirst(bc.Name), c.Index)
+	addCacheVar(view, cacheName, "gdextension.PtrConstructor")
+	view.InitLines = append(view.InitLines,
+		fmt.Sprintf("%s = gdextension.GetPtrConstructor(gdextension.%s, %d)", cacheName, view.VariantType, c.Index))
+
+	name := ctorGoName(bc.Name, c)
+	sig := fmt.Sprintf("%s(%s) %s", name, paramSig(c.Arguments), bc.Name)
+	prep, argsExpr, ok := buildArgs(api, c.Arguments)
+	if !ok {
+		return callableView{}, false
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "var v %s\n\t", bc.Name)
+	if prep != "" {
+		b.WriteString(prep)
+	}
+	fmt.Fprintf(&b, "gdextension.CallPtrConstructor(%s, gdextension.TypePtr(unsafe.Pointer(&v)), %s)\n\treturn v",
+		cacheName, argsExpr)
+
+	doc := fmt.Sprintf("// %s constructs a %s via the host (constructor index %d).", name, bc.Name, c.Index)
+	return callableView{GoDoc: doc, Sig: sig, Body: b.String()}, true
+}
+
+func buildMethodView(api *API, bc *BuiltinClass, m Method, view *builtinView) (callableView, bool) {
+	if !isSupportedType(api, "Variant") && false {
+		// placeholder — Variant is always supported
+	}
+	if m.ReturnType != "" && m.ReturnType != "void" && !isSupportedType(api, m.ReturnType) {
+		return callableView{}, false
+	}
+	for _, a := range m.Arguments {
+		if !isSupportedType(api, a.Type) {
+			return callableView{}, false
+		}
+	}
+
+	goMethod := pascal(m.Name)
+	cacheName := fmt.Sprintf("%sMethod%s", lowerFirst(bc.Name), goMethod)
+	addCacheVar(view, cacheName, "gdextension.PtrBuiltInMethod")
+	view.InitLines = append(view.InitLines,
+		fmt.Sprintf("%s = gdextension.GetPtrBuiltinMethod(gdextension.%s, internStringName(%q), %d)",
+			cacheName, view.VariantType, m.Name, m.Hash))
+
+	plan, ok := returnPrep(m.ReturnType)
+	if !ok {
+		return callableView{}, false
+	}
+
+	prep, argsExpr, ok := buildArgs(api, m.Arguments)
+	if !ok {
+		return callableView{}, false
+	}
+
+	var sig string
+	var basePtrExpr string
+	if m.IsStatic {
+		sig = fmt.Sprintf("%s%s(%s)", bc.Name, goMethod, paramSig(m.Arguments))
+		basePtrExpr = "nil"
+	} else {
+		sig = fmt.Sprintf("(self *%s) %s(%s)", bc.Name, goMethod, paramSig(m.Arguments))
+		basePtrExpr = "gdextension.TypePtr(unsafe.Pointer(self))"
+	}
+	if plan.GoType != "" {
+		sig += " " + plan.GoType
+	}
+
+	var b strings.Builder
+	if plan.DeclRet != "" {
+		b.WriteString(plan.DeclRet)
+		b.WriteString("\n\t")
+	}
+	if plan.Finalize != "" {
+		b.WriteString(plan.Finalize)
+		b.WriteString("\n\t")
+	}
+	if prep != "" {
+		b.WriteString(prep)
+	}
+	fmt.Fprintf(&b, "gdextension.CallPtrBuiltinMethod(%s, %s, %s, %s)",
+		cacheName, basePtrExpr, argsExpr, plan.RetArg)
+	if plan.RetExpr != "" {
+		b.WriteString("\n\treturn ")
+		b.WriteString(plan.RetExpr)
+	}
+
+	doc := fmt.Sprintf("// %s mirrors the Godot %s.%s method.", goMethod, bc.Name, m.Name)
+	return callableView{GoDoc: doc, Sig: sig, Body: b.String()}, true
+}
+
+func buildOperatorView(api *API, bc *BuiltinClass, op Operator, view *builtinView) (callableView, bool) {
+	// op.RightType=="Variant" means "any Variant on the right" — the operator
+	// evaluator handles that via the Nil-typed right slot, but the user-facing
+	// surface gets noisy fast (every type gains an Eq(Variant), Ne(Variant), …).
+	// Skip them in Phase 2c; we still emit the typed fast paths.
+	if op.RightType == "Variant" {
+		return callableView{}, false
+	}
+	if op.RightType != "" && !isSupportedType(api, op.RightType) {
+		return callableView{}, false
+	}
+	if !isSupportedType(api, op.ReturnType) {
+		return callableView{}, false
+	}
+	enum, ok := operatorEnumMap[op.Name]
+	if !ok {
+		return callableView{}, false
+	}
+	goName, err := opGoName(bc.Name, op.Name, op.RightType)
+	if err != nil {
+		return callableView{}, false
+	}
+
+	rightVariantType := "VariantTypeNil"
+	if op.RightType != "" {
+		rightVariantType = "VariantType" + suffixFor(op.RightType)
+	}
+
+	cacheName := fmt.Sprintf("%sOp%s", lowerFirst(bc.Name), goName)
+	addCacheVar(view, cacheName, "gdextension.PtrOperatorEvaluator")
+	view.InitLines = append(view.InitLines,
+		fmt.Sprintf("%s = gdextension.GetPtrOperatorEvaluator(gdextension.%s, gdextension.%s, gdextension.%s)",
+			cacheName, enum, view.VariantType, rightVariantType))
+
+	plan, ok := returnPrep(op.ReturnType)
+	if !ok {
+		return callableView{}, false
+	}
+	if plan.IsVoid {
+		// Operators always produce a value.
+		return callableView{}, false
+	}
+
+	// Sig: (v *Self) Name(rhs RhsType) RetType
+	var paramList string
+	var rightExpr string
+	if op.RightType == "" {
+		// unary
+		rightExpr = "nil"
+	} else {
+		argName := "rhs"
+		gtype, _ := goType(op.RightType)
+		paramList = argName + " " + gtype
+		_, kind := goType(op.RightType)
+		switch kind {
+		case kindString:
+			// Add prep above the call
+			rightExpr = "gdextension.TypePtr(unsafe.Pointer(&tmp_rhs))"
+		case kindStringName:
+			rightExpr = "gdextension.TypePtr(unsafe.Pointer(&tmp_rhs))"
+		case kindNodePath:
+			rightExpr = "gdextension.TypePtr(unsafe.Pointer(&tmp_rhs))"
+		default:
+			rightExpr = "gdextension.TypePtr(unsafe.Pointer(&rhs))"
+		}
+	}
+	sig := fmt.Sprintf("(self *%s) %s(%s) %s", bc.Name, goName, paramList, plan.GoType)
+
+	var b strings.Builder
+	b.WriteString(plan.DeclRet)
+	b.WriteString("\n\t")
+	if plan.Finalize != "" {
+		b.WriteString(plan.Finalize)
+		b.WriteString("\n\t")
+	}
+	if op.RightType != "" {
+		// Boundary prep on rhs.
+		_, kind := goType(op.RightType)
+		switch kind {
+		case kindString:
+			b.WriteString("var tmp_rhs String\n\tstringFromGo(&tmp_rhs, rhs)\n\tdefer stringDestroy(&tmp_rhs)\n\t")
+		case kindStringName:
+			b.WriteString("var tmp_rhs StringName\n\tstringNameFromGo(&tmp_rhs, rhs)\n\tdefer stringNameDestroy(&tmp_rhs)\n\t")
+		case kindNodePath:
+			b.WriteString("var tmp_rhs NodePath\n\tnodePathFromGo(&tmp_rhs, rhs)\n\tdefer nodePathDestroy(&tmp_rhs)\n\t")
+		}
+	}
+	fmt.Fprintf(&b, "gdextension.CallPtrOperatorEvaluator(%s, gdextension.TypePtr(unsafe.Pointer(self)), %s, %s)\n\treturn %s",
+		cacheName, rightExpr, plan.RetArg, plan.RetExpr)
+
+	doc := fmt.Sprintf("// %s mirrors the Godot %s %s operator.", goName, bc.Name, op.Name)
+	return callableView{GoDoc: doc, Sig: sig, Body: b.String()}, true
+}
+
+func buildIndexedView(api *API, bc *BuiltinClass, view *builtinView) (indexedView, bool) {
+	if !isSupportedType(api, bc.IndexingReturnType) {
+		return indexedView{}, false
+	}
+	plan, ok := returnPrep(bc.IndexingReturnType)
+	if !ok || plan.IsVoid {
+		return indexedView{}, false
+	}
+
+	getCache := lowerFirst(bc.Name) + "IndexedGetter"
+	setCache := lowerFirst(bc.Name) + "IndexedSetter"
+	addCacheVar(view, getCache, "gdextension.PtrIndexedGetter")
+	addCacheVar(view, setCache, "gdextension.PtrIndexedSetter")
+	view.InitLines = append(view.InitLines,
+		fmt.Sprintf("%s = gdextension.GetPtrIndexedGetter(gdextension.%s)", getCache, view.VariantType),
+		fmt.Sprintf("%s = gdextension.GetPtrIndexedSetter(gdextension.%s)", setCache, view.VariantType),
+	)
+
+	var getB strings.Builder
+	getB.WriteString(plan.DeclRet)
+	getB.WriteString("\n\t")
+	if plan.Finalize != "" {
+		getB.WriteString(plan.Finalize)
+		getB.WriteString("\n\t")
+	}
+	fmt.Fprintf(&getB, "gdextension.CallPtrIndexedGetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, %s)\n\treturn %s",
+		getCache, plan.RetArg, plan.RetExpr)
+
+	var setB strings.Builder
+	_, kind := goType(bc.IndexingReturnType)
+	switch kind {
+	case kindString:
+		setB.WriteString("var tmp_value String\n\tstringFromGo(&tmp_value, value)\n\tdefer stringDestroy(&tmp_value)\n\t")
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+			setCache)
+	case kindStringName:
+		setB.WriteString("var tmp_value StringName\n\tstringNameFromGo(&tmp_value, value)\n\tdefer stringNameDestroy(&tmp_value)\n\t")
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+			setCache)
+	case kindNodePath:
+		setB.WriteString("var tmp_value NodePath\n\tnodePathFromGo(&tmp_value, value)\n\tdefer nodePathDestroy(&tmp_value)\n\t")
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&tmp_value)))",
+			setCache)
+	default:
+		fmt.Fprintf(&setB, "gdextension.CallPtrIndexedSetter(%s, gdextension.TypePtr(unsafe.Pointer(self)), index, gdextension.TypePtr(unsafe.Pointer(&value)))",
+			setCache)
+	}
+
+	// The Godot JSON exposes `get`/`set` for indexable classes as both regular
+	// methods AND via the indexed-accessor codepath. To avoid colliding with
+	// the method-named Get/Set the bindgen emits, the indexed wrappers go out
+	// as Index/SetIndex. Same C entry point, slightly different name.
+	getSig := fmt.Sprintf("(self *%s) Index(index int64) %s", bc.Name, plan.GoType)
+	setSig := fmt.Sprintf("(self *%s) SetIndex(index int64, value %s)", bc.Name, plan.GoType)
+
+	return indexedView{
+		GoName:    "Index/SetIndex",
+		GoType:    plan.GoType,
+		GetSig:    getSig,
+		GetBody:   getB.String(),
+		HasSetter: true,
+		SetSig:    setSig,
+		SetBody:   setB.String(),
+	}, true
+}
+
+// goTypeForMeta maps a member-offset `meta` field to a Go type. Composite
+// member types (e.g. "Vector2") flow through unchanged; the template emits
+// a memcpy via unsafe.Pointer cast for them.
 func goTypeForMeta(meta string) string {
 	switch meta {
 	case "float":
@@ -208,93 +606,19 @@ func goTypeForMeta(meta string) string {
 	case "uint64":
 		return "uint64"
 	default:
-		// Composite member types (e.g. "Vector2") fall through to the type
-		// name as-is. Phase 2c handles cross-type field accessors.
 		return meta
 	}
 }
 
-// goTypeForGodot maps a Godot type name (as it appears in extension_api.json)
-// to the Go type used in user-facing APIs.
-//
-// Phase 2b only handles the primitive types that show up in the curated
-// Vector2 method set. Phase 2c extends this for composite + ref-counted types.
-func goTypeForGodot(godotType string) string {
-	switch godotType {
-	case "bool":
-		return "bool"
-	case "int":
-		return "int64"
-	case "float":
-		return "float32" // single precision; flips to float64 under double_* configs in Phase 2c
-	case "String", "StringName", "NodePath":
-		return "string"
-	default:
-		return godotType
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
 	}
-}
-
-// goZeroForGodot returns the zero-value expression for the type
-// goTypeForGodot would produce.
-func goZeroForGodot(godotType string) string {
-	switch godotType {
-	case "bool":
-		return "false"
-	case "int":
-		return "0"
-	case "float":
-		return "0"
-	case "String", "StringName", "NodePath":
-		return "\"\""
-	default:
-		// Builtin struct types are zero-initialized via `var v Vector2; return v`
-		// in the template; no expression needed.
-		return ""
-	}
-}
-
-func pascal(snake string) string {
-	if snake == "" {
-		return ""
-	}
-	parts := strings.Split(snake, "_")
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(p[:1]) + p[1:]
-	}
-	return strings.Join(parts, "")
-}
-
-// safeGoIdent rewrites Godot argument names that collide with Go keywords or
-// predeclared identifiers.
-func safeGoIdent(name string) string {
-	switch name {
-	case "type":
-		return "typ"
-	case "func":
-		return "fn"
-	case "len":
-		return "length"
-	case "string":
-		return "s"
-	case "default":
-		return "def"
-	case "range":
-		return "rng"
-	case "map":
-		return "m"
-	case "select":
-		return "sel"
-	}
-	return name
+	return strings.ToLower(s[:1]) + s[1:]
 }
 
 var builtinTmpl = template.Must(template.New("builtin").Funcs(template.FuncMap{
-	"lower":  strings.ToLower,
-	"pascal": pascal,
-	"quote":  func(s string) string { return fmt.Sprintf("%q", s) },
+	"lower": lowerFirst,
 }).Parse(`// Code generated by godot-go-bindgen. DO NOT EDIT.
 
 package variant
@@ -306,100 +630,98 @@ import (
 )
 
 // {{.GoName}} is the opaque Godot builtin {{.GoName}} ({{.Size}} bytes under
-// the framework's float_32 build config). The backing storage is an opaque
+// the framework's float_64 build config). The backing storage is an opaque
 // byte array; field reads/writes go through offset accessors below.
 type {{.GoName}} [{{.Size}}]byte
 
 {{range .Members}}
 // {{.GoName}} reads the {{.GoName}} field.
-func (v *{{$.GoName}}) {{.GoName}}() {{.GoType}} {
-	return *(*{{.GoType}})(unsafe.Pointer(&v[{{.Offset}}]))
+func (self *{{$.GoName}}) {{.GoName}}() {{.GoType}} {
+	return *(*{{.GoType}})(unsafe.Pointer(&self[{{.Offset}}]))
 }
 
 // Set{{.GoName}} writes the {{.GoName}} field.
-func (v *{{$.GoName}}) Set{{.GoName}}(value {{.GoType}}) {
-	*(*{{.GoType}})(unsafe.Pointer(&v[{{.Offset}}])) = value
+func (self *{{$.GoName}}) Set{{.GoName}}(value {{.GoType}}) {
+	*(*{{.GoType}})(unsafe.Pointer(&self[{{.Offset}}])) = value
 }
 {{end}}
 
-// Cached resolved function pointers. Populated by {{.GoName | lower}}Init at
-// CORE init level (the host's interface table is loaded before then).
+// Cached resolved function pointers. Populated at CORE init level (the
+// host's interface table is loaded before then).
 var (
-{{range .Constructors}}	{{$.GoName | lower}}{{.VarID | pascal}} gdextension.PtrConstructor
-{{end -}}
-{{range .Methods}}	{{$.GoName | lower}}{{.VarID | pascal}} gdextension.PtrBuiltInMethod
-{{end -}}
-	{{.GoName | lower}}FromType gdextension.VariantFromTypeFunc
-	{{.GoName | lower}}ToType   gdextension.VariantToTypeFunc
-{{if .HasDestructor}}	{{.GoName | lower}}Dtor    gdextension.PtrDestructor
-{{end -}}
+{{range .CacheVars}}	{{.Name}} {{.Type}}
+{{end}}
 )
 
 func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelCore, {{.GoName | lower}}Init)
+	gdextension.RegisterInitCallback(gdextension.InitLevelCore, init{{.GoName}})
 }
 
-func {{.GoName | lower}}Init() {
-{{range .Constructors}}	{{$.GoName | lower}}{{.VarID | pascal}} = gdextension.GetPtrConstructor(gdextension.{{$.VariantType}}, {{.Index}})
-{{end -}}
-{{range .Methods}}	{{$.GoName | lower}}{{.VarID | pascal}} = gdextension.GetPtrBuiltinMethod(gdextension.{{$.VariantType}}, internStringName({{.GodotName | quote}}), {{.Hash}})
-{{end -}}
-	{{.GoName | lower}}FromType = gdextension.GetVariantFromTypeConstructor(gdextension.{{.VariantType}})
-	{{.GoName | lower}}ToType = gdextension.GetVariantToTypeConstructor(gdextension.{{.VariantType}})
-{{if .HasDestructor}}	{{.GoName | lower}}Dtor = gdextension.GetPtrDestructor(gdextension.{{.VariantType}})
-{{end -}}
+func init{{.GoName}}() {
+{{range .InitLines}}	{{.}}
+{{end}}
 }
 
 {{range .Constructors}}
-// {{.GoName}} constructs a {{$.GoName}} via the host (constructor index {{.Index}}).
-func {{.GoName}}({{range $i, $a := .Args}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}) {{$.GoName}} {
-	var v {{$.GoName}}
-{{- if .Args}}
-	args := [...]gdextension.TypePtr{
-{{- range .Args}}
-		gdextension.TypePtr(unsafe.Pointer(&{{.GoName}})),
-{{- end}}
-	}
-	gdextension.CallPtrConstructor({{$.GoName | lower}}{{.VarID | pascal}}, gdextension.TypePtr(unsafe.Pointer(&v)), args[:])
-{{- else}}
-	gdextension.CallPtrConstructor({{$.GoName | lower}}{{.VarID | pascal}}, gdextension.TypePtr(unsafe.Pointer(&v)), nil)
-{{- end}}
-	return v
+{{.GoDoc}}
+func {{.Sig}} {
+	{{.Body}}
 }
 {{end}}
 
 {{range .Methods}}
-// {{.GoName}} mirrors the Godot {{$.GoName}}.{{.GodotName}} method.
-func (v *{{$.GoName}}) {{.GoName}}({{range $i, $a := .Args}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}){{if .ReturnGoType}} {{.ReturnGoType}}{{end}} {
-{{- if .ReturnGoType}}
-	var ret {{.ReturnGoType}}
-{{- end}}
-{{- if .Args}}
-	args := [...]gdextension.TypePtr{
-{{- range .Args}}
-		gdextension.TypePtr(unsafe.Pointer(&{{.GoName}})),
-{{- end}}
-	}
-	gdextension.CallPtrBuiltinMethod({{$.GoName | lower}}{{.VarID | pascal}}, gdextension.TypePtr(unsafe.Pointer(v)), args[:],{{if .ReturnGoType}} gdextension.TypePtr(unsafe.Pointer(&ret)){{else}} nil{{end}})
-{{- else}}
-	gdextension.CallPtrBuiltinMethod({{$.GoName | lower}}{{.VarID | pascal}}, gdextension.TypePtr(unsafe.Pointer(v)), nil,{{if .ReturnGoType}} gdextension.TypePtr(unsafe.Pointer(&ret)){{else}} nil{{end}})
-{{- end}}
-{{- if .ReturnGoType}}
-	return ret
-{{- end}}
+{{.GoDoc}}
+func {{.Sig}} {
+	{{.Body}}
 }
 {{end}}
 
-// ToVariant copies v into the uninitialized Variant slot dst. dst must point
-// to variantSize bytes (16 under float_32, sized by builtin_class_sizes).
-func (v *{{.GoName}}) ToVariant(dst gdextension.VariantPtr) {
-	gdextension.CallVariantFromType({{.GoName | lower}}FromType, dst, gdextension.TypePtr(unsafe.Pointer(v)))
+{{range .Operators}}
+{{.GoDoc}}
+func {{.Sig}} {
+	{{.Body}}
+}
+{{end}}
+
+{{with .Indexed}}
+// Index reads element [index] from the receiver.
+func {{.GetSig}} {
+	{{.GetBody}}
 }
 
-// {{.GoName}}FromVariant unwraps a Variant slot into a fresh {{.GoName}}.
-func {{.GoName}}FromVariant(src gdextension.VariantPtr) {{.GoName}} {
+{{if .HasSetter}}
+// SetIndex writes value into element [index] of the receiver.
+func {{.SetSig}} {
+	{{.SetBody}}
+}
+{{end}}
+{{end}}
+
+{{if .HasDestructor}}
+// Destroy releases the resources owned by the receiver. Safe to call on a
+// zero value.
+func (self *{{.GoName}}) Destroy() {
+	gdextension.CallPtrDestructor({{.GoName | lower}}Dtor, gdextension.TypePtr(unsafe.Pointer(self)))
+}
+{{end}}
+
+// ToVariant copies the receiver into a freshly-initialized Variant slot. The
+// caller owns the returned slot and must call (*Variant).Destroy() once done.
+func (self *{{.GoName}}) ToVariant() *Variant {
+	ret := new(Variant)
+	gdextension.CallVariantFromType({{.GoName | lower}}FromType,
+		gdextension.VariantPtr(unsafe.Pointer(ret)),
+		gdextension.TypePtr(unsafe.Pointer(self)))
+	return ret
+}
+
+// {{.GoName}}FromVariant unwraps a Variant slot into a fresh {{.GoName}}. The
+// source slot is not destroyed; the caller still owns it.
+func {{.GoName}}FromVariant(src *Variant) {{.GoName}} {
 	var v {{.GoName}}
-	gdextension.CallTypeFromVariant({{.GoName | lower}}ToType, gdextension.TypePtr(unsafe.Pointer(&v)), src)
+	gdextension.CallTypeFromVariant({{.GoName | lower}}ToType,
+		gdextension.TypePtr(unsafe.Pointer(&v)),
+		gdextension.VariantPtr(unsafe.Pointer(src)))
 	return v
 }
 `))

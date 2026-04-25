@@ -3,10 +3,9 @@
 // godot-go maintainers when the json bumps; it is NOT the //go:generate target
 // that user extensions invoke (that one lives at cmd/godot-go).
 //
-// Phase 2b scope: scaffold + Vector2 only. The walker, type mapper, and
-// builtin-class emitter all exist but are deliberately exercised on a single
-// type to validate the codegen pipeline. Phase 2c expands to all 38 builtin
-// classes.
+// Phase 2c scope: every builtin class in extension_api.json#builtin_classes
+// (minus the Go-native primitives Nil/bool/int/float) plus a sibling
+// godot/aliases.gen.go re-exporting the high-traffic types.
 package main
 
 import (
@@ -16,10 +15,19 @@ import (
 	"path/filepath"
 )
 
+// goNativePrimitives are the four Godot "builtin classes" that map directly
+// to Go primitives — we don't generate wrappers for these.
+var goNativePrimitives = map[string]bool{
+	"Nil":   true,
+	"bool":  true,
+	"int":   true,
+	"float": true,
+}
+
 func main() {
 	apiPath := flag.String("api", "godot/extension_api.json", "Path to extension_api.json")
-	outDir := flag.String("out", ".", "Module root; generated files are written under <out>/variant, <out>/core, etc.")
-	buildConfig := flag.String("build-config", "float_32", "Target build configuration (float_32, float_64, double_32, double_64)")
+	outDir := flag.String("out", ".", "Module root; generated files are written under <out>/variant, <out>/godot, etc.")
+	buildConfig := flag.String("build-config", "float_64", "Target build configuration (float_32, float_64, double_32, double_64)")
 	flag.Parse()
 
 	api, err := loadAPI(*apiPath)
@@ -40,22 +48,32 @@ func main() {
 		fmt.Fprintf(os.Stderr, "godot-go-bindgen: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Phase 2b: only generate Vector2 to validate the pipeline.
-	for _, name := range []string{"Vector2"} {
-		bc := api.FindBuiltin(name)
-		if bc == nil {
-			fmt.Fprintf(os.Stderr, "godot-go-bindgen: builtin class %q not found in extension_api.json\n", name)
-			os.Exit(1)
-		}
-		if err := emitBuiltinClass(api, *buildConfig, bc, variantDir); err != nil {
-			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit %s: %v\n", name, err)
-			os.Exit(1)
-		}
+	godotDir := filepath.Join(*outDir, "godot")
+	if err := os.MkdirAll(godotDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: %v\n", err)
+		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated against %s (precision=%s, build_config=%s)\n",
-		api.Header.VersionFullName, api.Header.Precision, *buildConfig)
+	emitted := make([]string, 0, len(api.BuiltinClasses))
+	for i := range api.BuiltinClasses {
+		bc := &api.BuiltinClasses[i]
+		if goNativePrimitives[bc.Name] {
+			continue
+		}
+		if err := emitBuiltinClass(api, *buildConfig, bc, variantDir); err != nil {
+			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit %s: %v\n", bc.Name, err)
+			os.Exit(1)
+		}
+		emitted = append(emitted, bc.Name)
+	}
+
+	if err := emitAliases(emitted, godotDir); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit aliases: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes against %s (precision=%s, build_config=%s)\n",
+		len(emitted), api.Header.VersionFullName, api.Header.Precision, *buildConfig)
 }
 
 func precisionForBuildConfig(bc string) string {
