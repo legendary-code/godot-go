@@ -70,6 +70,11 @@ var iface struct {
 	objectMethodBindCall     C.GDExtensionInterfaceObjectMethodBindCall
 	objectDestroy            C.GDExtensionInterfaceObjectDestroy
 	globalGetSingleton       C.GDExtensionInterfaceGlobalGetSingleton
+
+	classdbRegisterExtensionClass5       C.GDExtensionInterfaceClassdbRegisterExtensionClass5
+	classdbRegisterExtensionClassMethod  C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
+	classdbUnregisterExtensionClass      C.GDExtensionInterfaceClassdbUnregisterExtensionClass
+	objectSetInstance                    C.GDExtensionInterfaceObjectSetInstance
 }
 
 // Library returns the GDExtensionClassLibraryPtr the host handed us. Required
@@ -116,6 +121,11 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.objectMethodBindCall = (C.GDExtensionInterfaceObjectMethodBindCall)(unsafe.Pointer(resolveProc("object_method_bind_call")))
 	iface.objectDestroy = (C.GDExtensionInterfaceObjectDestroy)(unsafe.Pointer(resolveProc("object_destroy")))
 	iface.globalGetSingleton = (C.GDExtensionInterfaceGlobalGetSingleton)(unsafe.Pointer(resolveProc("global_get_singleton")))
+
+	iface.classdbRegisterExtensionClass5 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass5)(unsafe.Pointer(resolveProc("classdb_register_extension_class5")))
+	iface.classdbRegisterExtensionClassMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_method")))
+	iface.classdbUnregisterExtensionClass = (C.GDExtensionInterfaceClassdbUnregisterExtensionClass)(unsafe.Pointer(resolveProc("classdb_unregister_extension_class")))
+	iface.objectSetInstance = (C.GDExtensionInterfaceObjectSetInstance)(unsafe.Pointer(resolveProc("object_set_instance")))
 }
 
 func resolveProc(name string) C.GDExtensionInterfaceFunctionPtr {

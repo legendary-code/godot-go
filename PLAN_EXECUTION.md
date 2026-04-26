@@ -239,6 +239,21 @@ a/b/c rhythm and keep every commit landable.
 
 This is the headline feature. Steps:
 
+0. **[Done] ABI shims + hand-bound proof (Phase 5a).** `internal/gdextension/classdb.go`
+   exposes `RegisterClass` / `RegisterClassMethod` / `UnregisterClass`. The C
+   side (`shim.h`/`shim.c`) hosts `godot_go_register_extension_class`,
+   `godot_go_register_extension_class_method`, and the
+   `create_instance_func` / `free_instance_func` / `get_virtual_func` /
+   `method_call_func` / `method_ptrcall_func` trampolines that bridge into
+   `//export`'d Go functions (`godotGoCreateInstance`,
+   `godotGoFreeInstance`, `godotGoMethodCall`, `godotGoMethodPtrcall`).
+   Class/method ids flow through the host's `class_userdata` / `method_userdata`
+   void\* slots so Go pointers never sit inside C-visible structs (cgo's
+   pointer-storage rule). Smoke now ships a hand-bound `MyNode` extending
+   `core.Node`; `examples/smoke/godot_project/test_mynode.gd` runs
+   `MyNode.new(); n.hello()` headlessly and confirms `MyNode.Hello()` reaches
+   Go. Phase 5b–5f remain — they automate what 5a wired by hand.
+
 1. **Discover input:** when invoked via `go generate`, env vars
    `GOFILE` / `GOPACKAGE` / `GOLINE` identify the trigger file. Parse with
    `go/parser` + `go/ast` + `go/types`.

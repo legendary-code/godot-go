@@ -271,3 +271,120 @@ const char *godot_go_version2_status(const GDExtensionGodotVersion2 *v) { return
 const char *godot_go_version2_build (const GDExtensionGodotVersion2 *v) { return v->build;  }
 const char *godot_go_version2_hash  (const GDExtensionGodotVersion2 *v) { return v->hash;   }
 const char *godot_go_version2_string(const GDExtensionGodotVersion2 *v) { return v->string; }
+
+/* ---------- Class registration ABI. ---------- */
+
+void godot_go_call_classdb_unregister_extension_class(
+    GDExtensionInterfaceClassdbUnregisterExtensionClass fn,
+    GDExtensionClassLibraryPtr p_library,
+    GDExtensionConstStringNamePtr p_class_name) {
+    fn(p_library, p_class_name);
+}
+
+void godot_go_call_object_set_instance(
+    GDExtensionInterfaceObjectSetInstance fn,
+    GDExtensionObjectPtr p_o,
+    GDExtensionConstStringNamePtr p_classname,
+    GDExtensionClassInstancePtr p_instance) {
+    fn(p_o, p_classname, p_instance);
+}
+
+/* Trampolines installed in the GDExtensionClassCreationInfo4 / MethodInfo
+ * structs by godot_go_class_creation_info_init and friends. Each one forwards
+ * into a //export'd Go function; the cgo-generated _cgo_export.h declares
+ * those Go functions with C-compatible signatures.
+ *
+ * The userdata pointers (class_userdata, method_userdata) are *not* Go
+ * pointers — they're small integer ids the Go side uses to look up the
+ * registered class/method in a side table. Rationale: Go's cgo rules
+ * forbid storing Go pointers in C memory, so we go through ids. */
+
+static GDExtensionObjectPtr godot_go_create_instance_trampoline(
+    void *p_class_userdata, GDExtensionBool p_notify_postinitialize) {
+    return godotGoCreateInstance(p_class_userdata, p_notify_postinitialize);
+}
+
+static void godot_go_free_instance_trampoline(
+    void *p_class_userdata, GDExtensionClassInstancePtr p_instance) {
+    godotGoFreeInstance(p_class_userdata, p_instance);
+}
+
+static GDExtensionClassCallVirtual godot_go_get_virtual_trampoline(
+    void *p_class_userdata, GDExtensionConstStringNamePtr p_name, uint32_t p_hash) {
+    /* No virtual overrides in Phase 5a — return NULL means "not overridden",
+     * the host will use the parent class's implementation. Phase 5e will
+     * route this through Go to look up generated virtual binders. */
+    (void)p_class_userdata; (void)p_name; (void)p_hash;
+    return NULL;
+}
+
+static void godot_go_method_call_trampoline(
+    void *method_userdata,
+    GDExtensionClassInstancePtr p_instance,
+    const GDExtensionConstVariantPtr *p_args,
+    GDExtensionInt p_argument_count,
+    GDExtensionVariantPtr r_return,
+    GDExtensionCallError *r_error) {
+    /* The host array is `const GDExtensionConstVariantPtr *` (pointer-to-
+     * const-pointer); cgo's exported signature drops the inner const. The
+     * cast is purely a type-system handshake — Go never writes through it. */
+    godotGoMethodCall(method_userdata, p_instance,
+                      (GDExtensionConstVariantPtr *)p_args,
+                      p_argument_count, r_return, r_error);
+}
+
+static void godot_go_method_ptrcall_trampoline(
+    void *method_userdata,
+    GDExtensionClassInstancePtr p_instance,
+    const GDExtensionConstTypePtr *p_args,
+    GDExtensionTypePtr r_ret) {
+    godotGoMethodPtrcall(method_userdata, p_instance,
+                         (GDExtensionConstTypePtr *)p_args, r_ret);
+}
+
+void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn,
+                                       GDExtensionClassLibraryPtr p_library,
+                                       GDExtensionConstStringNamePtr p_class_name,
+                                       GDExtensionConstStringNamePtr p_parent_class_name,
+                                       void *class_userdata,
+                                       GDExtensionBool is_virtual,
+                                       GDExtensionBool is_abstract,
+                                       GDExtensionBool is_exposed) {
+    /* Build the struct on the C-side stack so the Go caller never stores
+     * the Go-allocated StringName pointers (or our Go-side class id, used
+     * as a void*) in a Go-allocated outer struct passed to C — a pattern
+     * cgo's runtime checker rejects.
+     *
+     * memset zeroes every optional field; set/get/property/notification/
+     * to_string/reference/unreference are all NULL in Phase 5a. */
+    GDExtensionClassCreationInfo4 info;
+    memset(&info, 0, sizeof(info));
+    info.is_virtual            = is_virtual;
+    info.is_abstract           = is_abstract;
+    info.is_exposed            = is_exposed;
+    info.is_runtime            = 0;
+    info.create_instance_func  = godot_go_create_instance_trampoline;
+    info.free_instance_func    = godot_go_free_instance_trampoline;
+    info.get_virtual_func      = godot_go_get_virtual_trampoline;
+    info.class_userdata        = class_userdata;
+    fn(p_library, p_class_name, p_parent_class_name, &info);
+}
+
+void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegisterExtensionClassMethod fn,
+                                              GDExtensionClassLibraryPtr p_library,
+                                              GDExtensionConstStringNamePtr p_class_name,
+                                              GDExtensionStringNamePtr p_method_name,
+                                              void *method_userdata,
+                                              uint32_t method_flags) {
+    GDExtensionClassMethodInfo info;
+    memset(&info, 0, sizeof(info));
+    info.name             = p_method_name;
+    info.method_userdata  = method_userdata;
+    info.call_func        = godot_go_method_call_trampoline;
+    info.ptrcall_func     = godot_go_method_ptrcall_trampoline;
+    info.method_flags     = method_flags;
+    /* return_value_info / arguments_info are left NULL — the Go side passes
+     * no arg/return metadata for nullary void methods in Phase 5a. Phase 5d
+     * wires up arg/return info from the user's Go method signature. */
+    fn(p_library, p_class_name, &info);
+}

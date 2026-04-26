@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "gdextension_interface.h"
 
@@ -124,5 +125,41 @@ const char *godot_go_version2_status(const GDExtensionGodotVersion2 *v);
 const char *godot_go_version2_build (const GDExtensionGodotVersion2 *v);
 const char *godot_go_version2_hash  (const GDExtensionGodotVersion2 *v);
 const char *godot_go_version2_string(const GDExtensionGodotVersion2 *v);
+
+/* ---------- Class registration ABI (Phase 5: user-class registration). -- */
+
+void godot_go_call_classdb_unregister_extension_class(
+    GDExtensionInterfaceClassdbUnregisterExtensionClass fn,
+    GDExtensionClassLibraryPtr p_library,
+    GDExtensionConstStringNamePtr p_class_name);
+
+void godot_go_call_object_set_instance(
+    GDExtensionInterfaceObjectSetInstance fn,
+    GDExtensionObjectPtr p_o,
+    GDExtensionConstStringNamePtr p_classname,
+    GDExtensionClassInstancePtr p_instance);
+
+/* One-shot register helpers. The C-side builds the GDExtensionClassCreationInfo4
+ * / GDExtensionClassMethodInfo struct on its own stack so the Go caller never
+ * stores Go-allocated StringName pointers inside a Go struct that's then
+ * passed to C — that combination would trip cgo's "Go pointer to unpinned
+ * Go memory" check at call time. Function-pointer trampoline fields are
+ * filled in by the C helper from internal symbols, so they never cross the
+ * cgo boundary. */
+void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn,
+                                       GDExtensionClassLibraryPtr p_library,
+                                       GDExtensionConstStringNamePtr p_class_name,
+                                       GDExtensionConstStringNamePtr p_parent_class_name,
+                                       void *class_userdata,
+                                       GDExtensionBool is_virtual,
+                                       GDExtensionBool is_abstract,
+                                       GDExtensionBool is_exposed);
+
+void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegisterExtensionClassMethod fn,
+                                              GDExtensionClassLibraryPtr p_library,
+                                              GDExtensionConstStringNamePtr p_class_name,
+                                              GDExtensionStringNamePtr p_method_name,
+                                              void *method_userdata,
+                                              uint32_t method_flags);
 
 #endif /* GODOT_GO_SHIM_H */
