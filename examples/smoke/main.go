@@ -36,10 +36,8 @@ func init() {
 		runtime.Printf("godot-go: hello godot-go (Godot %s — %s)", v.Short(), v.String)
 
 		runSmokeChecks()
-		registerMyNode()
 	})
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
-		gdextension.UnregisterClass("MyNode")
 		runtime.Print("godot-go: SCENE deinit, goodbye")
 	})
 }

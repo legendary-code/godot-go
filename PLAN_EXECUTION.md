@@ -254,6 +254,32 @@ This is the headline feature. Steps:
    `MyNode.new(); n.hello()` headlessly and confirms `MyNode.Hello()` reaches
    Go. Phase 5b–5f remain — they automate what 5a wired by hand.
 
+0a. **[Done] Discovery skeleton (Phase 5b).** `internal/doctag` parses
+    `@…`-style comment tags into `[]Tag{Name, Value}`. `cmd/godot-go`'s AST
+    pass (`discover.go`) reads the GOFILE/`-file` source and yields a
+    `*discovered` carrying the main class, parent (resolved via embedded
+    framework type), inner classes, methods classified as
+    `instance` / `static` / `virtual?`, and `int`-typedef-backed enums
+    (with iota-continuation entries carried forward). PascalCase →
+    snake_case naming (acronyms collapsed, e.g. `HTTPServer` →
+    `http_server`). `report.go` prints the shape; tests cover positive
+    cases and the four error paths (no main / multiple main / missing
+    parent / multiple framework embeds).
+
+0b. **[Done] Emitter (Phase 5c).** `cmd/godot-go/emit.go` renders a
+    `<file>_bindings.go` from `*discovered` via `text/template` + gofmt.
+    Default mode writes the file alongside the trigger; `-print` keeps
+    the report-only debug behavior. The generated file replaces the
+    hand-bound `examples/smoke/mynode_bindings.go`: side-table machinery,
+    `register<Class>` calling `RegisterClass` + `RegisterClassMethod`,
+    and an `init()` that wires SCENE init/deinit callbacks so the
+    user's main package doesn't have to. Scope: no-arg/no-return
+    instance methods only — static, virtual-candidate, and methods
+    with parameters or returns error out cleanly with file:line, to be
+    folded in by Phase 5d (marshalling) and 5e (statics + virtuals).
+    Verified headless: `MyNode.new(); n.hello()` reaches Go via
+    codegen-emitted glue, deinit unregisters cleanly.
+
 1. **Discover input:** when invoked via `go generate`, env vars
    `GOFILE` / `GOPACKAGE` / `GOLINE` identify the trigger file. Parse with
    `go/parser` + `go/ast` + `go/types`.
