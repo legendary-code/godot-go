@@ -15,5 +15,7 @@ Thumbs.db
 # tool source dir, not the repo.
 /godot-go-bindgen
 /godot-go-bindgen.exe
+/godot-go
+/godot-go.exe
 /smoke
 /smoke.exe
