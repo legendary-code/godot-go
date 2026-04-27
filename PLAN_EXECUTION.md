@@ -280,6 +280,97 @@ This is the headline feature. Steps:
     Verified headless: `MyNode.new(); n.hello()` reaches Go via
     codegen-emitted glue, deinit unregisters cleanly.
 
+0c. **[Done] Type marshalling (Phase 5d).** Methods can now take primitive
+    arguments and return a primitive value. Supported types: `bool`,
+    `int` / `int32` / `int64`, `float32` / `float64`, `string`. The
+    Godot ABI widens `int*` → `int64` and `float*` → `double` over the
+    PtrCall wire; the `MethodArgumentMetadata` registered with each arg
+    keeps the editor / GDScript display showing the original width. The
+    Call (variant-typed) path uses new `variant.VariantAs*` /
+    `VariantSet*` helpers; the PtrCall path uses
+    `gdextension.PtrCallArg` to read typed slots and direct pointer
+    casts to write returns. Code-gen table lives at
+    `cmd/godot-go/types.go` and rejects unsupported types
+    (slices, pointers, generated engine classes) with file:line. C-side
+    plumbing (`shim.{h,c}`) gained
+    `godot_go_register_extension_class_method` arg/return PropertyInfo
+    parameters; arrays of `uint32_t` tags travel as direct C args so cgo
+    never sees a Go-allocated struct containing pointers.
+    `examples/smoke/mynode.go` extended with `Add(a, b int64) int64` and
+    `Greet(name string) string`; `test_mynode.gd` now invokes both
+    headlessly, confirming `add(2, 3) == 5` and
+    `greet('world') == 'hello, world!'`. Phase 5e (statics + virtuals)
+    and 5f (`examples/locale_language`) remain.
+
+0d. **[Done] Statics + virtuals (Phase 5e).** Static methods (unnamed
+    receiver) and virtual overrides (lowercase first letter, e.g.
+    `process` → `_process`) now emit cleanly. Static methods register
+    with `MethodFlagsDefault | MethodFlagStatic`, dispatch on a
+    zero-valued receiver (`var self T`) instead of looking up an
+    instance — supports both value and pointer receiver forms. Virtuals
+    use Godot's `get_virtual_call_data_func` + `call_virtual_with_data_func`
+    pair on `ClassCreationInfo4` (the userdata-passing flavor — cleaner
+    for cgo than `get_virtual_func` which would require synthesizing a
+    distinct C function pointer per override). The framework's
+    `RegisterClassVirtual` records the Go callback in a
+    `(class, name) → virtual_id` side table and shadow-registers the
+    same method through ClassDB with `MethodFlagVirtual` so explicit
+    GDScript calls (`n._process(0.5)`) resolve via standard method
+    dispatch in addition to engine-internal virtual dispatch.
+    `StringNameToGo` was added to `internal/gdextension/variant.go` to
+    convert host-supplied StringName probes into a `string` for the
+    side-table lookup (lazy `String<-StringName` constructor + the
+    String destructor, both `sync.OnceValue`-cached).
+    `examples/smoke/mynode.go` extended with `Origin() int64` (static)
+    and `process(delta float64)` (virtual); headless verification
+    confirms `MyNode.origin() = 42` and `MyNode._process(0.50) reached
+    from GDScript`. The pre-existing shutdown segfault was also fixed
+    here: bisecting by progressively disabling registrations showed the
+    crash reproduced even with zero classes and zero callbacks (just
+    the gdextension import), and `GOMAXPROCS=1` made it disappear —
+    confirming Go's auxiliary scheduler threads were racing the engine's
+    late teardown on Windows. First-pass mitigation was
+    `runtime.GOMAXPROCS(1) + debug.SetGCPercent(-1)` at Scene deinit;
+    it dropped the crash rate dramatically but still flaked at ~2–4%
+    across 50-run batches — the Go runtime simply isn't designed to be
+    cleanly quiesced by an external host process. Final fix in
+    `internal/gdextension/shutdown.go` calls `os.Exit(0)` from
+    Core-level deinit (the last callback Godot fires), terminating
+    via Windows ExitProcess after every user-visible cleanup has run.
+    Verified clean across 100/100 consecutive runs.
+
+0e. **[Done] examples/locale_language (Phase 5f).** The verbatim PLAN.md
+    showcase now builds, registers, and verifies headlessly. Two codegen
+    extensions were needed beyond Phase 5e to get there: (1)
+    `cmd/godot-go/types.go` `resolveType` accepts user-defined int-backed
+    enum types declared in the trigger file (the discovered enum set is
+    threaded through `classifyForEmit` → `buildEmitMethod` → `resolveType`),
+    treating them as int64 over the wire with a typed cast on read; (2)
+    the `@abstract` doctag now plumbs through to `RegisterClass` via a
+    new `IsAbstract` field on `emitData` and an `{{if .IsAbstract}}`
+    branch on the binding template. The example exercises five distinct
+    codegen paths simultaneously: `@abstract` flag → ClassDef.IsAbstract;
+    `Language` enum → int64-backed return marshalling with typed cast;
+    unnamed-receiver `Parse` → static dispatch with MethodFlagStatic;
+    `@name do_something_alt_name` on `DoSomething` → renamed binding
+    (registered name differs from snake-case derivation);
+    lowercase `process(_ float32)` → engine virtual `_process`. Inner
+    classes (`@innerclass InnerExample`) are discovered but not
+    registered — Godot has no public inner-class concept, so they're
+    just there to prove discovery accepts them without conflating with
+    the main class. Headless verification via
+    `examples/locale_language/godot_project/test_locale_language.gd`
+    pokes ClassDB directly (`class_exists`, `class_has_method`,
+    `get_parent_class`, `class_call_static`) rather than using
+    `LocaleLanguage.parse(...)` syntax — GDScript's parser only resolves
+    *non-abstract* extension classes as type-name identifiers, so the
+    literal `ClassName.method()` form errors at parse time on abstract
+    classes. All 11 ClassDB assertions pass; static `parse("en")=1`,
+    `parse("de")=2`, `parse("??")=0` round-trip the user enum. Stable
+    shutdown verified 5/5. New Taskfile target `build:locale_language`
+    encapsulates the install→generate→build sequence; example doc lives
+    in `examples/locale_language/README.md`. Phase 5 is closed.
+
 1. **Discover input:** when invoked via `go generate`, env vars
    `GOFILE` / `GOPACKAGE` / `GOLINE` identify the trigger file. Parse with
    `go/parser` + `go/ast` + `go/types`.
@@ -323,6 +414,38 @@ This is the headline feature. Steps:
 
 ### Phase 6 — Lifecycle & runtime polish
 
+- [x] **Explicit `@override` for virtual methods.** Pre-Phase-6
+      classification used the case of the Go method name as the virtual
+      signal: lowercase first letter → `methodVirtualCandidate`,
+      registered unconditionally with `MethodFlagVirtual` and a
+      `_`-prefixed Godot name. That silently surprises in both
+      directions — capitalized methods that should override get
+      registered as plain methods (engine never invokes them), and
+      lowercase Go-private helpers get exposed to Godot as fake
+      engine virtuals. Replaced with an explicit `@override` doctag
+      in `cmd/godot-go/discover.go` (the `methodVirtualCandidate` kind
+      was renamed to `methodOverride`):
+      | Go method | `@override`? | Outcome |
+      | --- | --- | --- |
+      | `Process` | yes | virtual override, registered as `_process` |
+      | `Process` | no  | regular method, registered as `process`  |
+      | `process` | yes | virtual override, registered as `_process` |
+      | `process` | no  | NOT registered — Go-private helper        |
+      The leading `_` prepend logic moved out of `emit.go` and into
+      `discover.go`; the doctag parser already accepts arbitrary `@…`
+      tags so `@override` came for free. `@name <verbatim>` still wins
+      end-to-end — no auto-prepend on overrides when the user supplied
+      an explicit name. The engine-virtuals lookup table that an
+      earlier draft of this item proposed is intentionally not built:
+      `@override` is the user's stated intent, and validating it against
+      `extension_api.json` is a separate concern (signature checking)
+      that can land later without changing the classification rule.
+      Test matrix in `cmd/godot-go/discover_test.go` covers all four
+      cells plus `@name` interaction; `examples/smoke/mynode.go` and
+      `examples/locale_language/locale_language.go` updated to the new
+      convention (capitalized `Process` + `@override`); both still
+      verify headlessly. PLAN.md's canonical `LocaleLanguage` example
+      reflects the new convention.
 - [ ] Property/group/signal annotations (likely `@property`, `@signal`,
       `@group`, `@export` doc tags) — design before implementing.
 - [ ] Editor-only behavior (tool scripts) and run-mode gating.
@@ -334,7 +457,7 @@ This is the headline feature. Steps:
 
 ### Phase 7 — Examples, docs, CI
 
-- [ ] `examples/locale_language` (verbatim from PLAN.md).
+- [x] `examples/locale_language` (verbatim from PLAN.md). [Phase 5f, item 0e]
 - [ ] `examples/2d_demo` — minimal Node2D extension that moves a sprite,
       proves the virtual-method (`_process`) path end-to-end inside Godot.
 - [ ] CI matrix: Windows / macOS / Linux × Godot 4.6 headless smoke test

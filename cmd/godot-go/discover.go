@@ -58,7 +58,7 @@ type methodKind int
 const (
 	methodInstance methodKind = iota
 	methodStatic
-	methodVirtualCandidate // lowercase Go name — may map to a parent virtual
+	methodOverride // @override on a method — register as a Godot virtual
 )
 
 func (k methodKind) String() string {
@@ -67,8 +67,8 @@ func (k methodKind) String() string {
 		return "instance"
 	case methodStatic:
 		return "static"
-	case methodVirtualCandidate:
-		return "virtual?"
+	case methodOverride:
+		return "override"
 	default:
 		return "unknown"
 	}
@@ -188,6 +188,17 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	// Methods: walk all FuncDecls with named receivers matching one of the
 	// discovered struct types. Static (unnamed receiver) methods are
 	// identified by an empty Names slice on the receiver field.
+	//
+	// Classification rule (Phase 6):
+	//   - unnamed receiver           → static
+	//   - @override doctag           → override (registered as a Godot virtual)
+	//   - else                       → regular instance method
+	// Lowercase-first methods with no @override are treated as Go-private
+	// helpers and skipped — they don't get registered with Godot at all,
+	// matching Go's own export model. The @name doctag overrides the
+	// derived Godot name verbatim; otherwise the name is snake_case(GoName)
+	// with a leading `_` for overrides (or for cases where @name already
+	// supplies a leading underscore explicitly).
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 {
@@ -199,18 +210,25 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			continue
 		}
 		isStatic := len(fn.Recv.List[0].Names) == 0
+		tags := doctag.Parse(fn.Doc)
+		hasOverride := doctag.Has(tags, "override")
+		// Skip Go-private methods that aren't explicit overrides — they
+		// belong to the user's package, not to Godot's ClassDB.
+		if !isStatic && !hasOverride && isLowerFirst(fn.Name.Name) {
+			continue
+		}
 		mi := &methodInfo{
 			GoName:       fn.Name.Name,
 			Pos:          fn.Pos(),
 			Decl:         fn,
-			Doc:          doctag.Parse(fn.Doc),
+			Doc:          tags,
 			IsPointerRcv: isPtr,
 		}
 		switch {
 		case isStatic:
 			mi.Kind = methodStatic
-		case isLowerFirst(fn.Name.Name):
-			mi.Kind = methodVirtualCandidate
+		case hasOverride:
+			mi.Kind = methodOverride
 		default:
 			mi.Kind = methodInstance
 		}
@@ -218,6 +236,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			mi.GodotName = name
 		} else {
 			mi.GodotName = pascalToSnake(fn.Name.Name)
+			if mi.Kind == methodOverride && !strings.HasPrefix(mi.GodotName, "_") {
+				mi.GodotName = "_" + mi.GodotName
+			}
 		}
 		ci.Methods = append(ci.Methods, mi)
 	}

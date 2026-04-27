@@ -37,7 +37,7 @@ func (n *MyNode) Hello() {}
 	mustContain(t, out, "myNodeInstances   = map[uintptr]*MyNode{}")
 	// Method registration: Go name `Hello`, Godot name `hello`.
 	mustContain(t, out, `Name:  "hello",`)
-	mustContain(t, out, "n.Hello()")
+	mustContain(t, out, "self.Hello()")
 	// Auto-init wiring at SCENE level.
 	mustContain(t, out, "RegisterInitCallback(gdextension.InitLevelScene, registerMyNode)")
 	mustContain(t, out, `UnregisterClass("MyNode")`)
@@ -55,53 +55,140 @@ type Lonely struct { core.Node }
 	mustContain(t, out, "registerLonely")
 }
 
-func TestEmitRejectsStaticMethod(t *testing.T) {
+func TestEmitStaticMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 type N struct { core.Node }
-func (N) Foo() {}
+func (N) Origin() int64 { return 42 }
 `
-	d := mustDiscover(t, src)
-	var buf bytes.Buffer
-	err := emit(&buf, d)
-	if err == nil {
-		t.Fatalf("expected emit to reject static method")
-	}
-	if !strings.Contains(err.Error(), "static methods not supported yet") {
-		t.Errorf("unexpected error: %v", err)
+	out := emitFor(t, src)
+
+	// Static methods skip the per-instance side-table lookup and call on a
+	// zero value — and must register MethodFlagStatic so GDScript can use
+	// `N.origin()` syntax.
+	mustContain(t, out, "_ = instance")
+	mustContain(t, out, "var self N")
+	mustContain(t, out, "self.Origin()")
+	// gofmt may pad the field column; check the value, not the column.
+	mustContain(t, out, "gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,")
+	// The instance-handle lookup pattern must NOT appear for a static-only class.
+	if strings.Contains(out, "lookupNInstance(instance)") {
+		t.Errorf("static method body should not perform instance lookup:\n%s", out)
 	}
 }
 
-func TestEmitRejectsMethodWithParams(t *testing.T) {
+func TestEmitOverrideMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 type N struct { core.Node }
-func (n *N) Foo(x int) {}
+// @override
+func (n *N) process(delta float64) {}
 `
-	d := mustDiscover(t, src)
-	var buf bytes.Buffer
-	err := emit(&buf, d)
-	if err == nil {
-		t.Fatalf("expected emit to reject methods with parameters")
-	}
-	if !strings.Contains(err.Error(), "parameters not supported yet") {
-		t.Errorf("unexpected error: %v", err)
+	out := emitFor(t, src)
+
+	// Overrides route through RegisterClassVirtual (no Call/Args/Return
+	// metadata) and the engine name carries the leading underscore Godot
+	// expects (`process` → `_process`).
+	mustContain(t, out, "RegisterClassVirtual(gdextension.ClassVirtualDef{")
+	mustContain(t, out, `Name:  "_process",`)
+	mustContain(t, out, "self.process(arg0)")
+	mustContain(t, out, "arg0 := *(*float64)(gdextension.PtrCallArg(args, 0))")
+	// An override must NOT appear as a regular method.
+	if strings.Contains(out, `RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "N",
+		Name:  "_process"`) {
+		t.Errorf("override should not also register as a regular method:\n%s", out)
 	}
 }
 
-func TestEmitRejectsMethodWithReturn(t *testing.T) {
+func TestEmitOverrideExportedReceiver(t *testing.T) {
+	// Capitalized Go method + @override — the case decision is independent
+	// of override status; the leading underscore is added because it's an
+	// override, not because of case.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 type N struct { core.Node }
-func (n *N) Foo() int { return 0 }
+// @override
+func (n *N) Process(delta float64) {}
+`
+	out := emitFor(t, src)
+	mustContain(t, out, "RegisterClassVirtual(gdextension.ClassVirtualDef{")
+	mustContain(t, out, `Name:  "_process",`)
+	mustContain(t, out, "self.Process(arg0)")
+}
+
+func TestEmitOverrideWithExplicitName(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+// @override
+// @name _physics_process
+func (n *N) PhysicsTick(delta float64) {}
+`
+	out := emitFor(t, src)
+
+	// @name with leading underscore is taken verbatim — no double prefix.
+	mustContain(t, out, `Name:  "_physics_process",`)
+}
+
+func TestEmitMethodWithIntArgsAndReturn(t *testing.T) {
+	src := `package mypkg
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+func (n *MyNode) Add(a, b int64) int64 { return a + b }
+`
+	out := emitFor(t, src)
+
+	// Variant import is needed once a method touches a primitive.
+	mustContain(t, out, `"github.com/legendary-code/godot-go/variant"`)
+	// Both bodies should read both args and store the result.
+	mustContain(t, out, "arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))")
+	mustContain(t, out, "arg1 := *(*int64)(gdextension.PtrCallArg(args, 1))")
+	mustContain(t, out, "*(*int64)(ret) = result")
+	mustContain(t, out, "arg0 := variant.VariantAsInt64(args[0])")
+	mustContain(t, out, "variant.VariantSetInt64(ret, result)")
+	// Dispatch must thread arg0/arg1 through.
+	mustContain(t, out, "self.Add(arg0, arg1)")
+	// Registration metadata: HasReturn + parallel arg slices.
+	mustContain(t, out, "HasReturn:      true,")
+	mustContain(t, out, "ReturnType:     gdextension.VariantTypeInt,")
+	mustContain(t, out, "ReturnMetadata: gdextension.ArgMetaIntIsInt64,")
+	mustContain(t, out, "ArgTypes: []gdextension.VariantType{")
+	mustContain(t, out, "ArgMetadata: []gdextension.MethodArgumentMetadata{")
+}
+
+func TestEmitMethodWithMixedPrimitives(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+func (n *N) Mix(b bool, i int32, f float32, s string) string { return s }
+`
+	out := emitFor(t, src)
+
+	// Each primitive gets the right wire conversion / extractor.
+	mustContain(t, out, "arg0 := *(*bool)(gdextension.PtrCallArg(args, 0))")
+	mustContain(t, out, "arg1 := int32(*(*int64)(gdextension.PtrCallArg(args, 1)))")
+	mustContain(t, out, "arg2 := float32(*(*float64)(gdextension.PtrCallArg(args, 2)))")
+	mustContain(t, out, "arg3 := variant.PtrCallArgString(args, 3)")
+	mustContain(t, out, "variant.PtrCallStoreString(ret, result)")
+	// Variant-side metadata reflects the narrower types.
+	mustContain(t, out, "gdextension.ArgMetaIntIsInt32,")
+	mustContain(t, out, "gdextension.ArgMetaRealIsFloat,")
+}
+
+func TestEmitRejectsUnsupportedType(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+func (n *N) Foo(xs []int) {}
 `
 	d := mustDiscover(t, src)
 	var buf bytes.Buffer
 	err := emit(&buf, d)
 	if err == nil {
-		t.Fatalf("expected emit to reject methods with return values")
+		t.Fatalf("expected emit to reject slice arg")
 	}
-	if !strings.Contains(err.Error(), "return values not supported yet") {
+	if !strings.Contains(err.Error(), "unsupported type") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

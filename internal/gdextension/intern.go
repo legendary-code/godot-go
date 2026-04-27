@@ -41,3 +41,21 @@ var (
 	internMu    sync.Mutex
 	internCache map[string]StringNamePtr
 )
+
+// internedEmptyString returns a stable StringPtr to a default-constructed
+// (empty) Godot String. Used by the class-registration shim as the
+// hint_string field of GDExtensionPropertyInfo entries — Godot expects a
+// non-NULL String there even when no hint is set, and a single shared
+// empty instance is fine since the host treats it as immutable input.
+func internedEmptyString() StringPtr {
+	emptyStringOnce.Do(func() {
+		emptyStringSlot = new([StringSize]byte)
+		StringNewWithUtf8(StringPtr(unsafe.Pointer(emptyStringSlot)), "")
+	})
+	return StringPtr(unsafe.Pointer(emptyStringSlot))
+}
+
+var (
+	emptyStringOnce sync.Once
+	emptyStringSlot *[StringSize]byte
+)

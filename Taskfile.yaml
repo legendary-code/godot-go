@@ -45,6 +45,25 @@ tasks:
     generates:
       - '{{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}}'
 
+  build:locale_language:
+    desc: Build the Phase 5f locale_language example (the verbatim PLAN.md showcase).
+    vars:
+      OUT_DIR: examples/locale_language/godot_project/bin
+      LIB_NAME: godot_go_locale_language
+    cmds:
+      - go install ./cmd/godot-go
+      - go generate ./examples/locale_language/...
+      - mkdir -p {{.OUT_DIR}}
+      - go build -buildmode=c-shared -o {{.OUT_DIR}}/{{.LIB_NAME}}{{.LIB_EXT}} ./examples/locale_language
+    sources:
+      - examples/locale_language/**/*.go
+      - cmd/godot-go/**/*.go
+      - internal/**/*.go
+      - internal/**/*.h
+      - godot/gdextension_interface.h
+    generates:
+      - 'examples/locale_language/godot_project/bin/godot_go_locale_language{{.LIB_EXT}}'
+
   example:
     desc: Alias for build:example.
     cmds:

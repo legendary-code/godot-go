@@ -81,9 +81,14 @@ func (l *LocaleLanguage) DoSomething() {
 	
 }
 
-// process here demonstrates implementing private functions in godot, which are traditionally represented with an
-// underscore before the name.  In this instance, we're implementing the `_process` method in godot.
-func (l *LocaleLanguage) process(_ float32) {
+// Process here demonstrates overriding a virtual method on the parent class — in this case, `Node._process`.
+// Use the `@override` doc tag to declare an override; codegen routes it through the engine's virtual dispatch
+// path and prepends the leading underscore Godot uses for engine virtuals (`Process` → `_process`). Without
+// `@override`, lowercase methods are treated as Go-private helpers and not registered with Godot at all,
+// matching Go's own export model.
+//
+// @override
+func (l *LocaleLanguage) Process(_ float32) {
 	
 }
 ```

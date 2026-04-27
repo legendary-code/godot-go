@@ -79,15 +79,84 @@ func (MyNode) Helper() {}
 	}
 }
 
-func TestDiscoverVirtualCandidate(t *testing.T) {
+func TestDiscoverOverrideLowercase(t *testing.T) {
+	// Lowercase Go method + @override → registered as a Godot virtual
+	// with a leading underscore on the snake-case name.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 type MyNode struct { core.Node }
+// @override
 func (n *MyNode) process(delta float64) {}
 `
 	d := mustDiscover(t, src)
-	if d.MainClass.Methods[0].Kind != methodVirtualCandidate {
-		t.Errorf("Kind = %v, want virtual candidate (lowercase first letter)", d.MainClass.Methods[0].Kind)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+	m := d.MainClass.Methods[0]
+	if m.Kind != methodOverride {
+		t.Errorf("Kind = %v, want override", m.Kind)
+	}
+	if m.GodotName != "_process" {
+		t.Errorf("GodotName = %q, want _process", m.GodotName)
+	}
+}
+
+func TestDiscoverOverrideExported(t *testing.T) {
+	// Exported Go method + @override → still gets the leading underscore;
+	// the case decision is independent of override status.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @override
+func (n *MyNode) Process(delta float64) {}
+`
+	d := mustDiscover(t, src)
+	m := d.MainClass.Methods[0]
+	if m.Kind != methodOverride {
+		t.Errorf("Kind = %v, want override", m.Kind)
+	}
+	if m.GodotName != "_process" {
+		t.Errorf("GodotName = %q, want _process", m.GodotName)
+	}
+}
+
+func TestDiscoverLowercaseNoTagSkipped(t *testing.T) {
+	// Lowercase Go method without @override → Go-private helper, NOT
+	// registered with Godot's ClassDB. Mirrors Go's own export model:
+	// lowercase = unexported = invisible outside the package.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+func (n *MyNode) Hello() {}
+func (n *MyNode) helper() {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("expected only Hello to register, got %d methods: %+v",
+			len(d.MainClass.Methods), d.MainClass.Methods)
+	}
+	if d.MainClass.Methods[0].GoName != "Hello" {
+		t.Errorf("Methods[0] = %q, want Hello", d.MainClass.Methods[0].GoName)
+	}
+}
+
+func TestDiscoverNameOverrideOnVirtualSkipsLeadingUnderscore(t *testing.T) {
+	// @name supplies the Godot name verbatim. No auto-prepend, even on
+	// overrides — @name is the explicit escape hatch.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @override
+// @name _physics_process
+func (n *MyNode) Tick(delta float64) {}
+`
+	d := mustDiscover(t, src)
+	m := d.MainClass.Methods[0]
+	if m.Kind != methodOverride {
+		t.Errorf("Kind = %v, want override", m.Kind)
+	}
+	if m.GodotName != "_physics_process" {
+		t.Errorf("GodotName = %q, want _physics_process (verbatim from @name)", m.GodotName)
 	}
 }
 

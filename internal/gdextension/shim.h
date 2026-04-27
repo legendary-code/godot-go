@@ -155,11 +155,34 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
                                        GDExtensionBool is_abstract,
                                        GDExtensionBool is_exposed);
 
+/* The arg / return type info travels as parallel scalar arrays so the Go
+ * caller never assembles a Go-allocated struct that contains pointers
+ * (cgo's "Go pointer to unpinned Go memory" rule rejects that pattern).
+ * The C side walks the arrays, builds GDExtensionPropertyInfo entries on
+ * the C stack, and fills the GDExtensionClassMethodInfo before calling fn.
+ *
+ * empty_string_name is reused as PropertyInfo.name + class_name for every
+ * argument and the return value. empty_string is reused as hint_string.
+ * Both come pre-constructed from the Go side (one-time interning) and are
+ * passed through as direct C arguments (cgo permits passing one Go pointer
+ * per arg slot).
+ *
+ * arg_count==0 with arg_types==NULL && arg_metadata==NULL is valid — it
+ * registers a no-arg method. has_return==0 means return_type / return_metadata
+ * are ignored. */
 void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegisterExtensionClassMethod fn,
                                               GDExtensionClassLibraryPtr p_library,
                                               GDExtensionConstStringNamePtr p_class_name,
                                               GDExtensionStringNamePtr p_method_name,
                                               void *method_userdata,
-                                              uint32_t method_flags);
+                                              uint32_t method_flags,
+                                              GDExtensionConstStringNamePtr empty_string_name,
+                                              GDExtensionConstStringPtr empty_string,
+                                              GDExtensionBool has_return,
+                                              uint32_t return_type,
+                                              uint32_t return_metadata,
+                                              uint32_t arg_count,
+                                              const uint32_t *arg_types,
+                                              const uint32_t *arg_metadata);
 
 #endif /* GODOT_GO_SHIM_H */

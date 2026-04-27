@@ -9,8 +9,39 @@ import "C"
 
 import (
 	"runtime"
+	"sync"
 	"unsafe"
 )
+
+// stringFromStringNameCtor / stringDestructor are lazy resolutions of the
+// builtin String constructor #2 (String <- StringName) and the String
+// destructor. They're paired below in StringNameToGo to convert a
+// host-supplied StringName to a Go string without depending on the variant
+// package (which would create an import cycle).
+var (
+	stringFromStringNameCtor = sync.OnceValue(func() PtrConstructor {
+		return GetPtrConstructor(VariantTypeString, 2)
+	})
+	stringDestructor = sync.OnceValue(func() PtrDestructor {
+		return GetPtrDestructor(VariantTypeString)
+	})
+)
+
+// StringNameToGo extracts the contents of a host-owned StringName as a Go
+// string. Routes through a temporary builtin String — the host's
+// StringName has no direct UTF-8 extractor in the public interface.
+//
+// Cheap enough for one-shot use (e.g. virtual-method probe handshake the
+// host caches), but allocations on every call make it the wrong choice for
+// per-frame paths.
+func StringNameToGo(name StringNamePtr) string {
+	var tmp [StringSize]byte
+	args := [...]TypePtr{TypePtr(unsafe.Pointer(name))}
+	CallPtrConstructor(stringFromStringNameCtor(), TypePtr(unsafe.Pointer(&tmp)), args[:])
+	s := StringToGo(StringPtr(unsafe.Pointer(&tmp)))
+	CallPtrDestructor(stringDestructor(), TypePtr(unsafe.Pointer(&tmp)))
+	return s
+}
 
 // VariantNewCopy clones src into dst. dst must point to an uninitialized
 // Variant slot of size variant_size (16 bytes in 32-bit float builds, 24 in

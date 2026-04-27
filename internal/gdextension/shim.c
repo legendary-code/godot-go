@@ -309,13 +309,32 @@ static void godot_go_free_instance_trampoline(
     godotGoFreeInstance(p_class_userdata, p_instance);
 }
 
-static GDExtensionClassCallVirtual godot_go_get_virtual_trampoline(
+/* Virtual-override discovery (Phase 5e). The host calls
+ * get_virtual_call_data_func once per (class, virtual_name) pair, caches
+ * the returned userdata, then dispatches via call_virtual_with_data_func
+ * on every invocation. We use the userdata-passing flavor (rather than
+ * `get_virtual_func` which returns a function pointer) because cgo can't
+ * synthesize per-virtual function pointers — but it can hand back a
+ * small-integer id encoded as void* and dispatch through a single fixed
+ * trampoline. */
+static void *godot_go_get_virtual_call_data_trampoline(
     void *p_class_userdata, GDExtensionConstStringNamePtr p_name, uint32_t p_hash) {
-    /* No virtual overrides in Phase 5a — return NULL means "not overridden",
-     * the host will use the parent class's implementation. Phase 5e will
-     * route this through Go to look up generated virtual binders. */
-    (void)p_class_userdata; (void)p_name; (void)p_hash;
-    return NULL;
+    return godotGoGetVirtualCallData(p_class_userdata,
+                                     (GDExtensionConstStringNamePtr)p_name,
+                                     p_hash);
+}
+
+static void godot_go_call_virtual_with_data_trampoline(
+    GDExtensionClassInstancePtr p_instance,
+    GDExtensionConstStringNamePtr p_name,
+    void *p_virtual_call_userdata,
+    const GDExtensionConstTypePtr *p_args,
+    GDExtensionTypePtr r_ret) {
+    godotGoCallVirtualWithData(p_instance,
+                               (GDExtensionConstStringNamePtr)p_name,
+                               p_virtual_call_userdata,
+                               (GDExtensionConstTypePtr *)p_args,
+                               r_ret);
 }
 
 static void godot_go_method_call_trampoline(
@@ -363,11 +382,33 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
     info.is_abstract           = is_abstract;
     info.is_exposed            = is_exposed;
     info.is_runtime            = 0;
-    info.create_instance_func  = godot_go_create_instance_trampoline;
-    info.free_instance_func    = godot_go_free_instance_trampoline;
-    info.get_virtual_func      = godot_go_get_virtual_trampoline;
-    info.class_userdata        = class_userdata;
+    info.create_instance_func        = godot_go_create_instance_trampoline;
+    info.free_instance_func          = godot_go_free_instance_trampoline;
+    info.get_virtual_call_data_func  = godot_go_get_virtual_call_data_trampoline;
+    info.call_virtual_with_data_func = godot_go_call_virtual_with_data_trampoline;
+    info.class_userdata              = class_userdata;
     fn(p_library, p_class_name, p_parent_class_name, &info);
+}
+
+/* Maximum supported argument count for a registered extension class
+ * method. The C-stack PropertyInfo arrays are sized to this; the Go side
+ * rejects anything larger before calling. 32 is overkill for hand-written
+ * Godot APIs but cheap. */
+#define GODOT_GO_MAX_METHOD_ARGS 32
+
+static void godot_go_fill_property_info(GDExtensionPropertyInfo *p_info,
+                                        uint32_t p_type,
+                                        GDExtensionConstStringNamePtr p_empty_string_name,
+                                        GDExtensionConstStringPtr p_empty_string) {
+    /* PROPERTY_USAGE_DEFAULT == 6 (PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_EDITOR).
+     * Hardcoded so the helper doesn't need to import the global enum
+     * header — the value is stable across Godot 4.x. */
+    p_info->type        = (GDExtensionVariantType)p_type;
+    p_info->name        = (GDExtensionStringNamePtr)p_empty_string_name;
+    p_info->class_name  = (GDExtensionStringNamePtr)p_empty_string_name;
+    p_info->hint        = 0;
+    p_info->hint_string = (GDExtensionStringPtr)p_empty_string;
+    p_info->usage       = 6;
 }
 
 void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegisterExtensionClassMethod fn,
@@ -375,7 +416,36 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               GDExtensionConstStringNamePtr p_class_name,
                                               GDExtensionStringNamePtr p_method_name,
                                               void *method_userdata,
-                                              uint32_t method_flags) {
+                                              uint32_t method_flags,
+                                              GDExtensionConstStringNamePtr empty_string_name,
+                                              GDExtensionConstStringPtr empty_string,
+                                              GDExtensionBool has_return,
+                                              uint32_t return_type,
+                                              uint32_t return_metadata,
+                                              uint32_t arg_count,
+                                              const uint32_t *arg_types,
+                                              const uint32_t *arg_metadata) {
+    GDExtensionPropertyInfo return_info;
+    GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
+    GDExtensionClassMethodArgumentMetadata arg_meta[GODOT_GO_MAX_METHOD_ARGS];
+
+    if (arg_count > GODOT_GO_MAX_METHOD_ARGS) {
+        /* Caller already validated; assert here in debug. Falling through
+         * with a truncated count would mismatch what the Go side expects. */
+        return;
+    }
+
+    for (uint32_t i = 0; i < arg_count; i++) {
+        godot_go_fill_property_info(&arg_infos[i], arg_types[i],
+                                    empty_string_name, empty_string);
+        arg_meta[i] = (GDExtensionClassMethodArgumentMetadata)arg_metadata[i];
+    }
+
+    if (has_return) {
+        godot_go_fill_property_info(&return_info, return_type,
+                                    empty_string_name, empty_string);
+    }
+
     GDExtensionClassMethodInfo info;
     memset(&info, 0, sizeof(info));
     info.name             = p_method_name;
@@ -383,8 +453,15 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
     info.call_func        = godot_go_method_call_trampoline;
     info.ptrcall_func     = godot_go_method_ptrcall_trampoline;
     info.method_flags     = method_flags;
-    /* return_value_info / arguments_info are left NULL — the Go side passes
-     * no arg/return metadata for nullary void methods in Phase 5a. Phase 5d
-     * wires up arg/return info from the user's Go method signature. */
+    info.has_return_value = has_return;
+    if (has_return) {
+        info.return_value_info     = &return_info;
+        info.return_value_metadata = (GDExtensionClassMethodArgumentMetadata)return_metadata;
+    }
+    info.argument_count = arg_count;
+    if (arg_count > 0) {
+        info.arguments_info     = arg_infos;
+        info.arguments_metadata = arg_meta;
+    }
     fn(p_library, p_class_name, &info);
 }

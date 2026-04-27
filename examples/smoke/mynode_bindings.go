@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/variant"
 )
 
 // Per-instance side table. The void* value the host hands back to us as
@@ -61,18 +62,140 @@ func registerMyNode() {
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
 		Name:  "hello",
-		Call: func(instance unsafe.Pointer, _ []gdextension.VariantPtr, _ gdextension.VariantPtr) gdextension.CallErrorType {
-			n := lookupMyNodeInstance(instance)
-			if n == nil {
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			n.Hello()
+			self.Hello()
 			return gdextension.CallErrorOK
 		},
-		PtrCall: func(instance unsafe.Pointer, _ unsafe.Pointer, _ unsafe.Pointer) {
-			if n := lookupMyNodeInstance(instance); n != nil {
-				n.Hello()
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
 			}
+			self.Hello()
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "add",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsInt64(args[0])
+			arg1 := variant.VariantAsInt64(args[1])
+			result := self.Add(arg0, arg1)
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			arg1 := *(*int64)(gdextension.PtrCallArg(args, 1))
+			result := self.Add(arg0, arg1)
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+			gdextension.ArgMetaIntIsInt64,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "greet",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			result := self.Greet(arg0)
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			result := self.Greet(arg0)
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "origin",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self MyNode
+			result := self.Origin()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self MyNode
+			result := self.Origin()
+			*(*int64)(ret) = result
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
+		Class: "MyNode",
+		Name:  "_process",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsFloat64(args[0])
+			self.Process(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*float64)(gdextension.PtrCallArg(args, 0))
+			self.Process(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeFloat,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaRealIsDouble,
 		},
 	})
 }
