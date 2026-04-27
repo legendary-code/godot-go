@@ -47,6 +47,30 @@ func (n *MyNode) SetHealth(v int64) { n.Health = v }
 
 func (n *MyNode) GetMaxHealth() int64 { return n.MaxHealth }
 
+func (n *MyNode) GetDamageRange() int64 { return n.DamageRange }
+
+func (n *MyNode) SetDamageRange(v int64) { n.DamageRange = v }
+
+func (n *MyNode) GetMode() int64 { return n.Mode }
+
+func (n *MyNode) SetMode(v int64) { n.Mode = v }
+
+func (n *MyNode) GetSkin() string { return n.Skin }
+
+func (n *MyNode) SetSkin(v string) { n.Skin = v }
+
+func (n *MyNode) GetDisplayName() string { return n.DisplayName }
+
+func (n *MyNode) SetDisplayName(v string) { n.DisplayName = v }
+
+func (n *MyNode) GetSaveDir() string { return n.SaveDir }
+
+func (n *MyNode) SetSaveDir(v string) { n.SaveDir = v }
+
+func (n *MyNode) GetNotes() string { return n.Notes }
+
+func (n *MyNode) SetNotes(v string) { n.Notes = v }
+
 // Damaged emits the damaged signal on this instance. Synthesized
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.
@@ -392,6 +416,324 @@ func registerMyNode() {
 		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_damage_range",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetDamageRange()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetDamageRange()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_damage_range",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsInt64(args[0])
+			self.SetDamageRange(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.SetDamageRange(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_mode",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetMode()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetMode()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_mode",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsInt64(args[0])
+			self.SetMode(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.SetMode(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_skin",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetSkin()
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetSkin()
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_skin",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			self.SetSkin(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			self.SetSkin(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_display_name",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetDisplayName()
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetDisplayName()
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_display_name",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			self.SetDisplayName(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			self.SetDisplayName(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_save_dir",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetSaveDir()
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetSaveDir()
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_save_dir",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			self.SetSaveDir(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			self.SetSaveDir(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_notes",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetNotes()
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetNotes()
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_notes",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			self.SetNotes(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			self.SetNotes(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
 		Class:  "MyNode",
 		Name:   "health",
@@ -420,6 +762,76 @@ func registerMyNode() {
 		Type:   gdextension.VariantTypeString,
 		Setter: "set_tag",
 		Getter: "get_tag",
+	})
+
+	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
+		Class: "MyNode",
+		Name:  "Combat",
+	})
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:      "MyNode",
+		Name:       "damage_range",
+		Type:       gdextension.VariantTypeInt,
+		Setter:     "set_damage_range",
+		Getter:     "get_damage_range",
+		Hint:       gdextension.PropertyHintRange,
+		HintString: "0,200,5",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:      "MyNode",
+		Name:       "mode",
+		Type:       gdextension.VariantTypeInt,
+		Setter:     "set_mode",
+		Getter:     "get_mode",
+		Hint:       gdextension.PropertyHintEnum,
+		HintString: "Idle,Attack,Defend",
+	})
+
+	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
+		Class: "MyNode",
+		Name:  "Visuals",
+	})
+	gdextension.RegisterClassPropertySubgroup(gdextension.ClassPropertyGroupDef{
+		Class: "MyNode",
+		Name:  "Texture",
+	})
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:      "MyNode",
+		Name:       "skin",
+		Type:       gdextension.VariantTypeString,
+		Setter:     "set_skin",
+		Getter:     "get_skin",
+		Hint:       gdextension.PropertyHintFile,
+		HintString: "*.png,*.jpg",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:      "MyNode",
+		Name:       "display_name",
+		Type:       gdextension.VariantTypeString,
+		Setter:     "set_display_name",
+		Getter:     "get_display_name",
+		Hint:       gdextension.PropertyHintPlaceholderText,
+		HintString: "e.g. Hero",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "save_dir",
+		Type:   gdextension.VariantTypeString,
+		Setter: "set_save_dir",
+		Getter: "get_save_dir",
+		Hint:   gdextension.PropertyHintDir,
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "notes",
+		Type:   gdextension.VariantTypeString,
+		Setter: "set_notes",
+		Getter: "get_notes",
+		Hint:   gdextension.PropertyHintMultilineText,
 	})
 
 	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{

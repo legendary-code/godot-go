@@ -49,6 +49,46 @@ type MyNode struct {
 	// @property
 	MaxHealth int64
 
+	// Combat group properties exercise the @group + export-hint path.
+	// DamageRange uses @export_range to render as a slider in the
+	// inspector; Mode uses @export_enum to render as a dropdown.
+
+	// @group("Combat")
+	// @export_range(0, 200, 5)
+	// @property
+	DamageRange int64
+
+	// @group("Combat")
+	// @export_enum("Idle", "Attack", "Defend")
+	// @property
+	Mode int64
+
+	// Visuals group with a Texture subgroup. Each hint type lights up
+	// a different inspector widget — file picker, dir picker, multi-
+	// line text, single-line placeholder.
+
+	// @group("Visuals")
+	// @subgroup("Texture")
+	// @export_file("*.png", "*.jpg")
+	// @property
+	Skin string
+
+	// @group("Visuals")
+	// @subgroup("Texture")
+	// @export_placeholder("e.g. Hero")
+	// @property
+	DisplayName string
+
+	// @group("Visuals")
+	// @export_dir
+	// @property
+	SaveDir string
+
+	// @group("Visuals")
+	// @export_multiline
+	// @property
+	Notes string
+
 	// score / tag are private backings that the user-written getters
 	// dispatch on. Lowercase = invisible to Godot; visible only to the
 	// package itself.

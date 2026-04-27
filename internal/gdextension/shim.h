@@ -190,15 +190,40 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
  * already registered through godot_go_register_extension_class_method. The
  * setter / getter are looked up by StringName at register time, so the
  * methods MUST be registered first. PropertyInfo is built C-side so the Go
- * caller only passes scalars + the interned StringName/String pointers. */
+ * caller only passes scalars + the interned StringName/String pointers.
+ *
+ * `property_hint` is a PropertyHint enum value (NONE=0 by default);
+ * `hint_string` is its payload (e.g. "0,100" for RANGE, comma-separated
+ * names for ENUM, file filter for FILE). Both default to NONE/empty when
+ * the user hasn't set an export hint. The hint_string is interned by the
+ * Go side (or the empty StringPtr is passed) so the C trampoline never
+ * has to copy. */
 void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegisterExtensionClassProperty fn,
                                                 GDExtensionClassLibraryPtr p_library,
                                                 GDExtensionConstStringNamePtr p_class_name,
                                                 GDExtensionStringNamePtr p_property_name,
                                                 GDExtensionConstStringNamePtr p_setter,
                                                 GDExtensionConstStringNamePtr p_getter,
-                                                GDExtensionConstStringPtr empty_string,
-                                                uint32_t property_type);
+                                                GDExtensionConstStringPtr hint_string,
+                                                uint32_t property_type,
+                                                uint32_t property_hint);
+
+/* Property group / subgroup registration. Calls must come BEFORE the
+ * properties they apply to — Godot's inspector treats subsequent
+ * properties as belonging to the most recent group/subgroup. The
+ * `prefix` parameter is currently always passed empty from the codegen
+ * (Phase 6 punt); a future iteration may wire it through. */
+void godot_go_register_extension_class_property_group(GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup fn,
+                                                       GDExtensionClassLibraryPtr p_library,
+                                                       GDExtensionConstStringNamePtr p_class_name,
+                                                       GDExtensionConstStringPtr p_group_name,
+                                                       GDExtensionConstStringPtr p_prefix);
+
+void godot_go_register_extension_class_property_subgroup(GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup fn,
+                                                          GDExtensionClassLibraryPtr p_library,
+                                                          GDExtensionConstStringNamePtr p_class_name,
+                                                          GDExtensionConstStringPtr p_subgroup_name,
+                                                          GDExtensionConstStringPtr p_prefix);
 
 /* Signal registration. Mirrors classdb_register_extension_class_signal —
  * arg type/metadata travels as parallel scalar arrays the same way method

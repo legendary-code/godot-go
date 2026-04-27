@@ -71,12 +71,14 @@ var iface struct {
 	objectDestroy            C.GDExtensionInterfaceObjectDestroy
 	globalGetSingleton       C.GDExtensionInterfaceGlobalGetSingleton
 
-	classdbRegisterExtensionClass5         C.GDExtensionInterfaceClassdbRegisterExtensionClass5
-	classdbRegisterExtensionClassMethod    C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
-	classdbRegisterExtensionClassProperty  C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty
-	classdbRegisterExtensionClassSignal    C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal
-	classdbUnregisterExtensionClass        C.GDExtensionInterfaceClassdbUnregisterExtensionClass
-	objectSetInstance                      C.GDExtensionInterfaceObjectSetInstance
+	classdbRegisterExtensionClass5              C.GDExtensionInterfaceClassdbRegisterExtensionClass5
+	classdbRegisterExtensionClassMethod         C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
+	classdbRegisterExtensionClassProperty       C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty
+	classdbRegisterExtensionClassPropertyGroup  C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup
+	classdbRegisterExtensionClassPropertySubgroup C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup
+	classdbRegisterExtensionClassSignal         C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal
+	classdbUnregisterExtensionClass             C.GDExtensionInterfaceClassdbUnregisterExtensionClass
+	objectSetInstance                           C.GDExtensionInterfaceObjectSetInstance
 }
 
 // Library returns the GDExtensionClassLibraryPtr the host handed us. Required
@@ -127,6 +129,8 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.classdbRegisterExtensionClass5 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass5)(unsafe.Pointer(resolveProc("classdb_register_extension_class5")))
 	iface.classdbRegisterExtensionClassMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_method")))
 	iface.classdbRegisterExtensionClassProperty = (C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property")))
+	iface.classdbRegisterExtensionClassPropertyGroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_group")))
+	iface.classdbRegisterExtensionClassPropertySubgroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_subgroup")))
 	iface.classdbRegisterExtensionClassSignal = (C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal)(unsafe.Pointer(resolveProc("classdb_register_extension_class_signal")))
 	iface.classdbUnregisterExtensionClass = (C.GDExtensionInterfaceClassdbUnregisterExtensionClass)(unsafe.Pointer(resolveProc("classdb_unregister_extension_class")))
 	iface.objectSetInstance = (C.GDExtensionInterfaceObjectSetInstance)(unsafe.Pointer(resolveProc("object_set_instance")))

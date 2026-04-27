@@ -519,6 +519,174 @@ type Signals interface {
 	mustFailDiscover(t, src, "return value")
 }
 
+func TestDiscoverPropertyGroup(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @group("Combat")
+	// @property
+	Damage int64
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	p := d.MainClass.Properties[0]
+	if p.Group != "Combat" {
+		t.Errorf("Group = %q, want Combat", p.Group)
+	}
+}
+
+func TestDiscoverPropertyExportRange(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @export_range(0, 100)
+	// @property
+	Health int64
+}
+`
+	d := mustDiscover(t, src)
+	p := d.MainClass.Properties[0]
+	if p.Hint != "PropertyHintRange" {
+		t.Errorf("Hint = %q, want PropertyHintRange", p.Hint)
+	}
+	if p.HintString != "0,100" {
+		t.Errorf("HintString = %q, want 0,100", p.HintString)
+	}
+}
+
+func TestDiscoverPropertyExportEnum(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @export_enum("Idle", "Run", "Jump")
+	// @property
+	Mode int64
+}
+`
+	d := mustDiscover(t, src)
+	p := d.MainClass.Properties[0]
+	if p.Hint != "PropertyHintEnum" {
+		t.Errorf("Hint = %q, want PropertyHintEnum", p.Hint)
+	}
+	if p.HintString != "Idle,Run,Jump" {
+		t.Errorf("HintString = %q, want Idle,Run,Jump", p.HintString)
+	}
+}
+
+func TestDiscoverPropertyExportPlaceholderWithComma(t *testing.T) {
+	// Quoted-string handling: a comma inside the quoted arg must NOT
+	// split it into two args.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @export_placeholder("Hello, world")
+	// @property
+	Display string
+}
+`
+	d := mustDiscover(t, src)
+	p := d.MainClass.Properties[0]
+	if p.HintString != "Hello, world" {
+		t.Errorf("HintString = %q, want Hello, world", p.HintString)
+	}
+}
+
+func TestDiscoverPropertySubgroupRequiresGroup(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @subgroup("Texture")
+	// @property
+	Skin string
+}
+`
+	mustFailDiscover(t, src, "@subgroup without @group")
+}
+
+func TestDiscoverPropertyMultipleHintsRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @export_range(0, 100)
+	// @export_enum("A", "B")
+	// @property
+	Foo int64
+}
+`
+	mustFailDiscover(t, src, "multiple @export_*")
+}
+
+func TestDiscoverPropertyHintsRejectedOnMethodForm(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @export_range(0, 100)
+// @property
+func (n *MyNode) GetHealth() int64 { return 0 }
+`
+	mustFailDiscover(t, src, "field-form only")
+}
+
+func TestDiscoverPropertyGroupNonContiguousRejected(t *testing.T) {
+	// Going back to group "A" after switching to group "B" would
+	// require re-registering A's header — produces a duplicate
+	// inspector entry. Reject.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @group("A")
+	// @property
+	One int64
+	// @group("B")
+	// @property
+	Two int64
+	// @group("A")
+	// @property
+	Three int64
+}
+`
+	mustFailDiscover(t, src, "reuses a group already left")
+}
+
+func TestDiscoverPropertyUngroupedFirstAcrossForms(t *testing.T) {
+	// Method-form @property is inherently ungrouped; codegen places
+	// ungrouped properties before grouped ones regardless of source
+	// position so source layout doesn't have to mirror the strict
+	// register-ungrouped-first ordering Godot requires.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @group("Combat")
+	// @property
+	Damage int64
+	score int64
+}
+// @property
+func (n *MyNode) GetScore() int64 { return 0 }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 2 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	if d.MainClass.Properties[0].Name != "Score" {
+		t.Errorf("first property = %q, want Score (ungrouped, comes first)", d.MainClass.Properties[0].Name)
+	}
+	if d.MainClass.Properties[1].Name != "Damage" {
+		t.Errorf("second property = %q, want Damage (grouped)", d.MainClass.Properties[1].Name)
+	}
+}
+
 func TestPascalToSnake(t *testing.T) {
 	cases := []struct {
 		in, want string

@@ -107,6 +107,33 @@ func _initialize() -> void:
 	n.tagged.emit("hello-signals")
 	_check("signal tagged delivered string payload", _tagged_label, "hello-signals")
 
+	# Phase 6: property groups + export hints. ClassDB.class_get_property_list
+	# exposes each property's PropertyHint enum value and hint string; we
+	# look up the registered properties and assert the inspector metadata
+	# matches what the @export_* doctags promised.
+	#   PropertyHint enum values (extension_api.json#global_enums):
+	#     RANGE=1, ENUM=2, FILE=13, DIR=14,
+	#     MULTILINE_TEXT=18, PLACEHOLDER_TEXT=20.
+	var props := {}
+	for p in ClassDB.class_get_property_list("MyNode", true):
+		props[p["name"]] = p
+
+	_check("damage_range hint=RANGE",        props["damage_range"]["hint"],        1)
+	_check("damage_range hint_string",       props["damage_range"]["hint_string"], "0,200,5")
+	_check("mode hint=ENUM",                 props["mode"]["hint"],                2)
+	_check("mode hint_string",               props["mode"]["hint_string"],         "Idle,Attack,Defend")
+	_check("skin hint=FILE",                 props["skin"]["hint"],                13)
+	_check("skin hint_string",               props["skin"]["hint_string"],         "*.png,*.jpg")
+	_check("display_name hint=PLACEHOLDER",  props["display_name"]["hint"],        20)
+	_check("display_name hint_string",       props["display_name"]["hint_string"], "e.g. Hero")
+	_check("save_dir hint=DIR",              props["save_dir"]["hint"],            14)
+	_check("notes hint=MULTILINE",           props["notes"]["hint"],               18)
+	# Round-trip a value through one of the hinted properties to confirm
+	# the property registration still bridges to the synthesized getter/
+	# setter alongside the inspector metadata.
+	n.damage_range = 175
+	_check("hinted property still r/w (damage_range)", n.damage_range, 175)
+
 	n.free()
 
 	if _failed == 0:

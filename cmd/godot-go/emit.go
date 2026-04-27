@@ -138,6 +138,21 @@ type emitProperty struct {
 	Type      string // bare const name, e.g. "VariantTypeInt"
 	Setter    string // snake_case setter method name (empty for read-only)
 	Getter    string // snake_case getter method name (always set)
+
+	// Hint + HintString render the property's editor metadata. Hint is
+	// the bare PropertyHint const name (e.g. "PropertyHintRange");
+	// empty means no hint specified (codegen omits the field entirely
+	// in that case so the default takes over).
+	Hint       string
+	HintString string
+
+	// BeginGroup / BeginSubgroup carry the group / subgroup name when
+	// THIS property is the first one of that group/subgroup. Codegen
+	// emits the corresponding RegisterClassPropertyGroup /
+	// RegisterClassPropertySubgroup call right before the property's
+	// own registration. Empty means "no transition here".
+	BeginGroup    string
+	BeginSubgroup string
 }
 
 type emitMethod struct {
@@ -300,6 +315,14 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 	out []emitProperty,
 	err error,
 ) {
+	// Track the active group/subgroup as we walk in source order so
+	// each transition emits exactly one RegisterClassPropertyGroup or
+	// RegisterClassPropertySubgroup call, attached to the first
+	// property of the new group/subgroup. Discovery already validated
+	// that ordering is contiguous, so a simple "did the name change"
+	// check suffices here.
+	curGroup := ""
+	curSubgroup := ""
 	for _, p := range props {
 		info, terr := resolveType(p.GoType, enums)
 		if terr != nil {
@@ -312,12 +335,27 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 		propGodotName := pascalToSnake(p.Name)
 
 		entry := emitProperty{
-			GodotName: propGodotName,
-			Type:      info.VariantType,
-			Getter:    getterGodotName,
+			GodotName:  propGodotName,
+			Type:       info.VariantType,
+			Getter:     getterGodotName,
+			Hint:       p.Hint,
+			HintString: p.HintString,
 		}
 		if !p.ReadOnly {
 			entry.Setter = setterGodotName
+		}
+		// Group transition: emit a RegisterClassPropertyGroup call
+		// before this property's registration if we're entering a new
+		// group. A new group also resets the subgroup tracker because
+		// subgroups nest under their group.
+		if p.Group != curGroup {
+			entry.BeginGroup = p.Group
+			curGroup = p.Group
+			curSubgroup = ""
+		}
+		if p.Subgroup != curSubgroup {
+			entry.BeginSubgroup = p.Subgroup
+			curSubgroup = p.Subgroup
 		}
 		out = append(out, entry)
 
@@ -676,6 +714,21 @@ func register{{.Class}}() {
 	{{- end}}
 {{end}}
 {{- range .Properties}}
+	{{- if .BeginGroup}}
+	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
+		Class: "{{$.Class}}",
+		Name:  "{{.BeginGroup}}",
+	})
+	{{- else if and (eq .BeginGroup "") (ne .BeginSubgroup "")}}
+	{{- /* Subgroup transition without a group transition — only emit
+	       the subgroup call. The group is unchanged. */}}
+	{{- end}}
+	{{- if .BeginSubgroup}}
+	gdextension.RegisterClassPropertySubgroup(gdextension.ClassPropertyGroupDef{
+		Class: "{{$.Class}}",
+		Name:  "{{.BeginSubgroup}}",
+	})
+	{{- end}}
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
 		Class:  "{{$.Class}}",
 		Name:   "{{.GodotName}}",
@@ -684,6 +737,12 @@ func register{{.Class}}() {
 		Setter: "{{.Setter}}",
 		{{- end}}
 		Getter: "{{.Getter}}",
+		{{- if .Hint}}
+		Hint:       gdextension.{{.Hint}},
+		{{- end}}
+		{{- if .HintString}}
+		HintString: {{printf "%q" .HintString}},
+		{{- end}}
 	})
 {{end}}
 {{- range .Signals}}

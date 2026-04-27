@@ -97,6 +97,19 @@ type propertyInfo struct {
 	// or when no Set<Name> method exists alongside the user's Get<Name>
 	// (method form).
 	ReadOnly bool
+
+	// Group / Subgroup carry the inspector grouping for this property
+	// (field form only — method-form properties don't support grouping
+	// in v1). Empty strings mean "ungrouped".
+	Group    string
+	Subgroup string
+
+	// Hint + HintString are the Godot PropertyHint enum value (bare
+	// const name, e.g. "PropertyHintRange") and its payload string. Set
+	// from `@export_range`/`@export_enum`/etc. on field-form @property.
+	// Default is "PropertyHintNone" + empty.
+	Hint       string
+	HintString string
 }
 
 type propertySource int
@@ -442,6 +455,122 @@ func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) 
 	return nil
 }
 
+// hintTagNames lists the export-hint doctag names recognized on field-form
+// `@property` declarations. Each maps to a Godot PropertyHint enum value
+// + a hint_string format described in the per-tag handler below. The list
+// is used both at parse time (parsePropertyHints) and at validation time
+// (rejecting hints on method-form properties).
+var hintTagNames = []string{
+	"export_range",
+	"export_enum",
+	"export_file",
+	"export_dir",
+	"export_multiline",
+	"export_placeholder",
+}
+
+// parsePropertyHints walks a field's doctags and extracts @group,
+// @subgroup, and @export_* hint info. Returns (group, subgroup, hint,
+// hintString, err). hint is the bare PropertyHint enum const name
+// (e.g. "PropertyHintRange"); empty means no hint specified.
+//
+// At most one @export_* tag may appear per field. @subgroup without
+// @group is rejected — Godot's inspector nests subgroups under their
+// parent group, and a free-floating subgroup degrades to a plain group
+// in confusing ways.
+func parsePropertyHints(fset *token.FileSet, tags []doctag.Tag, pos token.Pos) (group, subgroup, hint, hintString string, err error) {
+	if v, ok := doctag.Find(tags, "group"); ok {
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @group: %w", posStr(fset, pos), perr)
+		}
+		if len(args) != 1 {
+			return "", "", "", "", fmt.Errorf("%s: @group expects one quoted argument, got %d", posStr(fset, pos), len(args))
+		}
+		group = args[0]
+	}
+	if v, ok := doctag.Find(tags, "subgroup"); ok {
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @subgroup: %w", posStr(fset, pos), perr)
+		}
+		if len(args) != 1 {
+			return "", "", "", "", fmt.Errorf("%s: @subgroup expects one quoted argument, got %d", posStr(fset, pos), len(args))
+		}
+		subgroup = args[0]
+		if group == "" {
+			return "", "", "", "", fmt.Errorf("%s: @subgroup without @group — subgroups must be nested under a group", posStr(fset, pos))
+		}
+	}
+
+	// At most one export hint per field. Multiple is ambiguous and
+	// would silently let one win; reject so the user picks.
+	hintCount := 0
+	for _, name := range hintTagNames {
+		if doctag.Has(tags, name) {
+			hintCount++
+		}
+	}
+	if hintCount > 1 {
+		return "", "", "", "", fmt.Errorf("%s: multiple @export_* hints on one field — pick one", posStr(fset, pos))
+	}
+
+	switch {
+	case doctag.Has(tags, "export_range"):
+		v, _ := doctag.Find(tags, "export_range")
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @export_range: %w", posStr(fset, pos), perr)
+		}
+		if len(args) != 2 && len(args) != 3 {
+			return "", "", "", "", fmt.Errorf("%s: @export_range expects (min, max) or (min, max, step), got %d args", posStr(fset, pos), len(args))
+		}
+		hint = "PropertyHintRange"
+		hintString = strings.Join(args, ",")
+	case doctag.Has(tags, "export_enum"):
+		v, _ := doctag.Find(tags, "export_enum")
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @export_enum: %w", posStr(fset, pos), perr)
+		}
+		if len(args) == 0 {
+			return "", "", "", "", fmt.Errorf("%s: @export_enum requires at least one value", posStr(fset, pos))
+		}
+		hint = "PropertyHintEnum"
+		hintString = strings.Join(args, ",")
+	case doctag.Has(tags, "export_file"):
+		v, _ := doctag.Find(tags, "export_file")
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @export_file: %w", posStr(fset, pos), perr)
+		}
+		hint = "PropertyHintFile"
+		// @export_file with no args opens the picker without a filter.
+		// @export_file("*.png") supplies the filter; multiple filters
+		// are passed as comma-separated bare or quoted args. Either
+		// form joins to a single comma-separated payload.
+		hintString = strings.Join(args, ",")
+	case doctag.Has(tags, "export_dir"):
+		// Directory picker — payload is empty.
+		hint = "PropertyHintDir"
+	case doctag.Has(tags, "export_multiline"):
+		// Multi-line text editor — payload is empty.
+		hint = "PropertyHintMultilineText"
+	case doctag.Has(tags, "export_placeholder"):
+		v, _ := doctag.Find(tags, "export_placeholder")
+		args, perr := doctag.SplitArgs(v)
+		if perr != nil {
+			return "", "", "", "", fmt.Errorf("%s: @export_placeholder: %w", posStr(fset, pos), perr)
+		}
+		if len(args) != 1 {
+			return "", "", "", "", fmt.Errorf("%s: @export_placeholder expects one quoted argument, got %d", posStr(fset, pos), len(args))
+		}
+		hint = "PropertyHintPlaceholderText"
+		hintString = args[0]
+	}
+	return group, subgroup, hint, hintString, nil
+}
+
 // collectProperties walks the main class's struct fields (for the field
 // form) and its already-collected methods (for the method form), producing
 // the consolidated propertyInfo slice on classInfo.
@@ -485,6 +614,10 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 		if !hasProperty {
 			continue
 		}
+		group, subgroup, hint, hintString, perr := parsePropertyHints(fset, tags, f.Pos())
+		if perr != nil {
+			return perr
+		}
 		for _, name := range f.Names {
 			if !name.IsExported() {
 				return fmt.Errorf("%s: field %q has @property but is unexported — properties must be on exported fields (capitalize) or on a Get<Name> method",
@@ -495,11 +628,15 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 					posStr(fset, name.Pos()), name.Name, posStr(fset, existing.Pos))
 			}
 			byName[name.Name] = &propertyInfo{
-				Name:     name.Name,
-				GoType:   f.Type,
-				Pos:      name.Pos(),
-				Source:   propertyFromField,
-				ReadOnly: hasReadOnly,
+				Name:       name.Name,
+				GoType:     f.Type,
+				Pos:        name.Pos(),
+				Source:     propertyFromField,
+				ReadOnly:   hasReadOnly,
+				Group:      group,
+				Subgroup:   subgroup,
+				Hint:       hint,
+				HintString: hintString,
 			}
 		}
 	}
@@ -544,6 +681,16 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 		if !doctag.Has(getter.Doc, "property") {
 			continue
 		}
+		// Method-form properties don't support grouping or export hints
+		// in v1 — those tags only make sense on a field, where codegen
+		// has full control of the synthesized accessor. Reject early so
+		// the user gets a clear error rather than silently-dropped tags.
+		for _, banned := range append([]string{"group", "subgroup"}, hintTagNames...) {
+			if doctag.Has(getter.Doc, banned) {
+				return fmt.Errorf("%s: @%s on method-form @property %s — grouping and export hints are field-form only in this release",
+					posStr(fset, getter.Pos), banned, getter.GoName)
+			}
+		}
 		if existing, dup := byName[propName]; dup {
 			// Conflict: the same Name appears as a field property AND a
 			// method property. The user has to pick one to avoid the
@@ -576,26 +723,93 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 	if len(byName) == 0 {
 		return nil
 	}
-	// Stable iteration order so generated bindings are byte-stable.
-	names := make([]string, 0, len(byName))
-	for n := range byName {
-		names = append(names, n)
+	// Source-order iteration with a tier split: ungrouped properties
+	// are emitted before grouped ones. Within each tier, source order
+	// is preserved. The split lets users freely intermix
+	// (method-form properties, which can't be grouped in v1, fall in
+	// the ungrouped tier without forcing a particular struct layout)
+	// while still meeting Godot's positional requirement that ungrouped
+	// properties not visually fall under a previously-registered group.
+	props := make([]*propertyInfo, 0, len(byName))
+	for _, p := range byName {
+		props = append(props, p)
 	}
-	sortStrings(names)
-	for _, n := range names {
-		ci.Properties = append(ci.Properties, byName[n])
+	sortByPos(props)
+
+	var ungrouped, grouped []*propertyInfo
+	for _, p := range props {
+		if p.Group == "" {
+			ungrouped = append(ungrouped, p)
+		} else {
+			grouped = append(grouped, p)
+		}
 	}
+	if err := validateGroupOrdering(fset, grouped); err != nil {
+		return err
+	}
+	ci.Properties = append(ci.Properties, ungrouped...)
+	ci.Properties = append(ci.Properties, grouped...)
 	return nil
 }
 
-// sortStrings is a thin wrapper so the import block doesn't grow `sort`
-// just for one call site.
-func sortStrings(ss []string) {
-	for i := 1; i < len(ss); i++ {
-		for j := i; j > 0 && ss[j-1] > ss[j]; j-- {
-			ss[j-1], ss[j] = ss[j], ss[j-1]
+// sortByPos orders props by source token.Pos. Insertion sort is fine
+// here — property counts are tiny and the generated binding stays
+// byte-stable.
+func sortByPos(props []*propertyInfo) {
+	for i := 1; i < len(props); i++ {
+		for j := i; j > 0 && props[j-1].Pos > props[j].Pos; j-- {
+			props[j-1], props[j] = props[j], props[j-1]
 		}
 	}
+}
+
+// validateGroupOrdering enforces contiguity for grouped properties:
+//   - Properties of the same group must be contiguous (no coming back
+//     to a group after switching away).
+//   - Subgroups cycle the same way within their parent group.
+//
+// Receives only grouped properties (ungrouped tier is split out
+// upstream). Rationale: Godot's inspector treats group registration
+// positionally — RegisterClassPropertyGroup("X") makes every
+// subsequent property belong to X until another group call. Allowing
+// non-contiguous grouping would force codegen to either re-register
+// groups (creating duplicate inspector headers) or reorder properties
+// (losing source-order intent within a group). The strict rule keeps
+// the user's source visually matching what they get in the inspector.
+func validateGroupOrdering(fset *token.FileSet, props []*propertyInfo) error {
+	var (
+		seenGroup    = map[string]token.Pos{}
+		seenSubgroup = map[string]token.Pos{}
+		curGroup     string
+		curSubgroup  string
+	)
+	for _, p := range props {
+		if p.Group != curGroup {
+			// Switching to a new group. If we've seen this group name
+			// before, the user is going back — reject so the inspector
+			// doesn't get duplicate headers.
+			if existing, ok := seenGroup[p.Group]; ok && existing != p.Pos {
+				return fmt.Errorf("%s: @group(%q) on %q reuses a group already left at %s — properties of the same group must be contiguous in source",
+					posStr(fset, p.Pos), p.Group, p.Name, posStr(fset, existing))
+			}
+			seenGroup[p.Group] = p.Pos
+			curGroup = p.Group
+			// New group resets subgroup tracking.
+			curSubgroup = ""
+			seenSubgroup = map[string]token.Pos{}
+		}
+		if p.Subgroup != curSubgroup {
+			if existing, ok := seenSubgroup[p.Subgroup]; ok && p.Subgroup != "" && existing != p.Pos {
+				return fmt.Errorf("%s: @subgroup(%q) on %q reuses a subgroup already left at %s — properties of the same subgroup must be contiguous",
+					posStr(fset, p.Pos), p.Subgroup, p.Name, posStr(fset, existing))
+			}
+			if p.Subgroup != "" {
+				seenSubgroup[p.Subgroup] = p.Pos
+			}
+			curSubgroup = p.Subgroup
+		}
+	}
+	return nil
 }
 
 // findEmbeddedParent walks the struct fields looking for a *single*

@@ -64,3 +64,38 @@ var (
 	emptyStringOnce sync.Once
 	emptyStringSlot *[StringSize]byte
 )
+
+// InternString returns a stable StringPtr for s. Mirrors InternStringName
+// but for the Godot `String` type — used by property registration to
+// supply hint_string payloads (export_range "0,100", export_enum
+// "A,B,C", export_file "*.png", etc.) without having the Go side
+// allocate a fresh String per registration call.
+//
+// Godot uses Strings as immutable inputs at register time, so we hold
+// each interned slot for the extension's lifetime; that's cheap because
+// the call site is once-per-class-load, not per frame. The empty string
+// is special-cased and goes through internedEmptyString() to share its
+// slot.
+func InternString(s string) StringPtr {
+	if s == "" {
+		return internedEmptyString()
+	}
+	stringInternMu.Lock()
+	defer stringInternMu.Unlock()
+	if p, ok := stringInternCache[s]; ok {
+		return p
+	}
+	slot := new([StringSize]byte)
+	p := StringPtr(unsafe.Pointer(slot))
+	StringNewWithUtf8(p, s)
+	if stringInternCache == nil {
+		stringInternCache = map[string]StringPtr{}
+	}
+	stringInternCache[s] = p
+	return p
+}
+
+var (
+	stringInternMu    sync.Mutex
+	stringInternCache map[string]StringPtr
+)

@@ -317,6 +317,48 @@ type Signals interface {
 	}
 }
 
+func TestEmitPropertyGroupAndHints(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct {
+	core.Node
+
+	// @group("Combat")
+	// @export_range(0, 100, 5)
+	// @property
+	Damage int64
+
+	// @group("Combat")
+	// @export_enum("Idle", "Run")
+	// @property
+	Mode int64
+
+	// @group("Visuals")
+	// @subgroup("Texture")
+	// @export_file("*.png")
+	// @property
+	Skin string
+}
+`
+	out := emitFor(t, src)
+
+	// One group registration per group transition; subgroup follows
+	// the group it nests under.
+	mustContain(t, out, "RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{")
+	mustContain(t, out, `Name:  "Combat",`)
+	mustContain(t, out, `Name:  "Visuals",`)
+	mustContain(t, out, "RegisterClassPropertySubgroup(gdextension.ClassPropertyGroupDef{")
+	mustContain(t, out, `Name:  "Texture",`)
+
+	// Hints render with the right enum const + payload.
+	mustContain(t, out, "Hint:       gdextension.PropertyHintRange,")
+	mustContain(t, out, `HintString: "0,100,5",`)
+	mustContain(t, out, "Hint:       gdextension.PropertyHintEnum,")
+	mustContain(t, out, `HintString: "Idle,Run",`)
+	mustContain(t, out, "Hint:       gdextension.PropertyHintFile,")
+	mustContain(t, out, `HintString: "*.png",`)
+}
+
 func mustContain(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

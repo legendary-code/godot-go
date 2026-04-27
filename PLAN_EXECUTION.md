@@ -546,8 +546,72 @@ This is the headline feature. Steps:
       noting: GDScript lambdas don't reliably mutate outer-scope
       locals from inside Callables — the smoke driver uses class-level
       fields + named methods instead.)
-- [ ] Property groups + export hints (`@group`/`@subgroup`/
-      `@export_range`/`@export_file`/...) — inspector-layout polish.
+- [x] **Property groups + export hints.** Field-form `@property`
+      declarations grow optional `@group("Name")` / `@subgroup("Name")`
+      tags and a small set of `@export_*` hint tags that surface
+      Godot's PropertyHint enum to the inspector:
+      | Tag                              | PropertyHint        | Hint string                    |
+      | -------------------------------- | ------------------- | ------------------------------ |
+      | `@export_range(0, 100)`          | RANGE               | `"0,100"`                      |
+      | `@export_range(0, 100, 5)`       | RANGE               | `"0,100,5"`                    |
+      | `@export_enum("A", "B", "C")`    | ENUM                | `"A,B,C"`                      |
+      | `@export_file("*.png", "*.jpg")` | FILE                | `"*.png,*.jpg"`                |
+      | `@export_dir`                    | DIR                 | `""`                           |
+      | `@export_multiline`              | MULTILINE_TEXT      | `""`                           |
+      | `@export_placeholder("Hint")`    | PLACEHOLDER_TEXT    | `"Hint"`                       |
+      Doctag parser bumped to support `@tag(args)` syntax with quoted
+      strings (`"..."`, `\"` and `\\` escapes); existing `@name foo`
+      style still works since whitespace also terminates the tag name.
+      `doctag.SplitArgs(value)` exposed for consumers that want
+      structured args; comma-separated, quote-aware.
+      Group/subgroup placement is positional in Godot — calls must
+      come BEFORE the properties they cover. Codegen tracks the
+      current group as it walks properties in source order; the first
+      property of each new group/subgroup carries `BeginGroup` /
+      `BeginSubgroup` flags that render the corresponding
+      `RegisterClassPropertyGroup` / `RegisterClassPropertySubgroup`
+      call inline before the property's own registration.
+      Validation rules (all errors carry file:line):
+      - `@group` is required on every property that wants grouping —
+        no positional inference, matching the framework's "explicit
+        > implicit" philosophy.
+      - `@subgroup` without `@group` is rejected (Godot nests
+        subgroups under groups; standalone subgroup degrades poorly).
+      - At most one `@export_*` hint per field.
+      - `@export_range` requires 2 or 3 args; `@export_enum` at
+        least one; `@export_placeholder` exactly one.
+      - Properties of the same group must be CONTIGUOUS in source
+        (going back to a group already left would create a duplicate
+        inspector header).
+      - `@group`, `@subgroup`, and `@export_*` are all rejected on
+        method-form `@property` declarations — field-form only in v1.
+      Property output order: ungrouped properties (whether field- or
+      method-form) come first, then grouped properties in source
+      order. Codegen splits the tiers automatically so the user
+      doesn't have to interleave their struct layout to match Godot's
+      register-ungrouped-first requirement.
+      ABI surface added in `internal/gdextension`:
+      - `RegisterClassPropertyGroup` + `RegisterClassPropertySubgroup`
+        Go wrappers + C trampolines + iface entries.
+      - `RegisterClassProperty` (and `ClassPropertyDef`) extended with
+        `Hint PropertyHint` + `HintString string` fields.
+      - `PropertyHint` typed enum with the 7 constants the codegen
+        emits (None/Range/Enum/File/Dir/MultilineText/PlaceholderText).
+      - `InternString` helper (mirrors `InternStringName`) for
+        hint-string interning.
+      - `VariantSize` constant — same shape as `StringSize` /
+        `StringNameSize`, used elsewhere too.
+      Smoke example exercises 6 hint types across 2 groups (one with
+      a Texture subgroup); test_mynode.gd queries
+      `ClassDB.class_get_property_list("MyNode", true)` and asserts
+      each property carries the expected `hint` enum value and
+      `hint_string` payload, plus a round-trip read/write through one
+      hinted property to confirm the bridge still works alongside the
+      inspector metadata. 11 new property/hint assertions; 37 total
+      passing; 5/5 stable runs. Deferred to follow-ups: group
+      `prefix` parameter, hint coverage on method-form properties,
+      the long tail of PropertyHint values (LAYERS_*, RESOURCE_TYPE,
+      COLOR_NO_ALPHA, FLAGS, etc.).
 - [ ] Editor-only behavior (tool scripts) and run-mode gating.
 - [ ] Hot-reload story (Godot 4.2+ supports it; verify Go's c-shared can
       participate or document the limitation).

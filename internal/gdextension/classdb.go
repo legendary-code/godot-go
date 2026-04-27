@@ -300,6 +300,11 @@ func RegisterClassMethod(def ClassMethodDef) {
 // Both Setter and Getter must name methods previously registered via
 // RegisterClassMethod on the same class. An empty Setter registers the
 // property as read-only.
+//
+// Hint + HintString control the inspector's editor — RANGE with "0,100"
+// renders as a slider, ENUM with "A,B,C" as a dropdown, FILE with
+// "*.png,*.jpg" as a file picker, etc. Default is HintNone with empty
+// HintString.
 type ClassPropertyDef struct {
 	// Class names a previously-registered extension class.
 	Class string
@@ -311,6 +316,12 @@ type ClassPropertyDef struct {
 	// empty for read-only properties; Getter is required.
 	Setter string
 	Getter string
+	// Hint + HintString are the property's editor metadata. See
+	// PropertyHint constants in types.go for supported values; payload
+	// format is hint-specific and matches what GDScript's `@export_*`
+	// annotations produce.
+	Hint       PropertyHint
+	HintString string
 }
 
 // RegisterClassProperty wires a property on an extension class to its
@@ -329,12 +340,13 @@ func RegisterClassProperty(def ClassPropertyDef) {
 	propertyName := InternStringName(def.Name)
 	getterName := InternStringName(def.Getter)
 	emptyName := InternStringName("")
-	emptyStr := internedEmptyString()
 
 	setterName := emptyName
 	if def.Setter != "" {
 		setterName = InternStringName(def.Setter)
 	}
+
+	hintStr := InternString(def.HintString)
 
 	C.godot_go_register_extension_class_property(iface.classdbRegisterExtensionClassProperty,
 		C.GDExtensionClassLibraryPtr(iface.library),
@@ -342,8 +354,55 @@ func RegisterClassProperty(def ClassPropertyDef) {
 		C.GDExtensionStringNamePtr(propertyName),
 		C.GDExtensionConstStringNamePtr(setterName),
 		C.GDExtensionConstStringNamePtr(getterName),
-		C.GDExtensionConstStringPtr(emptyStr),
-		C.uint32_t(def.Type))
+		C.GDExtensionConstStringPtr(hintStr),
+		C.uint32_t(def.Type),
+		C.uint32_t(def.Hint))
+}
+
+// ClassPropertyGroupDef registers a property group / subgroup header on
+// an extension class. Group registration is positional: properties
+// registered AFTER this call belong to the group until the next group
+// or subgroup is registered. Phase 6 always passes empty Prefix; a
+// future iteration may surface it.
+type ClassPropertyGroupDef struct {
+	Class  string
+	Name   string
+	Prefix string
+}
+
+// RegisterClassPropertyGroup adds a property group header to an
+// extension class. Subsequent RegisterClassProperty calls fall under
+// this group in the inspector until another group/subgroup is
+// registered.
+func RegisterClassPropertyGroup(def ClassPropertyGroupDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassPropertyGroup: Class and Name are required")
+	}
+	className := InternStringName(def.Class)
+	groupName := InternString(def.Name)
+	prefix := InternString(def.Prefix)
+	C.godot_go_register_extension_class_property_group(iface.classdbRegisterExtensionClassPropertyGroup,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionConstStringPtr(groupName),
+		C.GDExtensionConstStringPtr(prefix))
+}
+
+// RegisterClassPropertySubgroup adds a property subgroup header — nested
+// under the current group in the inspector. Same positional rules as
+// RegisterClassPropertyGroup.
+func RegisterClassPropertySubgroup(def ClassPropertyGroupDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassPropertySubgroup: Class and Name are required")
+	}
+	className := InternStringName(def.Class)
+	subName := InternString(def.Name)
+	prefix := InternString(def.Prefix)
+	C.godot_go_register_extension_class_property_subgroup(iface.classdbRegisterExtensionClassPropertySubgroup,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionConstStringPtr(subName),
+		C.GDExtensionConstStringPtr(prefix))
 }
 
 // ClassSignalDef registers a signal on a previously-registered class.

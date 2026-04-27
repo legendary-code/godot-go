@@ -163,6 +163,24 @@ const (
 	ArgMetaObjectIsRequired MethodArgumentMetadata = C.GDEXTENSION_METHOD_ARGUMENT_METADATA_OBJECT_IS_REQUIRED
 )
 
+// PropertyHint mirrors the global PropertyHint enum from
+// extension_api.json. Values are sourced from the JSON, not from the
+// gdextension_interface.h header (the header just declares the field
+// type as uint32). Phase 6 surfaces the hints reachable through the
+// codegen `@export_*` doctags; the rest are still usable via direct
+// ClassPropertyDef construction in user code.
+type PropertyHint uint32
+
+const (
+	PropertyHintNone            PropertyHint = 0
+	PropertyHintRange           PropertyHint = 1
+	PropertyHintEnum            PropertyHint = 2
+	PropertyHintFile            PropertyHint = 13
+	PropertyHintDir             PropertyHint = 14
+	PropertyHintMultilineText   PropertyHint = 18
+	PropertyHintPlaceholderText PropertyHint = 20
+)
+
 // Opaque pointer aliases. They carry no compile-time type safety on the C side
 // (Godot's API is in C), but on the Go side they document intent and let us
 // catch mix-ups (e.g. passing a Variant where a String is expected).

@@ -472,8 +472,9 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionStringNamePtr p_property_name,
                                                 GDExtensionConstStringNamePtr p_setter,
                                                 GDExtensionConstStringNamePtr p_getter,
-                                                GDExtensionConstStringPtr empty_string,
-                                                uint32_t property_type) {
+                                                GDExtensionConstStringPtr hint_string,
+                                                uint32_t property_type,
+                                                uint32_t property_hint) {
     /* PropertyInfo lives on the C stack so the Go caller doesn't pass a Go-
      * allocated struct containing pointers. The interned StringName/String
      * pointers come in directly as args (cgo permits one Go pointer per arg
@@ -482,11 +483,27 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
     info.type        = (GDExtensionVariantType)property_type;
     info.name        = p_property_name;
     info.class_name  = (GDExtensionStringNamePtr)p_class_name;
-    info.hint        = 0;
-    info.hint_string = (GDExtensionStringPtr)empty_string;
+    info.hint        = property_hint;
+    info.hint_string = (GDExtensionStringPtr)hint_string;
     /* PROPERTY_USAGE_DEFAULT: STORAGE | EDITOR. */
     info.usage       = 6;
     fn(p_library, p_class_name, &info, p_setter, p_getter);
+}
+
+void godot_go_register_extension_class_property_group(GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup fn,
+                                                       GDExtensionClassLibraryPtr p_library,
+                                                       GDExtensionConstStringNamePtr p_class_name,
+                                                       GDExtensionConstStringPtr p_group_name,
+                                                       GDExtensionConstStringPtr p_prefix) {
+    fn(p_library, p_class_name, p_group_name, p_prefix);
+}
+
+void godot_go_register_extension_class_property_subgroup(GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup fn,
+                                                          GDExtensionClassLibraryPtr p_library,
+                                                          GDExtensionConstStringNamePtr p_class_name,
+                                                          GDExtensionConstStringPtr p_subgroup_name,
+                                                          GDExtensionConstStringPtr p_prefix) {
+    fn(p_library, p_class_name, p_subgroup_name, p_prefix);
 }
 
 void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegisterExtensionClassSignal fn,
