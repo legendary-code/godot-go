@@ -643,8 +643,27 @@ This is the headline feature. Steps:
       deferred — would require a separate driver run with `--editor`,
       not worth the test-infrastructure cost; the codegen-level test
       already proves the registration goes to the right level.
-- [ ] Hot-reload story (Godot 4.2+ supports it; verify Go's c-shared can
-      participate or document the limitation).
+- [x] **Hot-reload story.** Documented as an unsupported feature in
+      `docs/hot-reload.md`. Godot 4.2+ provides the reload machinery
+      (`recreate_instance_func` per class, `NOTIFICATION_EXTENSION_RELOADED`
+      on Object, a clean tear-down/re-init cycle), and Rust/C++
+      extensions participate transparently — but Go's runtime can't
+      be cleanly unloaded once initialized: scheduler, GC, sysmon,
+      per-P workers, and global runtime state are permanent for the
+      process's lifetime. `FreeLibrary`/`dlclose` unmaps our code
+      pages while Go's runtime threads keep running, which crashes
+      immediately. Compounding this: `internal/gdextension/shutdown.go`
+      calls `os.Exit(0)` at Core deinit specifically to dodge the
+      Windows DLL_PROCESS_DETACH race we hit during the Phase 5e
+      shutdown investigation, which is incompatible with reload by
+      definition. The doc covers the failure mode, what partial
+      workflows still work (GDScript reload, resource changes,
+      project reopens), the recommended dev loop (edit → rebuild →
+      restart Godot), and the only architecture that could support
+      hot-reload — graphics.gd-style host inversion (Go binary loads
+      libgodot via LoadLibrary). godot-go is committed to the
+      c-shared model and accepts the no-hot-reload trade-off as the
+      cost of natural Godot project integration.
 - [ ] Goroutine + Godot main-thread interaction guidance — most engine
       calls must happen on the main thread; codify with a `runtime.Lock`
       helper or doc section.
