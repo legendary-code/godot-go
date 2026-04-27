@@ -185,4 +185,19 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata);
 
+/* Property registration. Mirrors classdb_register_extension_class_property —
+ * the engine wires (class, property_name) → (setter_method, getter_method)
+ * already registered through godot_go_register_extension_class_method. The
+ * setter / getter are looked up by StringName at register time, so the
+ * methods MUST be registered first. PropertyInfo is built C-side so the Go
+ * caller only passes scalars + the interned StringName/String pointers. */
+void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegisterExtensionClassProperty fn,
+                                                GDExtensionClassLibraryPtr p_library,
+                                                GDExtensionConstStringNamePtr p_class_name,
+                                                GDExtensionStringNamePtr p_property_name,
+                                                GDExtensionConstStringNamePtr p_setter,
+                                                GDExtensionConstStringNamePtr p_getter,
+                                                GDExtensionConstStringPtr empty_string,
+                                                uint32_t property_type);
+
 #endif /* GODOT_GO_SHIM_H */

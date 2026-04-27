@@ -246,6 +246,197 @@ type Wrong struct {
 	mustFailDiscover(t, src, "single-inheritance")
 }
 
+func TestDiscoverPropertyFieldForm(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @property
+	Health int64
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	p := d.MainClass.Properties[0]
+	if p.Name != "Health" {
+		t.Errorf("Name = %q, want Health", p.Name)
+	}
+	if p.Source != propertyFromField {
+		t.Errorf("Source = %v, want field-form", p.Source)
+	}
+	if p.ReadOnly {
+		t.Errorf("ReadOnly = true, want false (no @readonly)")
+	}
+}
+
+func TestDiscoverPropertyFieldFormReadOnly(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @readonly
+	// @property
+	Health int64
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 || !d.MainClass.Properties[0].ReadOnly {
+		t.Fatalf("expected one read-only property, got %+v", d.MainClass.Properties)
+	}
+}
+
+func TestDiscoverPropertyMethodForm(t *testing.T) {
+	// Read-write method form: BOTH GetX and SetX must carry @property.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+func (n *MyNode) GetHealth() int64 { return 0 }
+// @property
+func (n *MyNode) SetHealth(v int64) {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	p := d.MainClass.Properties[0]
+	if p.Name != "Health" {
+		t.Errorf("Name = %q, want Health", p.Name)
+	}
+	if p.Source != propertyFromMethod {
+		t.Errorf("Source = %v, want method-form", p.Source)
+	}
+	if p.ReadOnly {
+		t.Errorf("ReadOnly = true, want false (Set<X> with @property exists)")
+	}
+}
+
+func TestDiscoverPropertyMethodFormSetterUntagged(t *testing.T) {
+	// GetX has @property but SetX does NOT — pairing requires both. The
+	// property is read-only; SetX is a regular method (registered, but
+	// not wired as the property's setter).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+func (n *MyNode) GetHealth() int64 { return 0 }
+func (n *MyNode) SetHealth(v int64) {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	if !d.MainClass.Properties[0].ReadOnly {
+		t.Errorf("ReadOnly = false, want true (SetHealth lacks @property)")
+	}
+}
+
+func TestDiscoverPropertyMethodFormReadOnly(t *testing.T) {
+	// No matching SetHealth → read-only inferred.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+func (n *MyNode) GetHealth() int64 { return 0 }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 || !d.MainClass.Properties[0].ReadOnly {
+		t.Fatalf("expected read-only inferred, got %+v", d.MainClass.Properties)
+	}
+}
+
+func TestDiscoverPropertyConflict(t *testing.T) {
+	// Same name as field-form AND method-form → ambiguous.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @property
+	Health int64
+}
+// @property
+func (n *MyNode) GetHealth() int64 { return 0 }
+`
+	mustFailDiscover(t, src, "ambiguous @property")
+}
+
+func TestDiscoverPropertyLowercaseFieldRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @property
+	health int64
+}
+`
+	mustFailDiscover(t, src, "unexported")
+}
+
+func TestDiscoverReadOnlyOnFieldWithoutPropertyRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct {
+	core.Node
+	// @readonly
+	Foo int64
+}
+`
+	mustFailDiscover(t, src, "@readonly without @property")
+}
+
+func TestDiscoverReadOnlyOnMethodRejected(t *testing.T) {
+	// @readonly on a method-form @property is redundant: read-only is
+	// already inferred from the absence of a matching Set<X>. Discovery
+	// rejects it so users don't end up with two ways to say the same
+	// thing.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+// @readonly
+func (n *MyNode) GetHealth() int64 { return 0 }
+`
+	mustFailDiscover(t, src, "@readonly on method")
+}
+
+func TestDiscoverPropertyMethodFormReadWrite(t *testing.T) {
+	// User writes both Get and Set, both tagged @property. Codegen
+	// pairs them and registers a read-write property.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+func (n *MyNode) GetTag() string { return "" }
+// @property
+func (n *MyNode) SetTag(v string) {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("properties = %+v", d.MainClass.Properties)
+	}
+	p := d.MainClass.Properties[0]
+	if p.Source != propertyFromMethod {
+		t.Errorf("Source = %v, want method-form", p.Source)
+	}
+	if p.ReadOnly {
+		t.Errorf("ReadOnly = true, want false (SetTag tagged @property)")
+	}
+}
+
+func TestDiscoverPropertyOrphanSetter(t *testing.T) {
+	// @property on Set<X> with no matching Get<X> @property is an error
+	// — there's no property to attach the setter to.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+// @property
+func (n *MyNode) SetHealth(v int64) {}
+`
+	mustFailDiscover(t, src, "@property on SetHealth")
+}
+
 func TestPascalToSnake(t *testing.T) {
 	cases := []struct {
 		in, want string

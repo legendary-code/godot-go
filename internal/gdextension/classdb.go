@@ -292,6 +292,60 @@ func RegisterClassMethod(def ClassMethodDef) {
 		argMetaPtr)
 }
 
+// ClassPropertyDef registers a property on a previously-registered class.
+// Phase 6: properties are wired by name to existing methods — the engine's
+// classdb_register_extension_class_property API takes (class, info, setter,
+// getter) where setter/getter are method names looked up at register time.
+//
+// Both Setter and Getter must name methods previously registered via
+// RegisterClassMethod on the same class. An empty Setter registers the
+// property as read-only.
+type ClassPropertyDef struct {
+	// Class names a previously-registered extension class.
+	Class string
+	// Name is the engine-visible property name (snake_case by convention).
+	Name string
+	// Type is the Godot variant type the property carries.
+	Type VariantType
+	// Setter / Getter name methods registered on Class. Setter may be
+	// empty for read-only properties; Getter is required.
+	Setter string
+	Getter string
+}
+
+// RegisterClassProperty wires a property on an extension class to its
+// getter/setter methods. The methods must already be registered through
+// RegisterClassMethod on the same class — the host resolves the names at
+// register time and warns if either is missing.
+func RegisterClassProperty(def ClassPropertyDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassProperty: Class and Name are required")
+	}
+	if def.Getter == "" {
+		panic("gdextension.RegisterClassProperty: Getter is required")
+	}
+
+	className := InternStringName(def.Class)
+	propertyName := InternStringName(def.Name)
+	getterName := InternStringName(def.Getter)
+	emptyName := InternStringName("")
+	emptyStr := internedEmptyString()
+
+	setterName := emptyName
+	if def.Setter != "" {
+		setterName = InternStringName(def.Setter)
+	}
+
+	C.godot_go_register_extension_class_property(iface.classdbRegisterExtensionClassProperty,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionStringNamePtr(propertyName),
+		C.GDExtensionConstStringNamePtr(setterName),
+		C.GDExtensionConstStringNamePtr(getterName),
+		C.GDExtensionConstStringPtr(emptyStr),
+		C.uint32_t(def.Type))
+}
+
 // UnregisterClass tears down a previously-registered class. Call from the
 // matching deinit callback so the host's classdb stays consistent across
 // hot-reloads. Unregistering a parent before its inheritors is rejected

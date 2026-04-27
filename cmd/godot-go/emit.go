@@ -36,6 +36,15 @@ func emit(w io.Writer, d *discovered) error {
 		return err
 	}
 
+	accessors, propMethods, properties, err := buildEmitProperties(d.MainClass.Properties, enumSet)
+	if err != nil {
+		return err
+	}
+	supported = append(supported, propMethods...)
+	if len(accessors) > 0 || len(properties) > 0 {
+		needsVariant = true
+	}
+
 	data := emitData{
 		PackageName:  d.PackageName,
 		SourceFile:   filepath.Base(d.FilePath),
@@ -44,6 +53,8 @@ func emit(w io.Writer, d *discovered) error {
 		Lower:        lowerFirst(d.MainClass.Name),
 		IsAbstract:   d.MainClass.IsAbstract,
 		Methods:      supported,
+		Accessors:    accessors,
+		Properties:   properties,
 		NeedsVariant: needsVariant,
 	}
 
@@ -67,7 +78,30 @@ type emitData struct {
 	Lower        string // class name with first rune lowercased — used for unexported helpers
 	IsAbstract   bool   // @abstract on the main class — passed through to RegisterClass
 	Methods      []emitMethod
-	NeedsVariant bool // any method touches a primitive (gates the variant import)
+	Accessors    []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
+	Properties   []emitProperty // RegisterClassProperty calls (one per @property, both forms)
+	NeedsVariant bool           // any method touches a primitive (gates the variant import)
+}
+
+// emitAccessor is one synthesized Go method that backs an exported field
+// for a field-form @property. The bindings file emits these as plain Go
+// source so they pass through the existing method-registration pipeline
+// — `self.GetHealth()` is just another method call from the trampoline's
+// perspective.
+type emitAccessor struct {
+	Name     string // "GetHealth" or "SetHealth"
+	Field    string // "Health"
+	GoType   string // type as it should render in source — "int64", "string", "Language" etc.
+	IsSetter bool
+}
+
+// emitProperty is one RegisterClassProperty literal. Setter is empty for
+// read-only properties.
+type emitProperty struct {
+	GodotName string // snake_case property name as Godot sees it
+	Type      string // bare const name, e.g. "VariantTypeInt"
+	Setter    string // snake_case setter method name (empty for read-only)
+	Getter    string // snake_case getter method name (always set)
 }
 
 type emitMethod struct {
@@ -212,6 +246,107 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool) (emitMethod, error) {
 	return em, nil
 }
 
+// buildEmitProperties walks the discovered @property declarations and
+// returns:
+//   - the synthesized accessor source for field-form properties (renders
+//     as plain Go in the bindings file before the registrations);
+//   - the synthesized emitMethods for those accessors (so they go through
+//     the same RegisterClassMethod path user methods do — no special
+//     dispatch in the template);
+//   - the per-property RegisterClassProperty entries (both forms).
+//
+// Method-form properties contribute a property entry only — the user's
+// Get/Set methods already live in the source file and were classified by
+// classifyForEmit upstream.
+func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
+	accessors []emitAccessor,
+	methods []emitMethod,
+	out []emitProperty,
+	err error,
+) {
+	for _, p := range props {
+		info, terr := resolveType(p.GoType, enums)
+		if terr != nil {
+			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
+		}
+		getterGoName := "Get" + p.Name
+		getterGodotName := pascalToSnake(getterGoName)
+		setterGoName := "Set" + p.Name
+		setterGodotName := pascalToSnake(setterGoName)
+		propGodotName := pascalToSnake(p.Name)
+
+		entry := emitProperty{
+			GodotName: propGodotName,
+			Type:      info.VariantType,
+			Getter:    getterGodotName,
+		}
+		if !p.ReadOnly {
+			entry.Setter = setterGodotName
+		}
+		out = append(out, entry)
+
+		if p.Source != propertyFromField {
+			continue
+		}
+		// Field form: synthesize the Go accessors and the matching
+		// emitMethods. The synthesized methods dispatch via direct field
+		// access — `return n.<Field>` and `n.<Field> = v` — so we don't
+		// need a template branch; the emit pipeline's `self.GetX()` /
+		// `self.SetX(arg0)` calls just resolve to the synthesized methods
+		// in the same package.
+		accessors = append(accessors, emitAccessor{
+			Name:   getterGoName,
+			Field:  p.Name,
+			GoType: info.GoType,
+		})
+		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info))
+
+		if p.ReadOnly {
+			continue
+		}
+		accessors = append(accessors, emitAccessor{
+			Name:     setterGoName,
+			Field:    p.Name,
+			GoType:   info.GoType,
+			IsSetter: true,
+		})
+		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info))
+	}
+	return accessors, methods, out, nil
+}
+
+// syntheticGetterMethod hand-builds an emitMethod equivalent to what
+// classifyForEmit would produce for `func (n *T) Get<Name>() <Type>`.
+// Dispatch uses the same `result := self.<GoName>()` shape the template
+// already emits — the synthesized Go method we render alongside is what
+// closes the loop.
+func syntheticGetterMethod(goName, godotName string, info *typeInfo) emitMethod {
+	return emitMethod{
+		GoName:        goName,
+		GodotName:     godotName,
+		HasReturn:     true,
+		ReturnType:    info.VariantType,
+		ReturnMeta:    info.ArgMeta,
+		PtrCallReturn: info.PtrCallWriteReturn("result"),
+		CallReturn:    info.CallWriteReturn("result"),
+	}
+}
+
+// syntheticSetterMethod hand-builds an emitMethod equivalent to
+// `func (n *T) Set<Name>(v <Type>)` — one arg, no return.
+func syntheticSetterMethod(goName, godotName string, info *typeInfo) emitMethod {
+	return emitMethod{
+		GoName:          goName,
+		GodotName:       godotName,
+		PtrCallArgReads: []string{info.PtrCallReadArg(0)},
+		CallArgReads:    []string{info.CallReadArg(0)},
+		DispatchArgs:    "arg0",
+		HasArgs:         true,
+		ArgTypes:        []string{info.VariantType},
+		ArgMetas:        []string{info.ArgMeta},
+	}
+}
+
 // fieldsOf is a nil-safe accessor for *ast.FieldList.List.
 func fieldsOf(fl *ast.FieldList) []*ast.Field {
 	if fl == nil {
@@ -279,7 +414,13 @@ func release{{.Class}}Instance(handle unsafe.Pointer) {
 	defer {{.Lower}}InstancesMu.Unlock()
 	delete({{.Lower}}Instances, uintptr(handle))
 }
-
+{{range .Accessors}}
+{{if .IsSetter -}}
+func (n *{{$.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
+{{else -}}
+func (n *{{$.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
+{{end -}}
+{{end}}
 func register{{.Class}}() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:      "{{.Class}}",
@@ -421,6 +562,17 @@ func register{{.Class}}() {
 		{{- end}}
 	})
 	{{- end}}
+{{end}}
+{{- range .Properties}}
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "{{$.Class}}",
+		Name:   "{{.GodotName}}",
+		Type:   gdextension.{{.Type}},
+		{{- if .Setter}}
+		Setter: "{{.Setter}}",
+		{{- end}}
+		Getter: "{{.Getter}}",
+	})
 {{end}}}
 
 func init() {

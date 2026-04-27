@@ -40,8 +40,51 @@ type classInfo struct {
 	IsAbstract bool
 	IsInner    bool
 
-	Methods []*methodInfo
+	Methods    []*methodInfo
+	Properties []*propertyInfo
 }
+
+// propertyInfo is one @property declaration on the class. There are two
+// surface forms:
+//
+//   - **Field form:** an exported struct field carries `@property` (and
+//     optionally `@readonly`). Codegen synthesizes Get<Name> + Set<Name>
+//     methods that read / write the field, registers them as ClassDB
+//     methods, then registers the property linking name → those methods.
+//   - **Method form:** the user already wrote a Get<Name> method (with
+//     `@property` on it). If a Set<Name> method also exists in the source
+//     it's wired as the setter; otherwise the property is read-only. The
+//     user owns the backing — we just emit RegisterClassProperty.
+//
+// Conflict rule: if the same Name appears in both forms (an exported field
+// `Foo` AND a `GetFoo` method), discovery errors with file:line. Pick one.
+type propertyInfo struct {
+	// Name is the bare property identifier in PascalCase (e.g. "Health").
+	// The Godot name is snake_case(Name) ("health"); generated method
+	// names are GetHealth / SetHealth.
+	Name string
+	// GoType is the property's Go type as it appears in the source (the
+	// field type for field form, the getter return type for method form).
+	GoType ast.Expr
+	// Pos points to the source declaration that triggered the property —
+	// the field declaration for field form, the GetX method for method
+	// form. Used for error reporting.
+	Pos token.Pos
+	// Source distinguishes how the property was declared. Field form
+	// emits synthesized Get/Set; method form just registers the property.
+	Source propertySource
+	// ReadOnly is true when @readonly accompanies @property (field form),
+	// or when no Set<Name> method exists alongside the user's Get<Name>
+	// (method form).
+	ReadOnly bool
+}
+
+type propertySource int
+
+const (
+	propertyFromField propertySource = iota
+	propertyFromMethod
+)
 
 type methodInfo struct {
 	GoName       string // exact identifier in the source
@@ -275,6 +318,18 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
+	// Properties: walk the main class's struct fields and methods for
+	// @property declarations. Two surface forms (see propertyInfo):
+	//   - field form: an exported field with @property. We synthesize
+	//     getter/setter methods at emit time.
+	//   - method form: a Get<Name> method with @property. The user owns
+	//     the getter (and optional setter); we just register.
+	// The two forms must not collide for the same property name — that
+	// would leave the binding ambiguous.
+	if err := collectProperties(fset, d.MainClass); err != nil {
+		return nil, err
+	}
+
 	// Validate: a non-inner class must have a parent. Inner classes don't.
 	if d.MainClass.Parent == "" {
 		return nil, fmt.Errorf("%s: class %s has no recognized base class — embed a framework type (e.g. core.Node) to inherit from a Godot class",
@@ -282,6 +337,162 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	}
 
 	return d, nil
+}
+
+// collectProperties walks the main class's struct fields (for the field
+// form) and its already-collected methods (for the method form), producing
+// the consolidated propertyInfo slice on classInfo.
+//
+// Field form:  exported field tagged with @property → synthesize get/set.
+//              An additional @readonly tag drops the setter.
+// Method form: a method named GetX with @property → register; if SetX
+//              exists alongside it, wire as setter, else read-only is
+//              inferred. @readonly is NOT honored on methods — it's
+//              redundant with the absence of SetX, and accepting it
+//              would just create two ways to say the same thing.
+//
+// Conflict: a property name appearing in both forms is rejected here.
+//
+// Misuse caught here:
+//   - @readonly on a method (any method, regardless of @property)
+//   - @readonly on a field without @property
+//   - @property on an unexported field
+//   - field- and method-form colliding on the same name
+func collectProperties(fset *token.FileSet, ci *classInfo) error {
+	st, ok := ci.Decl.Type.(*ast.StructType)
+	if !ok || st.Fields == nil {
+		return nil
+	}
+
+	byName := map[string]*propertyInfo{}
+
+	// Field form. Each ast.Field can declare multiple names sharing one
+	// type; iterate names so each property has its own propertyInfo.
+	for _, f := range st.Fields.List {
+		if f.Doc == nil || len(f.Names) == 0 {
+			continue
+		}
+		tags := doctag.Parse(f.Doc)
+		hasProperty := doctag.Has(tags, "property")
+		hasReadOnly := doctag.Has(tags, "readonly")
+		if hasReadOnly && !hasProperty {
+			return fmt.Errorf("%s: @readonly without @property — the @readonly tag only applies to fields also tagged @property",
+				posStr(fset, f.Pos()))
+		}
+		if !hasProperty {
+			continue
+		}
+		for _, name := range f.Names {
+			if !name.IsExported() {
+				return fmt.Errorf("%s: field %q has @property but is unexported — properties must be on exported fields (capitalize) or on a Get<Name> method",
+					posStr(fset, name.Pos()), name.Name)
+			}
+			if existing, dup := byName[name.Name]; dup {
+				return fmt.Errorf("%s: duplicate @property %q (also at %s)",
+					posStr(fset, name.Pos()), name.Name, posStr(fset, existing.Pos))
+			}
+			byName[name.Name] = &propertyInfo{
+				Name:     name.Name,
+				GoType:   f.Type,
+				Pos:      name.Pos(),
+				Source:   propertyFromField,
+				ReadOnly: hasReadOnly,
+			}
+		}
+	}
+
+	// Method form. A property is keyed off Get<Name> with @property; the
+	// matching Set<Name> ALSO needs @property to be wired as the setter
+	// — explicit on both sides, no silent pairing-by-name. @readonly on
+	// any method is rejected: it's either redundant (when no SetX exists,
+	// the property is already read-only) or contradictory (when SetX
+	// exists), so it never carries useful information here.
+	getters := map[string]*methodInfo{}
+	setters := map[string]*methodInfo{}
+	for _, m := range ci.Methods {
+		if doctag.Has(m.Doc, "readonly") {
+			return fmt.Errorf("%s: @readonly on method %s — @readonly only applies to fields tagged @property; method-form properties are read-only by virtue of having no matching Set<Name> (also tagged @property)",
+				posStr(fset, m.Pos), m.GoName)
+		}
+		switch {
+		case strings.HasPrefix(m.GoName, "Get") && len(m.GoName) > 3:
+			getters[strings.TrimPrefix(m.GoName, "Get")] = m
+		case strings.HasPrefix(m.GoName, "Set") && len(m.GoName) > 3:
+			setters[strings.TrimPrefix(m.GoName, "Set")] = m
+		}
+	}
+
+	// Orphan setters: @property on Set<X> without a matching Get<X>
+	// also tagged @property is meaningless — there's no property to
+	// attach it to. Treating it as a regular method would silently
+	// drop the user's intent, so we surface it.
+	for propName, setter := range setters {
+		if !doctag.Has(setter.Doc, "property") {
+			continue
+		}
+		getter, hasGetter := getters[propName]
+		if !hasGetter || !doctag.Has(getter.Doc, "property") {
+			return fmt.Errorf("%s: @property on Set%s but no matching Get%s with @property — both halves of a method-form property must be tagged @property",
+				posStr(fset, setter.Pos), propName, propName)
+		}
+	}
+
+	for propName, getter := range getters {
+		if !doctag.Has(getter.Doc, "property") {
+			continue
+		}
+		if existing, dup := byName[propName]; dup {
+			// Conflict: the same Name appears as a field property AND a
+			// method property. The user has to pick one to avoid the
+			// binding being ambiguous about which getter to call.
+			return fmt.Errorf("%s: ambiguous @property %q — declared as both an exported field (at %s) and a Get%s method; pick one form",
+				posStr(fset, getter.Pos), propName, posStr(fset, existing.Pos), propName)
+		}
+		// Determine the property type from the getter's return signature.
+		results := fieldsOf(getter.Decl.Type.Results)
+		if len(results) != 1 || len(results[0].Names) > 1 {
+			return fmt.Errorf("%s: @property method Get%s must return exactly one value",
+				posStr(fset, getter.Pos), propName)
+		}
+		// The setter only counts when it ALSO has @property — explicit
+		// on both sides. A Set<X> without @property is just a regular
+		// method named set_<x> that happens to share the property's
+		// stem; it gets registered through the normal method path but
+		// is not wired as the property's setter.
+		setter, hasSetter := setters[propName]
+		setterIsTagged := hasSetter && doctag.Has(setter.Doc, "property")
+		byName[propName] = &propertyInfo{
+			Name:     propName,
+			GoType:   results[0].Type,
+			Pos:      getter.Pos,
+			Source:   propertyFromMethod,
+			ReadOnly: !setterIsTagged,
+		}
+	}
+
+	if len(byName) == 0 {
+		return nil
+	}
+	// Stable iteration order so generated bindings are byte-stable.
+	names := make([]string, 0, len(byName))
+	for n := range byName {
+		names = append(names, n)
+	}
+	sortStrings(names)
+	for _, n := range names {
+		ci.Properties = append(ci.Properties, byName[n])
+	}
+	return nil
+}
+
+// sortStrings is a thin wrapper so the import block doesn't grow `sort`
+// just for one call site.
+func sortStrings(ss []string) {
+	for i := 1; i < len(ss); i++ {
+		for j := i; j > 0 && ss[j-1] > ss[j]; j-- {
+			ss[j-1], ss[j] = ss[j], ss[j-1]
+		}
+	}
 }
 
 // findEmbeddedParent walks the struct fields looking for a *single*

@@ -204,6 +204,78 @@ func (n *N) Hello() {}
 	mustContain(t, out, `Name:  "shout",`)
 }
 
+func TestEmitPropertyFieldForm(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct {
+	core.Node
+	// @property
+	Health int64
+}
+`
+	out := emitFor(t, src)
+
+	// Synthesized accessor methods land in the bindings file as plain Go.
+	mustContain(t, out, "func (n *N) GetHealth() int64 { return n.Health }")
+	mustContain(t, out, "func (n *N) SetHealth(v int64) { n.Health = v }")
+	// The synthesized methods are registered through the regular method
+	// path, by their snake-case names.
+	mustContain(t, out, `Name:  "get_health",`)
+	mustContain(t, out, `Name:  "set_health",`)
+	// Property registration links the property to those method names.
+	mustContain(t, out, "RegisterClassProperty(gdextension.ClassPropertyDef{")
+	mustContain(t, out, `Name:   "health",`)
+	mustContain(t, out, `Setter: "set_health",`)
+	mustContain(t, out, `Getter: "get_health",`)
+}
+
+func TestEmitPropertyFieldFormReadOnly(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct {
+	core.Node
+	// @readonly
+	// @property
+	Health int64
+}
+`
+	out := emitFor(t, src)
+
+	// Read-only: getter is synthesized but the setter must NOT be.
+	mustContain(t, out, "func (n *N) GetHealth() int64 { return n.Health }")
+	if strings.Contains(out, "func (n *N) SetHealth") {
+		t.Errorf("read-only property must not synthesize a setter:\n%s", out)
+	}
+	if strings.Contains(out, `"set_health"`) {
+		t.Errorf("read-only property must not register a setter method:\n%s", out)
+	}
+	mustContain(t, out, `Getter: "get_health",`)
+	if strings.Contains(out, "Setter:") {
+		t.Errorf("read-only property registration must omit Setter field:\n%s", out)
+	}
+}
+
+func TestEmitPropertyMethodForm(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+// @property
+func (n *N) GetHealth() int64 { return 0 }
+// @property
+func (n *N) SetHealth(v int64) {}
+`
+	out := emitFor(t, src)
+
+	// Method form: codegen does NOT synthesize accessors — the user
+	// already wrote them. We just register the property.
+	if strings.Contains(out, "{ return n.Health }") {
+		t.Errorf("method-form property must not re-synthesize the user's getter:\n%s", out)
+	}
+	mustContain(t, out, "RegisterClassProperty(gdextension.ClassPropertyDef{")
+	mustContain(t, out, `Setter: "set_health",`)
+	mustContain(t, out, `Getter: "get_health",`)
+}
+
 func mustContain(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

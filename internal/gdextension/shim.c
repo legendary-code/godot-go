@@ -465,3 +465,26 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
     }
     fn(p_library, p_class_name, &info);
 }
+
+void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegisterExtensionClassProperty fn,
+                                                GDExtensionClassLibraryPtr p_library,
+                                                GDExtensionConstStringNamePtr p_class_name,
+                                                GDExtensionStringNamePtr p_property_name,
+                                                GDExtensionConstStringNamePtr p_setter,
+                                                GDExtensionConstStringNamePtr p_getter,
+                                                GDExtensionConstStringPtr empty_string,
+                                                uint32_t property_type) {
+    /* PropertyInfo lives on the C stack so the Go caller doesn't pass a Go-
+     * allocated struct containing pointers. The interned StringName/String
+     * pointers come in directly as args (cgo permits one Go pointer per arg
+     * slot). */
+    GDExtensionPropertyInfo info;
+    info.type        = (GDExtensionVariantType)property_type;
+    info.name        = p_property_name;
+    info.class_name  = (GDExtensionStringNamePtr)p_class_name;
+    info.hint        = 0;
+    info.hint_string = (GDExtensionStringPtr)empty_string;
+    /* PROPERTY_USAGE_DEFAULT: STORAGE | EDITOR. */
+    info.usage       = 6;
+    fn(p_library, p_class_name, &info, p_setter, p_getter);
+}

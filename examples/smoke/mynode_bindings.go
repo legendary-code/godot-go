@@ -41,6 +41,12 @@ func releaseMyNodeInstance(handle unsafe.Pointer) {
 	delete(myNodeInstances, uintptr(handle))
 }
 
+func (n *MyNode) GetHealth() int64 { return n.Health }
+
+func (n *MyNode) SetHealth(v int64) { n.Health = v }
+
+func (n *MyNode) GetMaxHealth() int64 { return n.MaxHealth }
+
 func registerMyNode() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:      "MyNode",
@@ -171,6 +177,84 @@ func registerMyNode() {
 		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_score",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetScore()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetScore()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_tag",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetTag()
+			variant.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetTag()
+			variant.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_tag",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsString(args[0])
+			self.SetTag(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := variant.PtrCallArgString(args, 0)
+			self.SetTag(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+	})
+
 	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
 		Class: "MyNode",
 		Name:  "_process",
@@ -197,6 +281,114 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaRealIsDouble,
 		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_health",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetHealth()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetHealth()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_health",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := variant.VariantAsInt64(args[0])
+			self.SetHealth(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.SetHealth(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "get_max_health",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetMaxHealth()
+			variant.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetMaxHealth()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "health",
+		Type:   gdextension.VariantTypeInt,
+		Setter: "set_health",
+		Getter: "get_health",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "max_health",
+		Type:   gdextension.VariantTypeInt,
+		Getter: "get_max_health",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "score",
+		Type:   gdextension.VariantTypeInt,
+		Getter: "get_score",
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
+		Name:   "tag",
+		Type:   gdextension.VariantTypeString,
+		Setter: "set_tag",
+		Getter: "get_tag",
 	})
 }
 

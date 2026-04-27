@@ -446,8 +446,45 @@ This is the headline feature. Steps:
       convention (capitalized `Process` + `@override`); both still
       verify headlessly. PLAN.md's canonical `LocaleLanguage` example
       reflects the new convention.
-- [ ] Property/group/signal annotations (likely `@property`, `@signal`,
-      `@group`, `@export` doc tags) — design before implementing.
+- [x] **Property annotations (`@property`, `@readonly`).** Two surface
+      forms supported, both producing one `RegisterClassProperty` call
+      that wires the property name to existing ClassDB-registered
+      methods:
+      | Source                                  | Result |
+      | --------------------------------------- | ------ |
+      | exported field `Health int64` + `@property` | codegen synthesizes `GetHealth`/`SetHealth` Go methods in the bindings file (`return n.Health` / `n.Health = v`); registers both as ClassDB methods; registers property `health` linking to them |
+      | same field + `@property` and `@readonly` | only `GetHealth` is synthesized; property registered with no setter |
+      | user method `func GetHealth() int64` + `@property`; matching `SetHealth(v)` ALSO tagged `@property` | property registered using the user's existing methods; user owns backing |
+      | same getter + `@property`, `SetHealth` exists but NOT tagged | read-only property; SetHealth is just a regular method |
+      | same getter + `@property`, no `SetX` at all | read-only inferred |
+      Conflict rule: an exported field with `@property` AND a `Get<Name>`/`Set<Name>` method matching that name → error at discover time
+      (file:line + "pick one form"). Other discover errors enforcing
+      the "explicit and consistent" model: lowercase fields with
+      `@property` must be capitalized; `@readonly` without `@property`
+      on a field is rejected; `@readonly` on any method is rejected
+      (read-only is inferred from missing/un-tagged `Set<X>`); a
+      `Set<X>` tagged `@property` without a matching `Get<X>` also
+      tagged is an orphan and rejected too. The
+      synthesis uses the existing method-registration pipeline rather
+      than a new template branch — synthesized `GetX`/`SetX` methods
+      look indistinguishable from user-written ones to the rest of the
+      emitter, since they're emitted as real Go source in the bindings
+      file. ABI side: new `RegisterClassProperty` Go wrapper +
+      `godot_go_register_extension_class_property` C trampoline +
+      `classdbRegisterExtensionClassProperty` resolved into the iface
+      table. `examples/smoke/mynode.go` exercises both forms (`Health`
+      field-form r/w; `Score` method-form `@readonly`); `test_mynode.gd`
+      asserts `n.health = 75` round-trips, `n.score` reads the lazy
+      default, ClassDB reports `set_health` exists for `health` but
+      `set_score` does not for `score`. Stable shutdown 5/5. Defer to
+      6b: `@group`/`@subgroup` (inspector layout), export hints
+      (`@export_range`, `@export_file`, etc.), and signals (separate
+      design pass).
+- [ ] Signal annotations (`@signal`) — separate design pass; the
+      surface choice (struct field of a generic Signal type vs. doctag
+      on a method declaration) needs more thought.
+- [ ] Property groups + export hints (`@group`/`@subgroup`/
+      `@export_range`/`@export_file`/...) — inspector-layout polish.
 - [ ] Editor-only behavior (tool scripts) and run-mode gating.
 - [ ] Hot-reload story (Godot 4.2+ supports it; verify Go's c-shared can
       participate or document the limitation).
