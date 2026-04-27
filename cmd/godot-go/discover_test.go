@@ -687,6 +687,30 @@ func (n *MyNode) GetScore() int64 { return 0 }
 	}
 }
 
+func TestDiscoverEditorClass(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @editor
+type MyEditorPlugin struct { core.Node }
+`
+	d := mustDiscover(t, src)
+	if !d.MainClass.IsEditor {
+		t.Errorf("IsEditor = false, want true")
+	}
+}
+
+func TestDiscoverEditorOnInnerClassRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+
+// @innerclass
+// @editor
+type Helper struct {}
+`
+	mustFailDiscover(t, src, "@editor on inner class")
+}
+
 func TestPascalToSnake(t *testing.T) {
 	cases := []struct {
 		in, want string

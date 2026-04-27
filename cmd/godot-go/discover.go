@@ -39,6 +39,13 @@ type classInfo struct {
 
 	IsAbstract bool
 	IsInner    bool
+	// IsEditor flips registration from INIT_LEVEL_SCENE to
+	// INIT_LEVEL_EDITOR — Godot only fires editor-level init callbacks
+	// when the engine is in editor mode, so the class is invisible to
+	// game runtime builds. Used for EditorPlugin subclasses, custom
+	// inspectors, gizmos, and other tooling that has no business
+	// existing in deployed game builds.
+	IsEditor bool
 
 	Methods    []*methodInfo
 	Properties []*propertyInfo
@@ -224,6 +231,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 					Description: synthDescription(ts.Name.Name, doc, tags),
 					IsAbstract:  doctag.Has(tags, "abstract"),
 					IsInner:     doctag.Has(tags, "innerclass"),
+					IsEditor:    doctag.Has(tags, "editor"),
 				}
 				if parent, parentImport, err := findEmbeddedParent(t, d.Imports); err != nil {
 					return nil, fmt.Errorf("%s: %w", posStr(fset, ts.Pos()), err)
@@ -249,6 +257,10 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	var mainCandidates []*classInfo
 	for _, ci := range structs {
 		if ci.IsInner {
+			if ci.IsEditor {
+				return nil, fmt.Errorf("%s: @editor on inner class %s — inner classes aren't registered with Godot, so the init-level distinction has no effect",
+					posStr(fset, ci.Pos), ci.Name)
+			}
 			d.InnerClasses = append(d.InnerClasses, ci)
 			continue
 		}

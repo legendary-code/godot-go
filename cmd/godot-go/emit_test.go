@@ -359,6 +359,30 @@ type N struct {
 	mustContain(t, out, `HintString: "*.png",`)
 }
 
+func TestEmitDefaultInitLevelIsScene(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+`
+	out := emitFor(t, src)
+	mustContain(t, out, "RegisterInitCallback(gdextension.InitLevelScene, registerN)")
+	mustContain(t, out, "RegisterDeinitCallback(gdextension.InitLevelScene,")
+}
+
+func TestEmitEditorClassUsesEditorInitLevel(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @editor
+type N struct { core.Node }
+`
+	out := emitFor(t, src)
+	mustContain(t, out, "RegisterInitCallback(gdextension.InitLevelEditor, registerN)")
+	mustContain(t, out, "RegisterDeinitCallback(gdextension.InitLevelEditor,")
+	if strings.Contains(out, "InitLevelScene") {
+		t.Errorf("@editor class should not reference InitLevelScene at all:\n%s", out)
+	}
+}
+
 func mustContain(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

@@ -53,6 +53,11 @@ func emit(w io.Writer, d *discovered) error {
 		needsVariant = true
 	}
 
+	initLevel := "InitLevelScene"
+	if d.MainClass.IsEditor {
+		initLevel = "InitLevelEditor"
+	}
+
 	data := emitData{
 		PackageName:  d.PackageName,
 		SourceFile:   filepath.Base(d.FilePath),
@@ -60,6 +65,7 @@ func emit(w io.Writer, d *discovered) error {
 		Parent:       d.MainClass.Parent,
 		Lower:        lowerFirst(d.MainClass.Name),
 		IsAbstract:   d.MainClass.IsAbstract,
+		InitLevel:    initLevel,
 		Methods:      supported,
 		Accessors:    accessors,
 		Properties:   properties,
@@ -86,6 +92,7 @@ type emitData struct {
 	Parent       string
 	Lower        string // class name with first rune lowercased — used for unexported helpers
 	IsAbstract   bool   // @abstract on the main class — passed through to RegisterClass
+	InitLevel    string // bare InitializationLevel const name — "InitLevelScene" or "InitLevelEditor"
 	Methods      []emitMethod
 	Accessors    []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
 	Properties   []emitProperty // RegisterClassProperty calls (one per @property, both forms)
@@ -765,8 +772,8 @@ func register{{.Class}}() {
 {{end}}}
 
 func init() {
-	gdextension.RegisterInitCallback(gdextension.InitLevelScene, register{{.Class}})
-	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+	gdextension.RegisterInitCallback(gdextension.{{.InitLevel}}, register{{.Class}})
+	gdextension.RegisterDeinitCallback(gdextension.{{.InitLevel}}, func() {
 		gdextension.UnregisterClass("{{.Class}}")
 	})
 }

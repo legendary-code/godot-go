@@ -143,6 +143,15 @@ func runSmokeChecks() {
 	check("enums.SideRight == 2", int64(enums.SideRight) == 2, int64(enums.SideRight), int64(2))
 	check("enums.Ok == 0", int64(enums.Ok) == 0, int64(enums.Ok), int64(0))
 
+	// runtime.IsEditorHint() — wraps Engine.is_editor_hint(). In a
+	// headless game-mode run (no --editor), the engine reports false.
+	// Just confirms the helper resolves the singleton and ptrcalls
+	// through cleanly; the real `true` branch only fires when running
+	// inside the editor.
+	check("runtime.IsEditorHint() == false (headless)",
+		runtime.IsEditorHint() == false,
+		runtime.IsEditorHint(), false)
+
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
 	} else {

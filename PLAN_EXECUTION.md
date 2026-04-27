@@ -612,7 +612,37 @@ This is the headline feature. Steps:
       `prefix` parameter, hint coverage on method-form properties,
       the long tail of PropertyHint values (LAYERS_*, RESOURCE_TYPE,
       COLOR_NO_ALPHA, FLAGS, etc.).
-- [ ] Editor-only behavior (tool scripts) and run-mode gating.
+- [x] **Editor-only / run-mode gating.** Two orthogonal pieces:
+      1. **`@editor` doctag on the main class** flips registration
+         from `INIT_LEVEL_SCENE` to `INIT_LEVEL_EDITOR`. Godot only
+         fires editor-level init callbacks when the engine is in
+         editor mode, so `@editor` classes are invisible to deployed
+         game builds — useful for `EditorPlugin` subclasses, custom
+         inspectors, gizmos, and other tooling that has no business
+         existing at runtime. Validation: `@editor` on an inner class
+         is rejected (inner classes aren't registered with Godot at
+         all, so the init-level distinction is meaningless).
+      2. **`runtime.IsEditorHint()`** wraps `Engine.is_editor_hint()`
+         (already generated as a method on the Engine engine class).
+         Lazy-cached singleton lookup; the call itself is a single
+         ptrcall. Distinct from `@editor` — `@editor` decides whether
+         the class is *registered at all* outside the editor (compile-
+         time / load-time decision), while `IsEditorHint()` is a
+         per-call runtime check for "right now, is this code running
+         edit-time vs in-game". A normally-registered class can use
+         `IsEditorHint()` to vary behavior between editor and runtime
+         (e.g., debug visuals, tooling parameter defaults).
+      Codegen: `emitData.InitLevel` (bare const name) drops in for the
+      previously-hardcoded `InitLevelScene`; default stays SCENE,
+      `@editor` switches to `InitLevelEditor`. Smoke verifies
+      `IsEditorHint() == false` in headless game mode (12/12
+      framework checks passing, 5/5 stable shutdown). Two new emit
+      tests cover both init-level paths; two new discover tests
+      cover the `@editor` parse and the inner-class rejection.
+      Headless-editor smoke verification of an `@editor` class is
+      deferred — would require a separate driver run with `--editor`,
+      not worth the test-infrastructure cost; the codegen-level test
+      already proves the registration goes to the right level.
 - [ ] Hot-reload story (Godot 4.2+ supports it; verify Go's c-shared can
       participate or document the limitation).
 - [ ] Goroutine + Godot main-thread interaction guidance — most engine
