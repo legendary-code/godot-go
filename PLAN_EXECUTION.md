@@ -480,9 +480,72 @@ This is the headline feature. Steps:
       6b: `@group`/`@subgroup` (inspector layout), export hints
       (`@export_range`, `@export_file`, etc.), and signals (separate
       design pass).
-- [ ] Signal annotations (`@signal`) — separate design pass; the
-      surface choice (struct field of a generic Signal type vs. doctag
-      on a method declaration) needs more thought.
+- [x] **Signal annotations (`@signals`).** A `@signals`-tagged interface
+      declares the engine-visible signals on the main class; codegen
+      synthesizes typed emit methods on `*<MainClass>` (one per
+      interface method) plus a `RegisterClassSignal` call per signal at
+      SCENE init. No embedding, no marker types, no boilerplate beyond
+      the interface declaration itself. Multiple `@signals` interfaces
+      per file are allowed (the rule against multiple main classes
+      doesn't apply to signal contracts).
+      Example user code:
+      ```go
+      // @signals
+      type Signals interface {
+          Damaged(amount int64)
+          LeveledUp()
+          Tagged(label string)
+      }
+      ```
+      Codegen synthesizes (in `<file>_bindings.go`):
+      ```go
+      func (n *MyNode) Damaged(amount int64) {
+          arg0 := variant.NewVariantInt(amount)
+          defer arg0.Destroy()
+          args := []gdextension.VariantPtr{
+              gdextension.VariantPtr(unsafe.Pointer(&arg0)),
+          }
+          gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("damaged"), args)
+      }
+      ```
+      Validation rules (all errors carry file:line):
+      - signal method name must not collide with a regular method on
+        the main class (Go would reject the duplicate `func (n *T) X`
+        at compile time, but we catch it upstream with a clearer
+        message);
+      - signal names must be unique across all `@signals` interfaces
+        on the same class;
+      - signals must not have return values (Godot signals don't
+        return; reject so the surface stays honest);
+      - embedded interfaces inside `@signals` interfaces are rejected
+        (only direct method declarations become signals).
+      ABI surface added in `internal/gdextension`:
+      - `RegisterClassSignal` Go wrapper + `ClassSignalDef` struct.
+      - `godot_go_register_extension_class_signal` C trampoline.
+      - `EmitSignal` runtime helper that dispatches `Object::emit_signal`
+        via the vararg path (`object_method_bind_call`); the
+        `MethodBindPtr` is cached in `sync.OnceValue` against the hash
+        from `extension_api.json` (4047867050 for Godot 4.6).
+      - `VariantSize = 24` constant for stack-allocating transient
+        Variants.
+      - `variant.NewVariantBool` / `NewVariantFloat` rounding out the
+        constructor set so codegen has a single typed entry point per
+        primitive.
+      The synthesized `func (n *T) <SignalName>(args...)` method is a
+      Go-only API for the user's own class methods to fire signals from
+      inside their logic — it is NOT registered with ClassDB. GDScript
+      callers that want to trigger emission from outside the class use
+      the standard `emit_signal("name", args...)` entry point Godot
+      already exposes via Object's classdb.
+      Smoke example exercises three signal shapes end-to-end:
+      `Damaged(amount int64)`, `LeveledUp()` (no args), `Tagged(label string)`.
+      `test_mynode.gd` uses Godot 4's Signal property syntax both for
+      connecting (`n.damaged.connect(_on_damaged)`) and for triggering
+      emission (`n.damaged.emit(75)`), and asserts the callback
+      received the expected payload. (Lambda capture quirk worth
+      noting: GDScript lambdas don't reliably mutate outer-scope
+      locals from inside Callables — the smoke driver uses class-level
+      fields + named methods instead.)
 - [ ] Property groups + export hints (`@group`/`@subgroup`/
       `@export_range`/`@export_file`/...) — inspector-layout polish.
 - [ ] Editor-only behavior (tool scripts) and run-mode gating.

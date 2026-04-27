@@ -74,6 +74,7 @@ var iface struct {
 	classdbRegisterExtensionClass5         C.GDExtensionInterfaceClassdbRegisterExtensionClass5
 	classdbRegisterExtensionClassMethod    C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
 	classdbRegisterExtensionClassProperty  C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty
+	classdbRegisterExtensionClassSignal    C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal
 	classdbUnregisterExtensionClass        C.GDExtensionInterfaceClassdbUnregisterExtensionClass
 	objectSetInstance                      C.GDExtensionInterfaceObjectSetInstance
 }
@@ -126,6 +127,7 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.classdbRegisterExtensionClass5 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass5)(unsafe.Pointer(resolveProc("classdb_register_extension_class5")))
 	iface.classdbRegisterExtensionClassMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_method")))
 	iface.classdbRegisterExtensionClassProperty = (C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property")))
+	iface.classdbRegisterExtensionClassSignal = (C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal)(unsafe.Pointer(resolveProc("classdb_register_extension_class_signal")))
 	iface.classdbUnregisterExtensionClass = (C.GDExtensionInterfaceClassdbUnregisterExtensionClass)(unsafe.Pointer(resolveProc("classdb_unregister_extension_class")))
 	iface.objectSetInstance = (C.GDExtensionInterfaceObjectSetInstance)(unsafe.Pointer(resolveProc("object_set_instance")))
 }

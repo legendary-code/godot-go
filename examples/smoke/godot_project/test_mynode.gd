@@ -8,6 +8,17 @@ extends SceneTree
 
 var _failed: int = 0
 
+# Captured-by-callback state for signal verification. Module-level so the
+# Callable's mutation outlives any per-step closure scope quirks GDScript
+# might have around lambda capture of locals.
+var _damaged_amount: int = -1
+var _leveled_up_count: int = 0
+var _tagged_label: String = ""
+
+func _on_damaged(amount: int) -> void: _damaged_amount = amount
+func _on_leveled_up() -> void: _leveled_up_count += 1
+func _on_tagged(label: String) -> void: _tagged_label = label
+
 
 func _initialize() -> void:
 	print("test_mynode: ClassDB has MyNode? ", ClassDB.class_exists("MyNode"))
@@ -63,6 +74,38 @@ func _initialize() -> void:
 	n.set_tag("beta")
 	_check("method rw: n.tag after set_tag('beta')",        n.tag,        "beta")
 	_check("method rw: get_tag() after set_tag('beta')",    n.get_tag(),  "beta")
+
+	# Phase 6 signals — connect a Callable to each registered signal,
+	# trigger emission from Go via a regular ClassDB method, and verify
+	# the callback received the args we expect. Each closure mutates a
+	# captured variable so the assertion runs after the connect/emit
+	# round trip completes.
+	_check("ClassDB.has signal damaged",
+			ClassDB.class_has_signal("MyNode", "damaged"), true)
+	_check("ClassDB.has signal leveled_up",
+			ClassDB.class_has_signal("MyNode", "leveled_up"), true)
+	_check("ClassDB.has signal tagged",
+			ClassDB.class_has_signal("MyNode", "tagged"), true)
+
+	n.damaged.connect(_on_damaged)
+	n.leveled_up.connect(_on_leveled_up)
+	n.tagged.connect(_on_tagged)
+
+	# Trigger emission from GDScript via the Godot 4 Signal API. Each
+	# registered signal surfaces as a property of type Signal on the
+	# instance; `.emit(args...)` is the typed entry point. Equivalent to
+	# `n.emit_signal("damaged", 75)` but reads naturally from the call
+	# site. The synthesized Go-side methods on *MyNode are for the
+	# class's own logic to fire signals from inside.
+	n.damaged.emit(75)
+	_check("signal damaged delivered amount=75", _damaged_amount, 75)
+
+	n.leveled_up.emit()
+	n.leveled_up.emit()
+	_check("signal leveled_up fired twice", _leveled_up_count, 2)
+
+	n.tagged.emit("hello-signals")
+	_check("signal tagged delivered string payload", _tagged_label, "hello-signals")
 
 	n.free()
 

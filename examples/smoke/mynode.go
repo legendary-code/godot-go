@@ -9,6 +9,26 @@ import (
 
 //go:generate godot-go
 
+// Signals declares the engine-visible signals MyNode emits. Codegen
+// produces typed Emit-style methods on *MyNode for each interface method
+// (Damaged → snake_case "damaged"); GDScript subscribers can connect()
+// to those signals by name.
+//
+// @signals
+type Signals interface {
+	// Damaged is emitted when the node takes damage. The amount is the
+	// hit-point loss the receiver should react to.
+	Damaged(amount int64)
+
+	// LeveledUp is a no-arg signal — convenient because GDScript
+	// connect() supports both shapes uniformly.
+	LeveledUp()
+
+	// Tagged carries a string payload, exercising the string-Variant
+	// marshaling path through emit_signal's vararg dispatch.
+	Tagged(label string)
+}
+
 // MyNode is a minimal Go-defined extension class — embeds core.Node so the
 // host treats instances as nodes, and exposes Hello/Add/Greet to GDScript.
 //

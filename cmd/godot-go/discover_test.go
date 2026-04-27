@@ -437,6 +437,88 @@ func (n *MyNode) SetHealth(v int64) {}
 	mustFailDiscover(t, src, "@property on SetHealth")
 }
 
+func TestDiscoverSignalsInterface(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+
+// @signals
+type Signals interface {
+	Damaged(amount int64)
+	LeveledUp()
+	Tagged(label string)
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Signals) != 3 {
+		t.Fatalf("signals = %+v", d.MainClass.Signals)
+	}
+	got := map[string]string{}
+	for _, s := range d.MainClass.Signals {
+		got[s.Name] = s.GodotName
+	}
+	want := map[string]string{
+		"Damaged":   "damaged",
+		"LeveledUp": "leveled_up",
+		"Tagged":    "tagged",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("signal %q: GodotName = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+func TestDiscoverSignalsCollidesWithMethod(t *testing.T) {
+	// Signal method name on a @signals interface collides with a regular
+	// method on the class — Go would reject the duplicate at compile
+	// time; discover catches it earlier with a clearer message.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+func (n *MyNode) Damaged(x int64) {}
+
+// @signals
+type Signals interface {
+	Damaged(amount int64)
+}
+`
+	mustFailDiscover(t, src, "collides with regular method")
+}
+
+func TestDiscoverSignalsDuplicateAcrossInterfaces(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+
+// @signals
+type SignalsA interface {
+	Damaged(amount int64)
+}
+
+// @signals
+type SignalsB interface {
+	Damaged(amount int64)
+}
+`
+	mustFailDiscover(t, src, "duplicate signal")
+}
+
+func TestDiscoverSignalsRejectsReturn(t *testing.T) {
+	// Signals don't return values. Reject return types so users don't
+	// get silent drops.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type MyNode struct { core.Node }
+
+// @signals
+type Signals interface {
+	Damaged(amount int64) bool
+}
+`
+	mustFailDiscover(t, src, "return value")
+}
+
 func TestPascalToSnake(t *testing.T) {
 	cases := []struct {
 		in, want string

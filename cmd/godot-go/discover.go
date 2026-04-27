@@ -42,6 +42,26 @@ type classInfo struct {
 
 	Methods    []*methodInfo
 	Properties []*propertyInfo
+	Signals    []*signalInfo
+}
+
+// signalInfo is one signal declared on a `@signals` interface. Multiple
+// such interfaces may live in the same file; their methods accumulate
+// onto the main class. Codegen attaches an emit method directly to
+// `*<MainClass>` for each signal — there's no embedded struct in the
+// user's source.
+type signalInfo struct {
+	Name string // method identifier as it appeared on the interface (e.g. "Damaged")
+	// GodotName is the snake_case name Godot's ClassDB sees ("damaged").
+	GodotName string
+	Pos       token.Pos
+	// Args carry the AST type expressions for each formal parameter. The
+	// emitter resolves these via the same resolveType path used for
+	// method args — supported types are the framework's primitive set.
+	Args []*ast.Field
+	// SourceInterface is the Go name of the @signals interface this
+	// signal came from, used in error messages.
+	SourceInterface string
 }
 
 // propertyInfo is one @property declaration on the class. There are two
@@ -166,10 +186,12 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	}
 
 	// First pass: top-level types. Distinguish struct types (candidate
-	// classes) from named-int types (candidate enums); other type aliases
-	// are out of scope here.
+	// classes), named-int types (candidate enums), and interface types
+	// tagged @signals (signal contracts). Other type aliases are out of
+	// scope here.
 	structs := map[string]*classInfo{}
 	intTypes := map[string]*enumInfo{}
+	signalIfaces := []*ast.TypeSpec{}
 	for _, decl := range file.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.TYPE {
@@ -200,6 +222,10 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			case *ast.Ident:
 				if t.Name == "int" || t.Name == "int32" || t.Name == "int64" {
 					intTypes[ts.Name.Name] = &enumInfo{Name: ts.Name.Name, Pos: ts.Pos()}
+				}
+			case *ast.InterfaceType:
+				if doctag.Has(tags, "signals") {
+					signalIfaces = append(signalIfaces, ts)
 				}
 			}
 		}
@@ -330,6 +356,15 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		return nil, err
 	}
 
+	// Signals: walk @signals-tagged interfaces. Each interface method
+	// becomes a signal on the main class. Codegen attaches an emit
+	// method directly to *<MainClass> for each signal — no embedded
+	// struct in the user's source, no boilerplate beyond the interface
+	// declaration itself.
+	if err := collectSignals(fset, d.MainClass, signalIfaces); err != nil {
+		return nil, err
+	}
+
 	// Validate: a non-inner class must have a parent. Inner classes don't.
 	if d.MainClass.Parent == "" {
 		return nil, fmt.Errorf("%s: class %s has no recognized base class — embed a framework type (e.g. core.Node) to inherit from a Godot class",
@@ -337,6 +372,74 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	}
 
 	return d, nil
+}
+
+// collectSignals walks @signals-tagged interfaces and accumulates a flat
+// list of signalInfo on the main class. Each interface method becomes one
+// signal. Validation:
+//   - signal name must not collide with a regular method registered on
+//     the class (Go itself would reject the duplicate method declaration
+//     at compile time, but catching it here gives the user a clearer
+//     error pointing at both source positions).
+//   - signal names across all @signals interfaces must be unique (same
+//     reasoning).
+//
+// Argument types are not resolved here — the emitter does that via the
+// shared resolveType path so unsupported types fail with the same
+// diagnostic shape as method args.
+func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) error {
+	if len(ifaces) == 0 {
+		return nil
+	}
+	// Build a name set of the class's regular methods for collision
+	// checking. Use GoName (the source identifier) since that's what
+	// would clash if codegen synthesizes `func (n *T) <SignalName>(...)`.
+	methodNames := map[string]token.Pos{}
+	for _, m := range ci.Methods {
+		methodNames[m.GoName] = m.Pos
+	}
+
+	signalNames := map[string]token.Pos{}
+	for _, iface := range ifaces {
+		it := iface.Type.(*ast.InterfaceType)
+		if it.Methods == nil {
+			continue
+		}
+		for _, m := range it.Methods.List {
+			if len(m.Names) == 0 {
+				// Embedded interface — not supported as a signal carrier.
+				return fmt.Errorf("%s: @signals interface %s embeds another interface; only direct method declarations become signals",
+					posStr(fset, m.Pos()), iface.Name.Name)
+			}
+			ft, ok := m.Type.(*ast.FuncType)
+			if !ok {
+				continue
+			}
+			if ft.Results != nil && len(ft.Results.List) > 0 {
+				return fmt.Errorf("%s: signal %s on @signals interface %s has a return value; signals don't return values",
+					posStr(fset, m.Pos()), m.Names[0].Name, iface.Name.Name)
+			}
+			for _, name := range m.Names {
+				if existing, dup := signalNames[name.Name]; dup {
+					return fmt.Errorf("%s: duplicate signal %q (also at %s) — names must be unique across all @signals interfaces on a class",
+						posStr(fset, name.Pos()), name.Name, posStr(fset, existing))
+				}
+				if existing, dup := methodNames[name.Name]; dup {
+					return fmt.Errorf("%s: signal %q collides with regular method %s (at %s) — codegen would synthesize a method of that name on *%s, which Go would reject as a duplicate declaration",
+						posStr(fset, name.Pos()), name.Name, name.Name, posStr(fset, existing), ci.Name)
+				}
+				signalNames[name.Name] = name.Pos()
+				ci.Signals = append(ci.Signals, &signalInfo{
+					Name:            name.Name,
+					GodotName:       pascalToSnake(name.Name),
+					Pos:             name.Pos(),
+					Args:            ft.Params.List,
+					SourceInterface: iface.Name.Name,
+				})
+			}
+		}
+	}
+	return nil
 }
 
 // collectProperties walks the main class's struct fields (for the field

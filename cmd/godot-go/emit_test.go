@@ -276,6 +276,47 @@ func (n *N) SetHealth(v int64) {}
 	mustContain(t, out, `Getter: "get_health",`)
 }
 
+func TestEmitSignals(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type N struct { core.Node }
+
+// @signals
+type Signals interface {
+	Damaged(amount int64)
+	LeveledUp()
+	Tagged(label string)
+}
+`
+	out := emitFor(t, src)
+
+	// Synthesized emit methods on *N — name = signal name, args
+	// preserved from the interface declaration.
+	mustContain(t, out, "func (n *N) Damaged(amount int64) {")
+	mustContain(t, out, "func (n *N) LeveledUp() {")
+	mustContain(t, out, "func (n *N) Tagged(label string) {")
+
+	// Per-arg Variant construction + dispatch.
+	mustContain(t, out, "arg0 := variant.NewVariantInt(amount)")
+	mustContain(t, out, "arg0 := variant.NewVariantString(label)")
+	mustContain(t, out, `gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("damaged"), args)`)
+	mustContain(t, out, `gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("leveled_up"), nil)`)
+
+	// RegisterClassSignal at SCENE init.
+	mustContain(t, out, "RegisterClassSignal(gdextension.ClassSignalDef{")
+	mustContain(t, out, `Name:  "damaged",`)
+	mustContain(t, out, `Name:  "leveled_up",`)
+	mustContain(t, out, `Name:  "tagged",`)
+
+	// The synthesized emit method is Go-only — NOT registered with
+	// ClassDB. GDScript callers that want to trigger emission from
+	// outside the class use the standard emit_signal API.
+	if strings.Contains(out, `Name:  "damaged",
+		Call: func(`) {
+		t.Errorf("synthesized signal-emit methods must not be ClassDB-registered:\n%s", out)
+	}
+}
+
 func mustContain(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

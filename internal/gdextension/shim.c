@@ -488,3 +488,34 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
     info.usage       = 6;
     fn(p_library, p_class_name, &info, p_setter, p_getter);
 }
+
+void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegisterExtensionClassSignal fn,
+                                              GDExtensionClassLibraryPtr p_library,
+                                              GDExtensionConstStringNamePtr p_class_name,
+                                              GDExtensionConstStringNamePtr p_signal_name,
+                                              GDExtensionConstStringNamePtr empty_string_name,
+                                              GDExtensionConstStringPtr empty_string,
+                                              uint32_t arg_count,
+                                              const uint32_t *arg_types,
+                                              const uint32_t *arg_metadata) {
+    GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
+
+    if (arg_count > GODOT_GO_MAX_METHOD_ARGS) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < arg_count; i++) {
+        godot_go_fill_property_info(&arg_infos[i], arg_types[i],
+                                    empty_string_name, empty_string);
+        /* arg_metadata is currently unused by the engine for signal
+         * argument descriptors — the metadata field on PropertyInfo is
+         * about hint encoding, not int32-vs-int64 width. We carry the
+         * array on the Go side for symmetry with method registration so
+         * a future engine version that adds it has a place to plug in. */
+        (void)arg_metadata;
+    }
+
+    fn(p_library, p_class_name, p_signal_name,
+       arg_count > 0 ? arg_infos : NULL,
+       (GDExtensionInt)arg_count);
+}

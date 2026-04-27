@@ -47,6 +47,37 @@ func (n *MyNode) SetHealth(v int64) { n.Health = v }
 
 func (n *MyNode) GetMaxHealth() int64 { return n.MaxHealth }
 
+// Damaged emits the damaged signal on this instance. Synthesized
+// from a @signals interface declaration; per-arg Variants are constructed
+// from the typed parameters and dispatched via Object::emit_signal.
+func (n *MyNode) Damaged(amount int64) {
+	arg0 := variant.NewVariantInt(amount)
+	defer arg0.Destroy()
+	args := []gdextension.VariantPtr{
+		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
+	}
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("damaged"), args)
+}
+
+// LeveledUp emits the leveled_up signal on this instance. Synthesized
+// from a @signals interface declaration; per-arg Variants are constructed
+// from the typed parameters and dispatched via Object::emit_signal.
+func (n *MyNode) LeveledUp() {
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("leveled_up"), nil)
+}
+
+// Tagged emits the tagged signal on this instance. Synthesized
+// from a @signals interface declaration; per-arg Variants are constructed
+// from the typed parameters and dispatched via Object::emit_signal.
+func (n *MyNode) Tagged(label string) {
+	arg0 := variant.NewVariantString(label)
+	defer arg0.Destroy()
+	args := []gdextension.VariantPtr{
+		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
+	}
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("tagged"), args)
+}
+
 func registerMyNode() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:      "MyNode",
@@ -389,6 +420,33 @@ func registerMyNode() {
 		Type:   gdextension.VariantTypeString,
 		Setter: "set_tag",
 		Getter: "get_tag",
+	})
+
+	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
+		Class: "MyNode",
+		Name:  "damaged",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+	})
+
+	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
+		Class: "MyNode",
+		Name:  "leveled_up",
+	})
+
+	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
+		Class: "MyNode",
+		Name:  "tagged",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
 	})
 }
 

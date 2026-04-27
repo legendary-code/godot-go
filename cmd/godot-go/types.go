@@ -58,6 +58,13 @@ type typeInfo struct {
 	// writes `expr` (a GoType-typed expression) into the ret VariantPtr,
 	// allocating any required temporary internally.
 	CallWriteReturn func(expr string) string
+
+	// BuildVariant returns a single Go statement that constructs a
+	// fresh `variant.Variant` value, named `arg<idx>`, holding `srcExpr`
+	// (a GoType-typed expression). The caller is responsible for
+	// emitting `defer arg<idx>.Destroy()` separately. Used by signal-
+	// emit synthesis to marshal each user-supplied arg before dispatch.
+	BuildVariant func(idx int, srcExpr string) string
 }
 
 // typeTable indexes typeInfo by Go type ident. Keys must match exactly
@@ -81,6 +88,9 @@ var typeTable = map[string]*typeInfo{
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetBool(ret, %s)", expr)
 		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantBool(%s)", idx, srcExpr)
+		},
 	},
 	"int": {
 		GoType:             "int",
@@ -98,6 +108,9 @@ var typeTable = map[string]*typeInfo{
 		},
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetInt64(ret, int64(%s))", expr)
+		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantInt(int64(%s))", idx, srcExpr)
 		},
 	},
 	"int32": {
@@ -117,6 +130,9 @@ var typeTable = map[string]*typeInfo{
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetInt64(ret, int64(%s))", expr)
 		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantInt(int64(%s))", idx, srcExpr)
+		},
 	},
 	"int64": {
 		GoType:             "int64",
@@ -134,6 +150,9 @@ var typeTable = map[string]*typeInfo{
 		},
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetInt64(ret, %s)", expr)
+		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantInt(%s)", idx, srcExpr)
 		},
 	},
 	"float32": {
@@ -153,6 +172,9 @@ var typeTable = map[string]*typeInfo{
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetFloat64(ret, float64(%s))", expr)
 		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantFloat(float64(%s))", idx, srcExpr)
+		},
 	},
 	"float64": {
 		GoType:             "float64",
@@ -171,6 +193,9 @@ var typeTable = map[string]*typeInfo{
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetFloat64(ret, %s)", expr)
 		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantFloat(%s)", idx, srcExpr)
+		},
 	},
 	"string": {
 		GoType:             "string",
@@ -188,6 +213,9 @@ var typeTable = map[string]*typeInfo{
 		},
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetString(ret, %s)", expr)
+		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantString(%s)", idx, srcExpr)
 		},
 	},
 }
@@ -236,6 +264,9 @@ func enumTypeInfo(name string) *typeInfo {
 		},
 		CallWriteReturn: func(expr string) string {
 			return fmt.Sprintf("variant.VariantSetInt64(ret, int64(%s))", expr)
+		},
+		BuildVariant: func(idx int, srcExpr string) string {
+			return fmt.Sprintf("arg%d := variant.NewVariantInt(int64(%s))", idx, srcExpr)
 		},
 	}
 }

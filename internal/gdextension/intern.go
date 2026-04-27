@@ -12,6 +12,11 @@ import (
 const (
 	StringSize     = 8
 	StringNameSize = 8
+	// VariantSize is the byte size of a Variant slot under float_64.
+	// Sourced from extension_api.json#builtin_class_sizes; mirrors
+	// `variantSize` in the user-facing variant package. Used by the
+	// signal-emit helper to stack-allocate transient Variants.
+	VariantSize = 24
 )
 
 // InternStringName returns a stable StringNamePtr for s. The backing storage

@@ -45,6 +45,14 @@ func emit(w io.Writer, d *discovered) error {
 		needsVariant = true
 	}
 
+	signals, err := buildEmitSignals(d.MainClass.Signals, enumSet)
+	if err != nil {
+		return err
+	}
+	if len(signals) > 0 {
+		needsVariant = true
+	}
+
 	data := emitData{
 		PackageName:  d.PackageName,
 		SourceFile:   filepath.Base(d.FilePath),
@@ -55,6 +63,7 @@ func emit(w io.Writer, d *discovered) error {
 		Methods:      supported,
 		Accessors:    accessors,
 		Properties:   properties,
+		Signals:      signals,
 		NeedsVariant: needsVariant,
 	}
 
@@ -80,7 +89,34 @@ type emitData struct {
 	Methods      []emitMethod
 	Accessors    []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
 	Properties   []emitProperty // RegisterClassProperty calls (one per @property, both forms)
+	Signals      []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
 	NeedsVariant bool           // any method touches a primitive (gates the variant import)
+}
+
+// emitSignal is one signal declared on a `@signals` interface. The emitter
+// renders two pieces per signal: a method on *<Class> that constructs the
+// per-arg Variants and dispatches Object::emit_signal, plus a
+// RegisterClassSignal call at SCENE init.
+type emitSignal struct {
+	GoName    string // method identifier on the @signals interface ("Damaged")
+	GodotName string // snake_case for ClassDB ("damaged")
+	// PerArg holds the rendered fragments needed to construct one Variant
+	// per signal arg before dispatch. Each entry contributes a `var
+	// argN variant.Variant = ...` statement and a Destroy via defer.
+	PerArg []emitSignalArg
+	// Registration metadata — parallel to ArgTypes / ArgMetadata on
+	// emitMethod so RegisterClassSignal sees the same shape.
+	ArgTypes []string
+	ArgMetas []string
+}
+
+type emitSignalArg struct {
+	Index    int    // 0-based positional arg index (matches argN naming)
+	GoName   string // identifier the user method exposes for this arg
+	GoType   string // Go type as it appears in the synthesized method signature
+	BuildVar string // single statement that constructs the Variant, e.g.
+	// `arg0 := variant.NewVariantInt(amount)`. The Variant is destroyed
+	// via `defer arg0.Destroy()` rendered separately in the template.
 }
 
 // emitAccessor is one synthesized Go method that backs an exported field
@@ -315,6 +351,61 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 	return accessors, methods, out, nil
 }
 
+// buildEmitSignals walks the discovered @signals declarations and produces
+// the emitter-side records: per-signal arg marshaling fragments and the
+// type/metadata slices that go into RegisterClassSignal.
+//
+// Each signal's arguments are resolved through the same type table used
+// by regular methods, so signal arg type support tracks method arg type
+// support — adding a new arg type to types.go automatically lights it up
+// for signals too.
+//
+// Note: the synthesized `func (n *T) <SignalName>(args...)` method is a
+// Go-only API for the user's own code to fire signals from inside class
+// methods. We do NOT register it with ClassDB; GDScript callers use the
+// standard `emit_signal("name", args...)` to trigger emission from
+// outside the class, matching Godot's idiomatic model.
+func buildEmitSignals(signals []*signalInfo, enums map[string]bool) ([]emitSignal, error) {
+	if len(signals) == 0 {
+		return nil, nil
+	}
+	out := make([]emitSignal, 0, len(signals))
+	for _, s := range signals {
+		es := emitSignal{
+			GoName:    s.Name,
+			GodotName: s.GodotName,
+		}
+		idx := 0
+		for _, field := range s.Args {
+			info, err := resolveType(field.Type, enums)
+			if err != nil {
+				return nil, fmt.Errorf("@signals %s arg %d: %w", s.Name, idx, err)
+			}
+			count := len(field.Names)
+			if count == 0 {
+				count = 1
+			}
+			for k := 0; k < count; k++ {
+				goArgName := fmt.Sprintf("arg%d", idx)
+				if k < len(field.Names) && field.Names[k].Name != "" && field.Names[k].Name != "_" {
+					goArgName = field.Names[k].Name
+				}
+				es.PerArg = append(es.PerArg, emitSignalArg{
+					Index:    idx,
+					GoName:   goArgName,
+					GoType:   info.GoType,
+					BuildVar: info.BuildVariant(idx, goArgName),
+				})
+				es.ArgTypes = append(es.ArgTypes, info.VariantType)
+				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
+				idx++
+			}
+		}
+		out = append(out, es)
+	}
+	return out, nil
+}
+
 // syntheticGetterMethod hand-builds an emitMethod equivalent to what
 // classifyForEmit would produce for `func (n *T) Get<Name>() <Type>`.
 // Dispatch uses the same `result := self.<GoName>()` shape the template
@@ -420,6 +511,27 @@ func (n *{{$.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
 {{else -}}
 func (n *{{$.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
 {{end -}}
+{{end}}
+{{range .Signals}}
+// {{.GoName}} emits the {{.GodotName}} signal on this instance. Synthesized
+// from a @signals interface declaration; per-arg Variants are constructed
+// from the typed parameters and dispatched via Object::emit_signal.
+func (n *{{$.Class}}) {{.GoName}}({{range $i, $a := .PerArg}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}) {
+	{{- range .PerArg}}
+	{{.BuildVar}}
+	defer arg{{.Index}}.Destroy()
+	{{- end}}
+	{{- if .PerArg}}
+	args := []gdextension.VariantPtr{
+		{{- range .PerArg}}
+		gdextension.VariantPtr(unsafe.Pointer(&arg{{.Index}})),
+		{{- end}}
+	}
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("{{.GodotName}}"), args)
+	{{- else}}
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("{{.GodotName}}"), nil)
+	{{- end}}
+}
 {{end}}
 func register{{.Class}}() {
 	gdextension.RegisterClass(gdextension.ClassDef{
@@ -572,6 +684,24 @@ func register{{.Class}}() {
 		Setter: "{{.Setter}}",
 		{{- end}}
 		Getter: "{{.Getter}}",
+	})
+{{end}}
+{{- range .Signals}}
+	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
+		Class: "{{$.Class}}",
+		Name:  "{{.GodotName}}",
+		{{- if .ArgTypes}}
+		ArgTypes: []gdextension.VariantType{
+			{{- range .ArgTypes}}
+			gdextension.{{.}},
+			{{- end}}
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			{{- range .ArgMetas}}
+			gdextension.{{.}},
+			{{- end}}
+		},
+		{{- end}}
 	})
 {{end}}}
 

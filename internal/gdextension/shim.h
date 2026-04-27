@@ -200,4 +200,18 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionConstStringPtr empty_string,
                                                 uint32_t property_type);
 
+/* Signal registration. Mirrors classdb_register_extension_class_signal —
+ * arg type/metadata travels as parallel scalar arrays the same way method
+ * arg info does, so the Go caller never assembles a Go-allocated struct
+ * with pointers in it. arg_count==0 with NULL arrays is a no-arg signal. */
+void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegisterExtensionClassSignal fn,
+                                              GDExtensionClassLibraryPtr p_library,
+                                              GDExtensionConstStringNamePtr p_class_name,
+                                              GDExtensionConstStringNamePtr p_signal_name,
+                                              GDExtensionConstStringNamePtr empty_string_name,
+                                              GDExtensionConstStringPtr empty_string,
+                                              uint32_t arg_count,
+                                              const uint32_t *arg_types,
+                                              const uint32_t *arg_metadata);
+
 #endif /* GODOT_GO_SHIM_H */

@@ -71,6 +71,29 @@ func NewVariantString(s string) Variant {
 	return out
 }
 
+// NewVariantBool wraps a Go bool in a fresh Variant (type = BOOL). Result
+// must be released with Destroy.
+func NewVariantBool(b bool) Variant {
+	var out Variant
+	src := b
+	gdextension.CallVariantFromType(variantFromBool(),
+		gdextension.VariantPtr(unsafe.Pointer(&out)),
+		gdextension.TypePtr(unsafe.Pointer(&src)))
+	return out
+}
+
+// NewVariantFloat wraps a Go float64 in a fresh Variant (type = FLOAT).
+// Godot's FLOAT is always double-width on the wire regardless of build
+// config. Result must be released with Destroy.
+func NewVariantFloat(f float64) Variant {
+	var out Variant
+	src := f
+	gdextension.CallVariantFromType(variantFromFloat(),
+		gdextension.VariantPtr(unsafe.Pointer(&out)),
+		gdextension.TypePtr(unsafe.Pointer(&src)))
+	return out
+}
+
 // AsInt unwraps an INT-typed Variant. Behavior is undefined if the Variant
 // holds any other type — callers that don't know the runtime type should
 // inspect Type() first.

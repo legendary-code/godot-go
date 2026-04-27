@@ -346,6 +346,68 @@ func RegisterClassProperty(def ClassPropertyDef) {
 		C.uint32_t(def.Type))
 }
 
+// ClassSignalDef registers a signal on a previously-registered class.
+// Phase 6: signal arg types travel as parallel scalar arrays (mirroring
+// ClassMethodDef.ArgTypes / ArgMetadata), so the Go caller never builds a
+// Go-allocated struct with pointers in it that's then passed to C.
+//
+// ArgMetadata is currently unused on the engine side for signals (the
+// PropertyInfo "metadata" field is about hint encoding, not width); we
+// carry the parallel slice for symmetry with method registration so a
+// future engine version that grows it has a place to plug in.
+type ClassSignalDef struct {
+	Class       string
+	Name        string
+	ArgTypes    []VariantType
+	ArgMetadata []MethodArgumentMetadata
+}
+
+// RegisterClassSignal adds a signal on an extension class. After this
+// returns, GDScript can `obj.connect("name", callable)` against the
+// signal and emissions through Object::emit_signal route to connected
+// callables.
+func RegisterClassSignal(def ClassSignalDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassSignal: Class and Name are required")
+	}
+	if len(def.ArgTypes) != len(def.ArgMetadata) {
+		panic(fmt.Sprintf("gdextension.RegisterClassSignal: ArgTypes (len %d) and ArgMetadata (len %d) must be parallel",
+			len(def.ArgTypes), len(def.ArgMetadata)))
+	}
+	if len(def.ArgTypes) > maxMethodArgs {
+		panic(fmt.Sprintf("gdextension.RegisterClassSignal: too many args (%d > %d)",
+			len(def.ArgTypes), maxMethodArgs))
+	}
+
+	className := InternStringName(def.Class)
+	signalName := InternStringName(def.Name)
+	emptyName := InternStringName("")
+	emptyStr := internedEmptyString()
+
+	argCount := len(def.ArgTypes)
+	var argTypesPtr, argMetaPtr *C.uint32_t
+	if argCount > 0 {
+		argTypes := make([]C.uint32_t, argCount)
+		argMeta := make([]C.uint32_t, argCount)
+		for i := range def.ArgTypes {
+			argTypes[i] = C.uint32_t(def.ArgTypes[i])
+			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
+		}
+		argTypesPtr = &argTypes[0]
+		argMetaPtr = &argMeta[0]
+	}
+
+	C.godot_go_register_extension_class_signal(iface.classdbRegisterExtensionClassSignal,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionConstStringNamePtr(signalName),
+		C.GDExtensionConstStringNamePtr(emptyName),
+		C.GDExtensionConstStringPtr(emptyStr),
+		C.uint32_t(argCount),
+		argTypesPtr,
+		argMetaPtr)
+}
+
 // UnregisterClass tears down a previously-registered class. Call from the
 // matching deinit callback so the host's classdb stays consistent across
 // hot-reloads. Unregistering a parent before its inheritors is rejected
