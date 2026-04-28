@@ -12,9 +12,8 @@ import (
 // classView is the data the engine-class template consumes. Each method's
 // Body is pre-rendered to keep the template short.
 type classView struct {
-	GoName    string // e.g. "Node3D"
-	Pkg       string // "core" or "editor" — also the directory the file lands in.
-	BaseRef   string // Go type to embed; "" for Object (root).
+	GoName       string // e.g. "Node3D"
+	BaseRef      string // Go type to embed; "" for Object (root).
 	IsRefcounted bool
 
 	// Imports tracks Go import paths the rendered methods reference.
@@ -28,10 +27,9 @@ type classView struct {
 	// `<Class>Singleton()` accessor backed by sync.OnceValue.
 	Singleton string
 
-	// CacheVars + InitLines kept around in case future passes want eager init.
-	// Phase 3b uses sync.OnceValue inline instead, so these stay empty for now.
+	// CacheVars holds method-bind sync.OnceValue declarations rendered at
+	// file scope, one per emitted method.
 	CacheVars []cacheVar
-	InitLines []string
 }
 
 type constantView struct {
@@ -40,27 +38,22 @@ type constantView struct {
 }
 
 type enumView struct {
-	TypeName string // "ObjectConnectFlags"
-	Values   []constantView
+	TypeName   string // "ObjectConnectFlags"
+	Values     []constantView
 	IsBitfield bool
 }
 
-// emitEngineClass writes <pkgDir>/<lower(name)>.gen.go for one engine class.
-// Methods that reference unsupported types (cross-package forbidden, missing
-// builtins, etc.) are silently skipped; the rest are emitted.
-func emitEngineClass(api *API, c *Class, pkgRoot string) error {
-	pkg := c.APIType
-	if pkg == "" {
-		pkg = "core"
-	}
+// emitEngineClass writes <cfg.Dir>/<lower(name)>.gen.go for one engine class.
+// Methods that reference unsupported types are silently skipped; the rest
+// are emitted.
+func emitEngineClass(api *API, c *Class, cfg *genConfig) error {
 	view := &classView{
 		GoName:       c.Name,
-		Pkg:          pkg,
 		IsRefcounted: c.IsRefcounted,
 		Imports: map[string]bool{
 			// Every generated class file references gdextension.ObjectPtr
 			// in its <Class>FromPtr helper, regardless of method content.
-			"github.com/legendary-code/godot-go/internal/gdextension": true,
+			cfg.ModulePath + "/internal/gdextension": true,
 		},
 	}
 	// RefCounted-derived classes attach a Go finalizer in FromPtr so
@@ -71,24 +64,15 @@ func emitEngineClass(api *API, c *Class, pkgRoot string) error {
 	}
 
 	if c.Inherits != "" {
-		basePkg := classPkg(c.Inherits)
-		switch {
-		case basePkg == "" :
+		if !engineClassNames[c.Inherits] {
 			return fmt.Errorf("class %s inherits unknown class %s", c.Name, c.Inherits)
-		case basePkg == pkg:
-			view.BaseRef = c.Inherits
-		default:
-			// editor classes can inherit core classes; the reverse is forbidden.
-			if pkg == "core" && basePkg == "editor" {
-				return fmt.Errorf("core class %s would have to inherit editor class %s", c.Name, c.Inherits)
-			}
-			view.BaseRef = basePkg + "." + c.Inherits
-			view.Imports["github.com/legendary-code/godot-go/"+basePkg] = true
 		}
+		view.BaseRef = c.Inherits
 	}
 
 	if s := api.SingletonForType(c.Name); s != nil {
 		view.Singleton = s.Name
+		view.Imports["sync"] = true
 	}
 
 	for _, k := range c.Constants {
@@ -115,47 +99,39 @@ func emitEngineClass(api *API, c *Class, pkgRoot string) error {
 	for _, m := range c.Methods {
 		if m.IsVirtual {
 			// User-overridable virtuals don't have callable method binds.
-			// Phase 5 (user-class codegen) handles these.
 			continue
 		}
-		mv, ok := buildClassMethodView(api, c, m, view)
+		mv, ok := buildClassMethodView(api, c, m, view, cfg)
 		if !ok {
 			continue
 		}
 		view.Methods = append(view.Methods, mv)
 	}
 
-	pkgDir := filepath.Join(pkgRoot, pkg)
-	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-		return err
-	}
-
 	var buf bytes.Buffer
-	if err := writeClassFile(&buf, view); err != nil {
+	if err := writeClassFile(&buf, view, cfg); err != nil {
 		return fmt.Errorf("render %s: %w", c.Name, err)
 	}
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
-		_ = os.WriteFile(filepath.Join(pkgDir, strings.ToLower(c.Name)+".gen.go.broken"), buf.Bytes(), 0o644)
+		_ = os.WriteFile(filepath.Join(cfg.Dir, strings.ToLower(c.Name)+".gen.go.broken"), buf.Bytes(), 0o644)
 		return fmt.Errorf("gofmt %s: %w", c.Name, err)
 	}
-	out := filepath.Join(pkgDir, strings.ToLower(c.Name)+".gen.go")
+	out := filepath.Join(cfg.Dir, strings.ToLower(c.Name)+".gen.go")
 	return os.WriteFile(out, formatted, 0o644)
 }
 
 // buildClassMethodView is the engine-class twin of buildMethodView. It uses
 // resolveType so engine-class refs and class-scoped enums work, and routes
-// dispatch through CallMethodBindPtrCall (or CallMethodBindCall for vararg —
-// 3b skips vararg methods until the user-facing Variant slice API is in).
-func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView) (callableView, bool) {
+// dispatch through CallMethodBindPtrCall (vararg methods are skipped until
+// the user-facing Variant slice API is in).
+func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView, cfg *genConfig) (callableView, bool) {
 	if m.IsVararg {
-		// Vararg engine-class methods exist (Object.call, etc.) — defer
-		// these until we have a tidy `...variant.Variant` boundary.
 		return callableView{}, false
 	}
 
 	// Return planning.
-	rPlan, rImports, ok := classReturnPlan(view.Pkg, m.ReturnVal)
+	rPlan, rImports, ok := classReturnPlan(cfg.Package, m.ReturnVal)
 	if !ok {
 		return callableView{}, false
 	}
@@ -164,7 +140,7 @@ func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView) (c
 	}
 
 	// Argument planning.
-	prep, argsExpr, aImports, ok := buildClassArgs(view.Pkg, m.Arguments)
+	prep, argsExpr, aImports, ok := buildClassArgs(cfg.Package, m.Arguments)
 	if !ok {
 		return callableView{}, false
 	}
@@ -191,10 +167,10 @@ func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView) (c
 	var sig string
 	var instanceExpr string
 	if m.IsStatic {
-		sig = fmt.Sprintf("%s%s(%s)", c.Name, goMethod, paramSigCtx(view.Pkg, m.Arguments))
+		sig = fmt.Sprintf("%s%s(%s)", c.Name, goMethod, paramSigCtx(cfg.Package, m.Arguments))
 		instanceExpr = "nil"
 	} else {
-		sig = fmt.Sprintf("(self *%s) %s(%s)", c.Name, goMethod, paramSigCtx(view.Pkg, m.Arguments))
+		sig = fmt.Sprintf("(self *%s) %s(%s)", c.Name, goMethod, paramSigCtx(cfg.Package, m.Arguments))
 		instanceExpr = "self.Ptr()"
 	}
 	if rPlan.GoType != "" {
@@ -223,36 +199,28 @@ func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView) (c
 	doc := fmt.Sprintf("// %s mirrors the Godot %s.%s method.", goMethod, c.Name, m.Name)
 	body := b.String()
 	view.Imports["sync"] = true
-	view.Imports["github.com/legendary-code/godot-go/internal/gdextension"] = true
-	// Void+nullary methods don't reference unsafe — only add it when a
-	// method actually does. Same idea for variant: rPlan/aImports already
-	// signal it, but a few paths (e.g. variant.Variant in a sig) only
-	// surface here.
+	view.Imports[cfg.ModulePath+"/internal/gdextension"] = true
 	if strings.Contains(body, "unsafe.") || strings.Contains(sig, "unsafe.") {
 		view.Imports["unsafe"] = true
-	}
-	if strings.Contains(body, "variant.") || strings.Contains(sig, "variant.") {
-		view.Imports["github.com/legendary-code/godot-go/variant"] = true
 	}
 	return callableView{GoDoc: doc, Sig: sig, Body: body}, true
 }
 
 // classReturnPlan is the engine-class returnPrep. It supports kindObject in
 // addition to the builtin path. retImports is the set of import paths the
-// generated code needs (e.g. "github.com/legendary-code/godot-go/variant"
-// when the return type is a builtin).
+// generated code needs.
 //
 // Engine-class returns are tricky: the host writes a raw GDExtensionObjectPtr
 // into the slot. We declare a local pointer slot, then wrap it in the typed
 // Go struct after the call. nil returns are returned as a typed-nil Go
 // pointer (the caller can check with the IsNil method on Object).
-func classReturnPlan(currentPkg string, rv *ClassReturnVal) (retPlan, map[string]bool, bool) {
+func classReturnPlan(_ string, rv *ClassReturnVal) (retPlan, map[string]bool, bool) {
 	imports := map[string]bool{}
 	if rv == nil || rv.Type == "" || rv.Type == "void" {
 		return retPlan{IsVoid: true, RetArg: "nil"}, imports, true
 	}
 
-	g, kind, ok := resolveType(rv.Type, currentPkg)
+	g, kind, ok := resolveType(rv.Type)
 	if !ok {
 		return retPlan{}, imports, false
 	}
@@ -274,55 +242,41 @@ func classReturnPlan(currentPkg string, rv *ClassReturnVal) (retPlan, map[string
 			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&raw))",
 			RetExpr: "return float32(raw)"}, imports, true
 	case kindString:
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return retPlan{GoType: "string",
-			DeclRet:  "var raw variant.String",
+			DeclRet:  "var raw String",
 			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
-			Finalize: "defer raw.Destroy()",
-			RetExpr:  "return variant.StringToGo(&raw)"}, imports, true
+			Finalize: "defer stringDestroy(&raw)",
+			RetExpr:  "return stringToGo(&raw)"}, imports, true
 	case kindStringName:
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return retPlan{GoType: "string",
-			DeclRet:  "var raw variant.StringName",
+			DeclRet:  "var raw StringName",
 			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
-			Finalize: "defer raw.Destroy()",
-			RetExpr:  "return variant.StringNameToGo(&raw)"}, imports, true
+			Finalize: "defer stringNameDestroy(&raw)",
+			RetExpr:  "return stringNameToGo(&raw)"}, imports, true
 	case kindNodePath:
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return retPlan{GoType: "string",
-			DeclRet:  "var raw variant.NodePath",
+			DeclRet:  "var raw NodePath",
 			RetArg:   "gdextension.TypePtr(unsafe.Pointer(&raw))",
-			Finalize: "defer raw.Destroy()",
-			RetExpr:  "return variant.NodePathToGo(&raw)"}, imports, true
+			Finalize: "defer nodePathDestroy(&raw)",
+			RetExpr:  "return nodePathToGo(&raw)"}, imports, true
 	case kindVariant:
-		imports["github.com/legendary-code/godot-go/variant"] = true
-		return retPlan{GoType: "variant.Variant",
-			DeclRet: "var ret variant.Variant",
+		return retPlan{GoType: "Variant",
+			DeclRet: "var ret Variant",
 			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&ret))",
 			RetExpr: "return ret"}, imports, true
 	case kindBuiltin:
-		imports["github.com/legendary-code/godot-go/variant"] = true
-		ret := "variant." + g
-		return retPlan{GoType: ret,
-			DeclRet: "var ret " + ret,
+		return retPlan{GoType: g,
+			DeclRet: "var ret " + g,
 			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&ret))",
 			RetExpr: "return ret"}, imports, true
 	case kindObject:
-		// g is "*ClassName" or "*pkg.ClassName". The wrapper-construction
-		// path goes through <ClassName>FromPtr in whichever package owns it.
+		// g is "*ClassName". The wrapper-construction path goes through
+		// <ClassName>FromPtr in the same package.
 		bare := strings.TrimPrefix(g, "*")
-		var fromPtrCall string
-		if dot := strings.IndexByte(bare, '.'); dot >= 0 {
-			pkgPath := bare[:dot]
-			imports["github.com/legendary-code/godot-go/"+pkgPath] = true
-			fromPtrCall = pkgPath + "." + bare[dot+1:] + "FromPtr(ret)"
-		} else {
-			fromPtrCall = bare + "FromPtr(ret)"
-		}
 		return retPlan{GoType: g,
 			DeclRet: "var ret gdextension.ObjectPtr",
 			RetArg:  "gdextension.TypePtr(unsafe.Pointer(&ret))",
-			RetExpr: "return " + fromPtrCall,
+			RetExpr: "return " + bare + "FromPtr(ret)",
 		}, imports, true
 	}
 	return retPlan{}, imports, false
@@ -340,42 +294,33 @@ func maybeCast(goType, expr string) string {
 // classArgPrep is the engine-class twin of argPrep. It handles the kindObject
 // case (a single Object pointer slot) and reuses the builtin path for the
 // rest.
-func classArgPrep(currentPkg, godotType, goName string) (prep, passExpr string, imports map[string]bool, ok bool) {
+func classArgPrep(_, godotType, goName string) (prep, passExpr string, imports map[string]bool, ok bool) {
 	imports = map[string]bool{}
-	g, kind, resolved := resolveType(godotType, currentPkg)
+	_, kind, resolved := resolveType(godotType)
 	if !resolved {
 		return "", "", imports, false
 	}
 	switch kind {
 	case kindObject:
-		_ = g
 		tmp := "tmp_" + goName
 		prep = fmt.Sprintf("var %s gdextension.ObjectPtr\n\tif %s != nil { %s = %s.Ptr() }\n\t",
 			tmp, goName, tmp, goName)
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
-		// If g is qualified, ensure import.
-		if dot := strings.IndexByte(strings.TrimPrefix(g, "*"), '.'); dot >= 0 {
-			pkgPath := strings.TrimPrefix(g, "*")[:dot]
-			imports["github.com/legendary-code/godot-go/"+pkgPath] = true
-		}
 		return prep, passExpr, imports, true
 	case kindString:
 		tmp := "tmp_" + goName
-		prep = fmt.Sprintf("%s := variant.NewStringFromString(%s)\n\tdefer %s.Destroy()\n\t", tmp, goName, tmp)
+		prep = fmt.Sprintf("var %s String\n\tstringFromGo(&%s, %s)\n\tdefer stringDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return prep, passExpr, imports, true
 	case kindStringName:
 		tmp := "tmp_" + goName
-		prep = fmt.Sprintf("%s := variant.NewStringNameFromString(%s)\n\tdefer %s.Destroy()\n\t", tmp, goName, tmp)
+		prep = fmt.Sprintf("var %s StringName\n\tstringNameFromGo(&%s, %s)\n\tdefer stringNameDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return prep, passExpr, imports, true
 	case kindNodePath:
 		tmp := "tmp_" + goName
-		prep = fmt.Sprintf("%s := variant.NewNodePathFromString(%s)\n\tdefer %s.Destroy()\n\t", tmp, goName, tmp)
+		prep = fmt.Sprintf("var %s NodePath\n\tnodePathFromGo(&%s, %s)\n\tdefer nodePathDestroy(&%s)\n\t", tmp, tmp, goName, tmp)
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
-		imports["github.com/legendary-code/godot-go/variant"] = true
 		return prep, passExpr, imports, true
 	case kindFloat:
 		tmp := "tmp_" + goName
@@ -383,8 +328,9 @@ func classArgPrep(currentPkg, godotType, goName string) (prep, passExpr string, 
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", tmp)
 		return prep, passExpr, imports, true
 	case kindInt:
-		// Typed enum args land here (g != "int64"). The slot still needs
-		// an int64 underneath, so widen via a temporary.
+		// Typed enum args land here (the Go type isn't int64). The slot
+		// still needs an int64 underneath, so widen via a temporary.
+		g, _, _ := resolveType(godotType)
 		if g != "int64" {
 			tmp := "tmp_" + goName
 			prep = fmt.Sprintf("%s := int64(%s)\n\t", tmp, goName)
@@ -393,14 +339,6 @@ func classArgPrep(currentPkg, godotType, goName string) (prep, passExpr string, 
 			passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
 		}
 		return prep, passExpr, imports, true
-	case kindVariant:
-		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
-		imports["github.com/legendary-code/godot-go/variant"] = true
-		return prep, passExpr, imports, true
-	case kindBuiltin:
-		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
-		imports["github.com/legendary-code/godot-go/variant"] = true
-		return prep, passExpr, imports, true
 	default:
 		passExpr = fmt.Sprintf("gdextension.TypePtr(unsafe.Pointer(&%s))", goName)
 		return prep, passExpr, imports, true
@@ -408,15 +346,14 @@ func classArgPrep(currentPkg, godotType, goName string) (prep, passExpr string, 
 }
 
 // buildClassArgs renders the prep code + args[...] literal + import set for
-// an engine-class method's argument list. ("", "nil", _, true) for the empty
-// list.
+// an engine-class method's argument list.
 func buildClassArgs(currentPkg string, args []ClassArgument) (string, string, map[string]bool, bool) {
 	imports := map[string]bool{}
 	if len(args) == 0 {
 		return "", "nil", imports, true
 	}
 	for _, a := range args {
-		if _, _, ok := resolveType(a.Type, currentPkg); !ok {
+		if _, _, ok := resolveType(a.Type); !ok {
 			return "", "", imports, false
 		}
 	}
@@ -442,22 +379,16 @@ func buildClassArgs(currentPkg string, args []ClassArgument) (string, string, ma
 	return prepB.String() + elemsB.String(), "args[:]", imports, true
 }
 
-// paramSigCtx is paramSig with a current-package context so engine-class arg
-// types get the right `*core.X` / `*X` form, and builtin-class refs get the
-// `variant.` prefix.
-func paramSigCtx(currentPkg string, args []ClassArgument) string {
+// paramSigCtx renders a Go parameter list. currentPkg is unused now (single
+// package), but kept as a parameter so the utility-function emitter can call
+// in with no behavior change while we migrate.
+func paramSigCtx(_ string, args []ClassArgument) string {
 	if len(args) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(args))
 	for _, a := range args {
-		g, k, _ := resolveType(a.Type, currentPkg)
-		switch k {
-		case kindBuiltin:
-			g = "variant." + g
-		case kindVariant:
-			g = "variant.Variant"
-		}
+		g, _, _ := resolveType(a.Type)
 		parts = append(parts, safeIdent(a.Name)+" "+g)
 	}
 	return strings.Join(parts, ", ")
@@ -465,9 +396,9 @@ func paramSigCtx(currentPkg string, args []ClassArgument) string {
 
 // writeClassFile renders the .gen.go body. We don't use text/template because
 // we need to interleave imports computed mid-render.
-func writeClassFile(buf *bytes.Buffer, view *classView) error {
+func writeClassFile(buf *bytes.Buffer, view *classView, cfg *genConfig) error {
 	// Preamble + imports.
-	fmt.Fprintf(buf, "// Code generated by godot-go-bindgen. DO NOT EDIT.\n\npackage %s\n\n", view.Pkg)
+	fmt.Fprintf(buf, "// Code generated by godot-go-bindgen. DO NOT EDIT.\n\npackage %s\n\n", cfg.Package)
 	if len(view.Imports) > 0 {
 		buf.WriteString("import (\n")
 		// Sort imports for stable output: stdlib first, then ours.
@@ -536,9 +467,6 @@ func (self *Object) BindPtr(p gdextension.ObjectPtr) { self.ptr = p }
 	// Unreference call dispatches through gdextension.RunOnMain so
 	// the engine call lands on the main thread regardless of which
 	// goroutine the Go GC happens to use for finalizer dispatch.
-	//
-	// Plain Object subclasses (Node, Node2D, etc.) keep the simpler
-	// FromPtr — those are host-managed via the scene tree.
 	if view.IsRefcounted {
 		fmt.Fprintf(buf, `// %sFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
 // *%s. Returns nil on a nil input. %s descends from RefCounted, so the
