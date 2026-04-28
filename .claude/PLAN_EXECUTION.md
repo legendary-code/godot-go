@@ -851,6 +851,63 @@ Phase 0: get a `c-shared` build of an empty extension loading in Godot
 4.6 with a print-from-init smoke test. Everything downstream depends on
 that loop being closed.
 
+## 8. Multi-version restructure (post-Phase-8, 2026-04-28)
+
+Driven by `.claude/PLAN2.md`. Goal: stop pinning the framework to one
+Godot version. Each user (and the framework itself) supplies their own
+`extension_api.json` and stamps out bindings via `go generate`; the
+framework only commits the `gdextension_interface.h` ABI header (4.6)
+plus the cgo bridge.
+
+Landed across 7 commits (c0a16d4 → cc11cce):
+
+- **Single-package bindgen output.** Drop the per-api_type split
+  (variant/, core/, editor/, enums/, util/, native/, godot/aliases) —
+  bindgen now emits one flat package whose name comes from
+  `$GOPACKAGE`. Version constants move out of the framework and into a
+  generated `version.gen.go` in the user's bindings package, registered
+  with the framework via `gdextension.RegisterAPIVersion(...)` at init.
+- **gdextension promoted out of `internal/`.** User bindings live in a
+  separate Go module and can't import `internal/gdextension`; the cgo
+  bridge is now the top-level `gdextension/` package.
+- **Bindgen emits runtime helpers + runtime/ sub-package.** A
+  `runtime.gen.go` in the user's bindings package supplies the
+  package-internal marshal helpers (`stringFromGo`, `internStringName`,
+  the `Variant` type, the `VariantAs*`/`VariantSet*` accessors). A
+  sibling `runtime/` sub-package supplies the user-facing
+  `IsEditorHint`, `Print`/`Printerr`, and re-exports of
+  `RunOnMain`/`DrainMain`/`IsMainThread`. Bindings import path is
+  auto-detected from go.mod or supplied via `-import-path`.
+- **Shared godot/ trigger.** `godot/generate_bindings.go` is the
+  framework's own `//go:generate` file pointing at `extension_api.json`.
+  `godot/**/*.gen.go` and `godot/runtime/` are gitignored — the JSON is
+  the version pin, the generated tree is reproducible.
+- **Examples migrated.** smoke / locale_language / 2d_demo all import
+  `github.com/legendary-code/godot-go/godot` + `.../godot/runtime` (no
+  more core/variant/enums/util/internal/runtime). cmd/godot-go threads
+  the user's bindings alias through the type table — `frameworkPkgs`
+  gate dropped, any imported package can host the `@extends` parent.
+- **Old bindings deleted.** core/, editor/, variant/, enums/, util/,
+  native/, internal/runtime/ all removed (1080 files). Taskfile + CI
+  run `go generate ./godot/...` before tests.
+- **Docs.** `docs/setup.md` walks through project setup; README rewritten
+  for the new workflow.
+
+End-to-end verified 2026-04-28 against Godot 4.6.2.stable.official:
+all three example test scripts pass (`smoke: 21/21`,
+`locale_language: ALL CHECKS PASSED`, `2d_demo: ALL CHECKS PASSED`).
+
+**Not yet wired** (additive, doesn't block anything):
+- Multi-version CI matrix. Setup is ready (CI runs `go generate`
+  before tests; bindgen is version-agnostic), but populating older
+  `extension_api_4_4.json` / `4_5.json` requires running older Godot
+  binaries. Documented in `docs/setup.md`.
+- A pre-existing wart in `examples/smoke/main.go`: the
+  `runtime.IsEditorHint() == false (headless)` assertion FAILs during
+  the one-shot `--editor` import pass (where IsEditorHint correctly
+  returns true). Game-mode `--headless` runs pass 21/21. The label
+  encodes the assumption; CI ignores the editor pass result.
+
 ## Source Control
 After each Phase step, create a commit for those changes.  If we make any
 adjustments in a phase, update that commit that was created for that phase
