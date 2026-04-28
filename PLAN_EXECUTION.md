@@ -664,9 +664,45 @@ This is the headline feature. Steps:
       libgodot via LoadLibrary). godot-go is committed to the
       c-shared model and accepts the no-hot-reload trade-off as the
       cost of natural Godot project integration.
-- [ ] Goroutine + Godot main-thread interaction guidance — most engine
-      calls must happen on the main thread; codify with a `runtime.Lock`
-      helper or doc section.
+- [x] **Goroutine ↔ main-thread bridge.** A small surface in
+      `internal/runtime` plus `docs/threading.md`. Three exported
+      functions:
+      - `runtime.IsMainThread() bool` — runtime check, captures the
+        engine's main thread on first engine→Go callback.
+      - `runtime.RunOnMain(f func())` — schedule f for main-thread
+        execution. Inline if already on main; queued otherwise.
+        Returns immediately when queueing.
+      - `runtime.DrainMain()` — execute every queued func. Must be
+        called from main; typical recipe is one call at the top of
+        the user's `@override Process(delta float64)`.
+      Mechanism:
+      - Main-thread ID captured by `gdextension.CaptureMainThread`,
+        called from `godotGoOnInitialize` on every level (idempotent
+        via `atomic.CompareAndSwap` on zero).
+      - Cgo helper `godot_go_current_thread_id` returns
+        `GetCurrentThreadId()` on Windows, `pthread_self()` on POSIX
+        — opaque-but-comparable within a process.
+      - Queue is an unbounded `[]func()` + `sync.Mutex`. Bounded
+        would risk deadlock (producer waiting for a drain that's
+        waiting on the producer). Drain takes the slice atomically,
+        releases the lock, and runs each func — funcs queued during
+        drain land in the next batch (single-pass, prevents
+        pathological loops).
+      Smoke verifies all five threading axes: `IsMainThread()` true
+      during SCENE init, `RunOnMain` inlines when called from main,
+      goroutine sees `IsMainThread() == false`, posted func
+      doesn't run before drain, posted func DOES run after drain.
+      17/17 framework checks now passing; 5/5 stable shutdown.
+      5 Go unit tests for the queue (empty drain noop, off-thread
+      queue + drain ordering, single-pass semantics, nil silently
+      skipped, 1000-goroutine concurrent post).
+      `docs/threading.md` covers the threading model, the helper
+      surface, what's safe vs. requires main, common patterns
+      (bounce-from-goroutine, defensive `RunOnMain`, manual sync
+      block), and what's deferred — auto-drain (codegen-injected or
+      hidden-node-driven), `RunOnMainSync`, structured worker pools.
+
+**Phase 6 complete** — all checkboxes ticked.
 
 ### Phase 7 — Examples, docs, CI
 

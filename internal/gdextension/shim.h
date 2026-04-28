@@ -13,6 +13,19 @@
 GDExtensionInterfaceFunctionPtr godot_go_resolve(GDExtensionInterfaceGetProcAddress p_get_proc_address,
                                                  const char *p_name);
 
+/* godot_go_current_thread_id returns a stable identifier for the OS
+ * thread currently executing this code. The framework uses this to
+ * detect whether engine method calls would land on Godot's main
+ * thread (where engine state is safe to touch) or on a worker.
+ *
+ * Implementation is platform-specific:
+ *   - Windows: GetCurrentThreadId() — DWORD, widened to uint64_t.
+ *   - POSIX:   pthread_self() — opaque, but reinterpreted as
+ *              uint64_t for comparison only.
+ * Values are not portable across platforms or even across processes,
+ * but `==` comparison within a single process is well-defined. */
+uint64_t godot_go_current_thread_id(void);
+
 /* Function-pointer accessors for the GDExtensionInitialization callback fields.
  * They forward into the Go-exported godotGoOnInitialize / godotGoOnDeinitialize
  * declarations in _cgo_export.h. */

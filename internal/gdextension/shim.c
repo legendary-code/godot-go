@@ -1,6 +1,22 @@
 #include "shim.h"
 #include "_cgo_export.h"
 
+#ifdef _WIN32
+#include <windows.h>
+uint64_t godot_go_current_thread_id(void) {
+    return (uint64_t)GetCurrentThreadId();
+}
+#else
+#include <pthread.h>
+uint64_t godot_go_current_thread_id(void) {
+    /* pthread_t is opaque (sometimes a struct), but on every platform
+     * we ship for it round-trips through uint64_t for `==` comparison.
+     * If a future platform makes pthread_t larger than 8 bytes we'll
+     * need a per-OS fork here. */
+    return (uint64_t)(uintptr_t)pthread_self();
+}
+#endif
+
 GDExtensionInterfaceFunctionPtr godot_go_resolve(GDExtensionInterfaceGetProcAddress p_get_proc_address,
                                                  const char *p_name) {
     if (p_get_proc_address == NULL) {

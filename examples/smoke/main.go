@@ -22,6 +22,8 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/enums"
 	"github.com/legendary-code/godot-go/internal/gdextension"
@@ -151,6 +153,41 @@ func runSmokeChecks() {
 	check("runtime.IsEditorHint() == false (headless)",
 		runtime.IsEditorHint() == false,
 		runtime.IsEditorHint(), false)
+
+	// IsMainThread / RunOnMain / DrainMain — the goroutine ↔ main-
+	// thread bridge. We're inside SCENE init, which Godot calls on the
+	// engine main thread, so IsMainThread must be true here.
+	check("runtime.IsMainThread() during SCENE init",
+		runtime.IsMainThread(), runtime.IsMainThread(), true)
+
+	// Inline-when-on-main: RunOnMain from main runs synchronously.
+	// `inlineRan` flips before RunOnMain returns.
+	inlineRan := false
+	runtime.RunOnMain(func() { inlineRan = true })
+	check("RunOnMain inlines when called from main", inlineRan, inlineRan, true)
+
+	// Off-thread post: a goroutine queues a func; we wait via the
+	// WaitGroup so the post completes before we drain. The goroutine's
+	// IsMainThread must be false (worker thread), and the queued func
+	// must run on this thread (the engine main thread) at DrainMain
+	// time, observably setting `posted` to true.
+	var posted bool
+	var wg sync.WaitGroup
+	var goroutineSawMain bool
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		goroutineSawMain = runtime.IsMainThread()
+		runtime.RunOnMain(func() { posted = true })
+	}()
+	wg.Wait()
+	check("goroutine.IsMainThread() == false",
+		goroutineSawMain == false, goroutineSawMain, false)
+	check("posted == false before drain",
+		posted == false, posted, false)
+	runtime.DrainMain()
+	check("posted == true after drain",
+		posted == true, posted, true)
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)

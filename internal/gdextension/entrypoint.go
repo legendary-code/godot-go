@@ -35,6 +35,12 @@ func gdextension_library_init(
 
 //export godotGoOnInitialize
 func godotGoOnInitialize(level C.GDExtensionInt) {
+	// Godot's contract: per-level init fires on the engine's main
+	// thread. CaptureMainThread is idempotent, so calling it on every
+	// init level is fine — only the first call records the ID, and
+	// each level gives us another chance to capture if (somehow) the
+	// engine ever called us off-thread before.
+	CaptureMainThread()
 	runInitCallbacks(InitializationLevel(level))
 }
 
