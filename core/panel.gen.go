@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // Panel mirrors the Godot engine class Panel.

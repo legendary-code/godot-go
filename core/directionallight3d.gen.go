@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // DirectionalLight3D mirrors the Godot engine class DirectionalLight3D.

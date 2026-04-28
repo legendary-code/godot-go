@@ -7,7 +7,7 @@
 package native
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 	"github.com/legendary-code/godot-go/variant"
 )
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // VisualShaderNodeColorOp mirrors the Godot engine class VisualShaderNodeColorOp.

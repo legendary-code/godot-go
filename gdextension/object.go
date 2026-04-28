@@ -1,7 +1,7 @@
 package gdextension
 
 /*
-#cgo CFLAGS: -I${SRCDIR} -I${SRCDIR}/../../godot
+#cgo CFLAGS: -I${SRCDIR} -I${SRCDIR}/../godot
 
 #include "shim.h"
 */

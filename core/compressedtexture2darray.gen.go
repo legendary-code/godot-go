@@ -5,7 +5,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // CompressedTexture2DArray mirrors the Godot engine class CompressedTexture2DArray.

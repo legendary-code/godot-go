@@ -5,7 +5,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // TextServerDummy mirrors the Godot engine class TextServerDummy.

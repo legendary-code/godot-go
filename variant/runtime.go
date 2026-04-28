@@ -9,7 +9,7 @@ package variant
 import (
 	"unsafe"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // internStringName is a thin facade over gdextension.InternStringName so the

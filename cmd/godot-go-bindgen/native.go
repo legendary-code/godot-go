@@ -187,7 +187,7 @@ func mapNativeType(c string, known map[string]bool, cfg *genConfig) (goTypeOut s
 	if strings.HasSuffix(c, "*") {
 		base := strings.TrimSpace(strings.TrimSuffix(c, "*"))
 		if base == "Object" {
-			imports[cfg.ModulePath+"/internal/gdextension"] = true
+			imports[cfg.ModulePath+"/gdextension"] = true
 			return "gdextension.ObjectPtr", imports, "Object *", true
 		}
 		return "", imports, "", false

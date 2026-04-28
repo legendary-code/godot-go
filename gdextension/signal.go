@@ -67,6 +67,6 @@ func EmitSignal(instance ObjectPtr, signalName StringNamePtr, args []VariantPtr)
 		PrintError(
 			fmt.Sprintf("EmitSignal(%q): CallError type=%d arg=%d expected=%d",
 				StringNameToGo(signalName), cerr.Type, cerr.Argument, cerr.Expected),
-			"EmitSignal", "internal/gdextension/signal.go", 0, false)
+			"EmitSignal", "gdextension/signal.go", 0, false)
 	}
 }

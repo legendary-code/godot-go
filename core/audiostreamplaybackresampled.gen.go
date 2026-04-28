@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // AudioStreamPlaybackResampled mirrors the Godot engine class AudioStreamPlaybackResampled.

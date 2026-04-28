@@ -3,7 +3,7 @@
 package editor
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // OpenXRInteractionProfileEditor mirrors the Godot engine class OpenXRInteractionProfileEditor.

@@ -647,7 +647,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"{{.ModulePath}}/internal/gdextension"
+	"{{.ModulePath}}/gdextension"
 )
 
 // {{.GoName}} is the opaque Godot builtin {{.GoName}} ({{.Size}} bytes under

@@ -1,11 +1,11 @@
 package runtime
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // User-facing aliases for the main-thread work queue. The actual
-// implementation lives in internal/gdextension/mainqueue.go because
+// implementation lives in gdextension/mainqueue.go because
 // framework-internal code (bindgen-emitted RefCounted finalizers in
 // core/) needs to reach RunOnMain without an import cycle through
 // internal/runtime.
@@ -20,7 +20,7 @@ func IsMainThread() bool { return gdextension.IsMainThread() }
 
 // RunOnMain schedules f to execute on the engine's main thread.
 // Inline if already on main; queued otherwise. See
-// internal/gdextension.RunOnMain for full semantics.
+// gdextension.RunOnMain for full semantics.
 func RunOnMain(f func()) { gdextension.RunOnMain(f) }
 
 // DrainMain executes every func currently queued via RunOnMain.

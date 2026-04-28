@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // CSGCombiner3D mirrors the Godot engine class CSGCombiner3D.

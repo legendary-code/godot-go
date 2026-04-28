@@ -20,7 +20,7 @@ func emitUtilityFunctions(api *API, cfg *genConfig) error {
 	imports := map[string]bool{
 		"sync":   true,
 		"unsafe": true,
-		cfg.ModulePath + "/internal/gdextension": true,
+		cfg.ModulePath + "/gdextension": true,
 	}
 
 	type funView struct {

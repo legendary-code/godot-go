@@ -7,7 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/core"
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // EditorScriptPicker mirrors the Godot engine class EditorScriptPicker.

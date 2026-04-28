@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // PhysicsDirectBodyState2DExtension mirrors the Godot engine class PhysicsDirectBodyState2DExtension.

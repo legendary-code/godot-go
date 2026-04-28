@@ -8,7 +8,7 @@ package util
 
 import (
 	"github.com/legendary-code/godot-go/core"
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 	"github.com/legendary-code/godot-go/variant"
 	"sync"
 	"unsafe"

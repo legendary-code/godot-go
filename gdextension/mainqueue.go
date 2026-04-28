@@ -16,7 +16,7 @@ import "sync"
 //                       runs it. Typically called from the user's
 //                       per-frame Process override.
 //
-// The primitives live in internal/gdextension (not internal/runtime,
+// The primitives live in gdextension (not internal/runtime,
 // the user-facing convenience layer) because framework-internal code
 // — particularly the bindgen-emitted RefCounted finalizers in
 // core/ — needs to call RunOnMain without taking on internal/runtime

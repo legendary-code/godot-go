@@ -5,7 +5,7 @@ package editor
 import (
 	"runtime"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // EditorExportPlatformWindows mirrors the Godot engine class EditorExportPlatformWindows.

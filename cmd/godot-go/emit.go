@@ -520,7 +520,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 {{if .NeedsVariant}}	"github.com/legendary-code/godot-go/variant"
 {{end}})
 

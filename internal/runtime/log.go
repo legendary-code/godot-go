@@ -8,7 +8,7 @@ import (
 	"fmt"
 	goruntime "runtime"
 
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 )
 
 // Print logs the formatted args to Godot as a warning. Caller info (function

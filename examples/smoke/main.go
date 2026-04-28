@@ -27,7 +27,7 @@ import (
 
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/enums"
-	"github.com/legendary-code/godot-go/internal/gdextension"
+	"github.com/legendary-code/godot-go/gdextension"
 	"github.com/legendary-code/godot-go/internal/runtime"
 	"github.com/legendary-code/godot-go/util"
 	"github.com/legendary-code/godot-go/variant"

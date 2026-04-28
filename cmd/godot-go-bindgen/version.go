@@ -10,10 +10,10 @@ import (
 // compile-time view of the Godot API — the version data from the
 // extension_api.json the bindings were generated against. The file's
 // init() registers the version with the framework so
-// internal/gdextension can warn on major/minor drift between
+// gdextension can warn on major/minor drift between
 // bindings and the live host on first init.
 //
-// Lives in the user's package rather than internal/gdextension so the
+// Lives in the user's package rather than gdextension so the
 // constants reflect THIS user's chosen Godot version (different users
 // may target different versions); the framework runtime stays generic
 // and queries the host independently.
@@ -29,7 +29,7 @@ func emitVersion(api *API, cfg *genConfig) error {
 
 package %s
 
-import "%s/internal/gdextension"
+import "%s/gdextension"
 
 // Constants describing the Godot extension API these bindings target.
 // Sourced from extension_api.json's header block at bindgen time.

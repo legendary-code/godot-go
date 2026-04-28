@@ -53,7 +53,7 @@ func emitEngineClass(api *API, c *Class, cfg *genConfig) error {
 		Imports: map[string]bool{
 			// Every generated class file references gdextension.ObjectPtr
 			// in its <Class>FromPtr helper, regardless of method content.
-			cfg.ModulePath + "/internal/gdextension": true,
+			cfg.ModulePath + "/gdextension": true,
 		},
 	}
 	// RefCounted-derived classes attach a Go finalizer in FromPtr so
@@ -199,7 +199,7 @@ func buildClassMethodView(api *API, c *Class, m ClassMethod, view *classView, cf
 	doc := fmt.Sprintf("// %s mirrors the Godot %s.%s method.", goMethod, c.Name, m.Name)
 	body := b.String()
 	view.Imports["sync"] = true
-	view.Imports[cfg.ModulePath+"/internal/gdextension"] = true
+	view.Imports[cfg.ModulePath+"/gdextension"] = true
 	if strings.Contains(body, "unsafe.") || strings.Contains(sig, "unsafe.") {
 		view.Imports["unsafe"] = true
 	}

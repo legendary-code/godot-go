@@ -70,6 +70,6 @@ func checkVersionDrift() {
 			host.Major, host.Minor, host.Patch, host.String,
 		)
 		PrintWarning(msg, "checkVersionDrift",
-			"internal/gdextension/version.go", 0, false)
+			"gdextension/version.go", 0, false)
 	})
 }
