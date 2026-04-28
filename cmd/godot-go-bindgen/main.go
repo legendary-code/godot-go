@@ -107,6 +107,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := emitVersion(api, *outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit version: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes + %d engine classes against %s (precision=%s, build_config=%s)\n",
 		len(emitted), classCount, api.Header.VersionFullName, api.Header.Precision, *buildConfig)
 }

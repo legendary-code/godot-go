@@ -12,9 +12,9 @@ import (
 // just in emit.go.
 func emitFor(t *testing.T, src string) string {
 	t.Helper()
-	d := mustDiscover(t, src)
+	d, fset := mustDiscoverWithFset(t, src)
 	var buf bytes.Buffer
-	if err := emit(&buf, d); err != nil {
+	if err := emit(&buf, fset, d); err != nil {
 		t.Fatalf("emit: %v", err)
 	}
 	return buf.String()
@@ -218,9 +218,9 @@ type N struct {
 }
 func (n *N) Foo(xs []int) {}
 `
-	d := mustDiscover(t, src)
+	d, fset := mustDiscoverWithFset(t, src)
 	var buf bytes.Buffer
-	err := emit(&buf, d)
+	err := emit(&buf, fset, d)
 	if err == nil {
 		t.Fatalf("expected emit to reject slice arg")
 	}

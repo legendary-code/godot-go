@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/legendary-code/godot-go/internal/naming"
 )
 
 // typeKind classifies a Godot type for codegen purposes. It controls the Go
@@ -178,21 +180,11 @@ func suffixFor(godot string) string {
 	return godot
 }
 
-// pascal converts snake_case_or_lowercase to PascalCase. Numbers in the
-// middle are preserved (e.g. "vector2" -> "Vector2", "a_b_c" -> "ABC").
-func pascal(s string) string {
-	if s == "" {
-		return ""
-	}
-	parts := strings.Split(s, "_")
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(p[:1]) + p[1:]
-	}
-	return strings.Join(parts, "")
-}
+// pascal is a thin alias to keep call sites concise. The actual
+// snake → Pascal logic lives in internal/naming alongside its inverse
+// (PascalToSnake), so the user-facing codegen and the framework
+// bindgen agree on the convention.
+func pascal(s string) string { return naming.SnakeToPascal(s) }
 
 // safeIdent rewrites Godot argument names that collide with Go keywords or
 // commonly-shadowed builtin identifiers.

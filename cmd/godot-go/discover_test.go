@@ -9,6 +9,12 @@ import (
 
 func mustDiscover(t *testing.T, src string) *discovered {
 	t.Helper()
+	d, _ := mustDiscoverWithFset(t, src)
+	return d
+}
+
+func mustDiscoverWithFset(t *testing.T, src string) (*discovered, *token.FileSet) {
+	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
 	if err != nil {
@@ -18,7 +24,7 @@ func mustDiscover(t *testing.T, src string) *discovered {
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	return d
+	return d, fset
 }
 
 func mustFailDiscover(t *testing.T, src string, wantSubstr string) {
@@ -888,19 +894,3 @@ type Helper struct {}
 	mustFailDiscover(t, src, "@editor on inner class")
 }
 
-func TestPascalToSnake(t *testing.T) {
-	cases := []struct {
-		in, want string
-	}{
-		{"Hello", "hello"},
-		{"HelloWorld", "hello_world"},
-		{"HTTPServer", "http_server"},
-		{"GetURL", "get_url"},
-		{"X", "x"},
-	}
-	for _, c := range cases {
-		if got := pascalToSnake(c.in); got != c.want {
-			t.Errorf("pascalToSnake(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}

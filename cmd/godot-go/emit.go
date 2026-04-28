@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
+	"go/token"
 	"io"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/legendary-code/godot-go/internal/naming"
 )
 
 // emit renders the binding file for the discovered class to w. Phase 5d
@@ -21,7 +24,7 @@ import (
 // The emitter writes gofmt'd source so diffs against hand-written
 // references stay clean. Iteration order is deterministic — methods are
 // emitted in source-position order, mirroring the discovered slice.
-func emit(w io.Writer, d *discovered) error {
+func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 	if d.MainClass == nil {
 		return fmt.Errorf("no main class to emit")
 	}
@@ -31,7 +34,7 @@ func emit(w io.Writer, d *discovered) error {
 		enumSet[e.Name] = true
 	}
 
-	supported, needsVariant, err := classifyForEmit(d.MainClass.Methods, enumSet)
+	supported, needsVariant, err := classifyForEmit(fset, d.MainClass.Methods, enumSet)
 	if err != nil {
 		return err
 	}
@@ -218,13 +221,13 @@ type emitMethod struct {
 // arg/return type or multi-result return propagates as an error. The
 // enums set lets resolveType accept user-defined int enum types declared
 // in the same file (Phase 5f).
-func classifyForEmit(methods []*methodInfo, enums map[string]bool) ([]emitMethod, bool, error) {
+func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]bool) ([]emitMethod, bool, error) {
 	var out []emitMethod
 	needsVariant := false
 	for _, m := range methods {
 		em, err := buildEmitMethod(m, enums)
 		if err != nil {
-			return nil, false, fmt.Errorf("%s: %w", m.GoName, err)
+			return nil, false, fmt.Errorf("%s: %s: %w", posStr(fset, m.Pos), m.GoName, err)
 		}
 		if em.HasArgs || em.HasReturn {
 			needsVariant = true
@@ -336,10 +339,10 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
 		}
 		getterGoName := "Get" + p.Name
-		getterGodotName := pascalToSnake(getterGoName)
+		getterGodotName := naming.PascalToSnake(getterGoName)
 		setterGoName := "Set" + p.Name
-		setterGodotName := pascalToSnake(setterGoName)
-		propGodotName := pascalToSnake(p.Name)
+		setterGodotName := naming.PascalToSnake(setterGoName)
+		propGodotName := naming.PascalToSnake(p.Name)
 
 		entry := emitProperty{
 			GodotName:  propGodotName,

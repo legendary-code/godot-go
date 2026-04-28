@@ -41,6 +41,9 @@ func godotGoOnInitialize(level C.GDExtensionInt) {
 	// each level gives us another chance to capture if (somehow) the
 	// engine ever called us off-thread before.
 	CaptureMainThread()
+	// Surface compile-time vs runtime API version drift on first
+	// callback. sync.Once-guarded; subsequent levels are no-ops.
+	checkVersionDrift()
 	runInitCallbacks(InitializationLevel(level))
 }
 

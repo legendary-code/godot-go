@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/legendary-code/godot-go/internal/doctag"
+	"github.com/legendary-code/godot-go/internal/naming"
 )
 
 // discovered is everything the AST pass found in one trigger file. The
@@ -251,7 +252,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				// register. For @class structs, exactly one embedded
 				// field must carry @extends; that's the parent.
 				if isClass {
-					parent, parentImport, perr := findExtendsParent(fset, t, d.Imports)
+					parent, parentImport, perr := findExtendsParent(fset, t, ts.Pos(), d.Imports)
 					if perr != nil {
 						return nil, perr
 					}
@@ -291,7 +292,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	switch len(mainCandidates) {
 	case 0:
 		return nil, fmt.Errorf("%s: no @class struct found — tag exactly one top-level struct with @class to register it as a Godot extension class",
-			file.Name.Name)
+			posStr(fset, file.Pos()))
 	case 1:
 		d.MainClass = mainCandidates[0]
 	default:
@@ -352,7 +353,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		if name, ok := doctag.Find(mi.Doc, "name"); ok {
 			mi.GodotName = name
 		} else {
-			mi.GodotName = pascalToSnake(fn.Name.Name)
+			mi.GodotName = naming.PascalToSnake(fn.Name.Name)
 			if mi.Kind == methodOverride && !strings.HasPrefix(mi.GodotName, "_") {
 				mi.GodotName = "_" + mi.GodotName
 			}
@@ -477,7 +478,7 @@ func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) 
 				signalNames[name.Name] = name.Pos()
 				ci.Signals = append(ci.Signals, &signalInfo{
 					Name:            name.Name,
-					GodotName:       pascalToSnake(name.Name),
+					GodotName:       naming.PascalToSnake(name.Name),
 					Pos:             name.Pos(),
 					Args:            ft.Params.List,
 					SourceInterface: iface.Name.Name,
@@ -862,9 +863,10 @@ func validateGroupOrdering(fset *token.FileSet, props []*propertyInfo) error {
 //
 // Returns the bare class name (e.g. "Node") + the framework import
 // path it came from.
-func findExtendsParent(fset *token.FileSet, st *ast.StructType, imports map[string]string) (parent, parentImport string, err error) {
+func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.Pos, imports map[string]string) (parent, parentImport string, err error) {
 	if st.Fields == nil {
-		return "", "", fmt.Errorf("@class struct has no fields — it needs an embedded framework type tagged @extends")
+		return "", "", fmt.Errorf("%s: @class struct has no fields — it needs an embedded framework type tagged @extends",
+			posStr(fset, structPos))
 	}
 	hits := 0
 	for _, f := range st.Fields.List {
@@ -896,11 +898,13 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, imports map[stri
 	}
 	switch hits {
 	case 0:
-		return "", "", fmt.Errorf("@class struct has no @extends — tag the embedded framework type that this class extends (Godot's single-inheritance equivalent of `extends Node` in GDScript)")
+		return "", "", fmt.Errorf("%s: @class struct has no @extends — tag the embedded framework type that this class extends (Godot's single-inheritance equivalent of `extends Node` in GDScript)",
+			posStr(fset, structPos))
 	case 1:
 		return parent, parentImport, nil
 	default:
-		return "", "", fmt.Errorf("multiple @extends fields — Godot is single-inheritance, pick one")
+		return "", "", fmt.Errorf("%s: multiple @extends fields — Godot is single-inheritance, pick one",
+			posStr(fset, structPos))
 	}
 }
 
@@ -968,44 +972,6 @@ func isLowerFirst(name string) bool {
 	}
 	r := []rune(name)[0]
 	return unicode.IsLower(r)
-}
-
-// pascalToSnake converts Go-style PascalCase to Godot-style snake_case.
-// Acronyms run together (e.g. `HTTPServer` → `http_server`). The mapping
-// matches what the engine bindgen does when going the other way — see
-// cmd/godot-go-bindgen/naming.go.
-func pascalToSnake(s string) string {
-	var b strings.Builder
-	prevUpper := false
-	for i, r := range s {
-		isUpper := unicode.IsUpper(r)
-		if i > 0 && isUpper && !prevUpper {
-			b.WriteByte('_')
-		}
-		// Handle acronym → word boundary, e.g. `HTTPServer`: at the `S`
-		// after `HTTP`, prevUpper is true but the *next* rune is lower,
-		// so a separator belongs before this char.
-		if i > 0 && isUpper && prevUpper {
-			next, ok := nextRune(s, i, r)
-			if ok && unicode.IsLower(next) {
-				b.WriteByte('_')
-			}
-		}
-		b.WriteRune(unicode.ToLower(r))
-		prevUpper = isUpper
-	}
-	return b.String()
-}
-
-func nextRune(s string, i int, cur rune) (rune, bool) {
-	off := i + len(string(cur))
-	if off >= len(s) {
-		return 0, false
-	}
-	for _, r := range s[off:] {
-		return r, true
-	}
-	return 0, false
 }
 
 func posStr(fset *token.FileSet, pos token.Pos) string {

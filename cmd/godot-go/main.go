@@ -82,7 +82,7 @@ func run() error {
 		return fmt.Errorf("create %s: %w", outPath, err)
 	}
 	defer out.Close()
-	if err := emit(out, disc); err != nil {
+	if err := emit(out, fset, disc); err != nil {
 		return fmt.Errorf("emit %s: %w", outPath, err)
 	}
 	return nil
