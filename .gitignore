@@ -24,3 +24,6 @@ Thumbs.db
 /godot-go.exe
 /smoke
 /smoke.exe
+# Stray .claude/ dirs from running Claude Code in subdirectories.
+**/.claude/
+!/.claude/
