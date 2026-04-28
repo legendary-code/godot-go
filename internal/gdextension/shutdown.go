@@ -1,8 +1,11 @@
 package gdextension
 
-import "os"
+import (
+	"os"
+	"runtime"
+)
 
-// Process exit hook for the c-shared DLL load model.
+// Process exit hook for the c-shared DLL load model — Windows only.
 //
 // Godot loads our extension as a c-shared DLL; the host process is
 // godot.exe, and Go's runtime — sysmon, per-P scheduler workers, the
@@ -31,12 +34,27 @@ import "os"
 // handlers — but at this point the scene tree is gone, all servers
 // are stopped, and every extension class is unregistered. Anything
 // observable to the user has already happened. Verified 100/100
-// clean runs.
+// clean runs on Windows.
 //
-// On Linux and macOS the same call is benign: those platforms don't
-// race the unload path, but skipping the last microseconds of engine
-// teardown costs nothing the user can see.
+// **Why not on Linux/macOS.** Earlier versions of this hook fired
+// on every OS and the doc claimed the call was "benign" elsewhere.
+// CI evidence in 2026-04-28 disproved that for macOS specifically:
+// extensions instantiating Node2D-derived classes hit the engine's
+// static-destructor mutex during teardown, and skipping it via
+// os.Exit raises an uncaught `system_error: mutex lock failed`
+// that SIGABRTs the process AFTER our test code has already passed.
+// Linux tolerates either path. Scoping the workaround to Windows
+// keeps the race fix where it's needed and lets POSIX runners
+// complete the engine's normal teardown — no observable race on
+// either platform, and no post-test abort on macOS.
+//
+// If a future macOS or Linux scenario exposes a goroutine-thread
+// race we're not currently seeing, this is the place to widen the
+// scope back out (or add a per-OS variant).
 func init() {
+	if runtime.GOOS != "windows" {
+		return
+	}
 	RegisterDeinitCallback(InitLevelCore, func() {
 		os.Exit(0)
 	})
