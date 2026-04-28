@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // goNativePrimitives are the four Godot "builtin classes" that map directly
@@ -31,21 +32,25 @@ var goNativePrimitives = map[string]bool{
 }
 
 // genConfig captures everything the per-target emit functions need: where
-// to write, what to call the package, what the framework's import path is.
+// to write, what to call the package, what the framework's import path is,
+// and what the user's bindings package full import path is (so the runtime
+// sub-package can import its parent).
 type genConfig struct {
-	Dir        string // absolute path to the bindings directory
-	Package    string // package name used in the generated files
-	ModulePath string // import path of the framework (e.g., github.com/legendary-code/godot-go)
+	Dir           string // absolute path to the bindings directory
+	Package       string // package name used in the generated files
+	ModulePath    string // import path of the framework (e.g., github.com/legendary-code/godot-go)
+	PkgImportPath string // full import path of the bindings dir (e.g., example.com/foo/godot); empty if undetectable
 }
 
 func main() {
 	apiPath := flag.String("api", "extension_api.json", "Path to extension_api.json")
 	outFlag := flag.String("out", "", "Output directory (default: directory of $GOFILE when run via go generate)")
 	pkgFlag := flag.String("package", "", "Target package name (default: $GOPACKAGE when run via go generate)")
+	importPathFlag := flag.String("import-path", "", "Full import path of the bindings dir (default: auto-detected from go.mod). Required for the runtime sub-package import.")
 	buildConfig := flag.String("build-config", "float_64", "Target build configuration (float_32, float_64, double_32, double_64)")
 	flag.Parse()
 
-	cfg, err := resolveConfig(*outFlag, *pkgFlag)
+	cfg, err := resolveConfig(*outFlag, *pkgFlag, *importPathFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "godot-go-bindgen: %v\n", err)
 		os.Exit(1)
@@ -116,14 +121,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := emitRuntime(api, *buildConfig, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit runtime: %v\n", err)
+		os.Exit(1)
+	}
+
+	if cfg.PkgImportPath != "" {
+		if err := emitRuntimeSubpkg(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit runtime subpkg: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "godot-go-bindgen: skipping runtime/ sub-package: bindings import path unknown (pass -import-path or run from inside a go.mod tree)")
+	}
+
 	fmt.Fprintf(os.Stderr, "godot-go-bindgen: generated %d builtin classes + %d engine classes into %s (package %q) against %s (precision=%s, build_config=%s)\n",
 		len(emitted), classCount, cfg.Dir, cfg.Package, api.Header.VersionFullName, api.Header.Precision, *buildConfig)
 }
 
 // resolveConfig figures out where to put generated files and what to call
 // the package, preferring explicit flags but falling back to the
-// GOFILE / GOPACKAGE env vars `go generate` populates.
-func resolveConfig(outFlag, pkgFlag string) (*genConfig, error) {
+// GOFILE / GOPACKAGE env vars `go generate` populates. The bindings'
+// full import path is auto-detected from the surrounding go.mod when
+// possible (used by the runtime sub-package's import of its parent);
+// the -import-path flag overrides detection.
+func resolveConfig(outFlag, pkgFlag, importPathFlag string) (*genConfig, error) {
 	dir := outFlag
 	if dir == "" {
 		if gofile := os.Getenv("GOFILE"); gofile != "" {
@@ -147,11 +169,73 @@ func resolveConfig(outFlag, pkgFlag string) (*genConfig, error) {
 	if dir == "" || pkg == "" {
 		return nil, fmt.Errorf("no output configured: pass -out and -package, or run via `go generate` (which sets GOFILE / GOPACKAGE)")
 	}
+
+	importPath := importPathFlag
+	if importPath == "" {
+		// Best-effort auto-detect; non-fatal if it fails. Detection only
+		// matters for the runtime sub-package emit (which is skipped when
+		// no import path is known).
+		if p, err := detectImportPath(dir); err == nil {
+			importPath = p
+		}
+	}
+
 	return &genConfig{
-		Dir:        dir,
-		Package:    pkg,
-		ModulePath: "github.com/legendary-code/godot-go",
+		Dir:           dir,
+		Package:       pkg,
+		ModulePath:    "github.com/legendary-code/godot-go",
+		PkgImportPath: importPath,
 	}, nil
+}
+
+// detectImportPath walks up from `dir` looking for a go.mod, parses its
+// module line, and returns module + the relative path from the go.mod's
+// directory to `dir` (forward-slash joined). Returns ("", err) if no go.mod
+// is found or the module line can't be parsed.
+func detectImportPath(dir string) (string, error) {
+	cur := dir
+	for {
+		gomod := filepath.Join(cur, "go.mod")
+		if data, err := os.ReadFile(gomod); err == nil {
+			module, err := parseGoModModuleLine(data)
+			if err != nil {
+				return "", err
+			}
+			rel, err := filepath.Rel(cur, dir)
+			if err != nil {
+				return "", err
+			}
+			rel = filepath.ToSlash(rel)
+			if rel == "." || rel == "" {
+				return module, nil
+			}
+			return module + "/" + rel, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", fmt.Errorf("no go.mod found above %s", dir)
+		}
+		cur = parent
+	}
+}
+
+// parseGoModModuleLine extracts the module path from go.mod content.
+// Handles the simple `module path` form; both quoted and unquoted paths.
+func parseGoModModuleLine(data []byte) (string, error) {
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "module") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+		rest = strings.TrimSpace(strings.SplitN(rest, "//", 2)[0])
+		rest = strings.Trim(rest, "\"`")
+		if rest == "" {
+			continue
+		}
+		return rest, nil
+	}
+	return "", fmt.Errorf("no module line in go.mod")
 }
 
 func precisionForBuildConfig(bc string) string {

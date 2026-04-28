@@ -18,9 +18,20 @@ import (
 // are pointer loads.
 func emitUtilityFunctions(api *API, cfg *genConfig) error {
 	imports := map[string]bool{
-		"sync":   true,
-		"unsafe": true,
+		"sync":                            true,
+		"unsafe":                          true,
 		cfg.ModulePath + "/gdextension": true,
+	}
+
+	// Single-package output means utility-function names share a namespace
+	// with global-enum value names. Godot's `type_string` utility collides
+	// with Variant.Type.TYPE_STRING — collect the enum value names so we
+	// can rename collisions on the utility side (Pascal + "Func" suffix).
+	reservedNames := map[string]bool{}
+	for i := range api.GlobalEnums {
+		for _, v := range api.GlobalEnums[i].Values {
+			reservedNames[pascal(strings.ToLower(v.Name))] = true
+		}
 	}
 
 	type funView struct {
@@ -69,6 +80,12 @@ func emitUtilityFunctions(api *API, cfg *genConfig) error {
 		}
 
 		goName := pascal(uf.Name)
+		if reservedNames[goName] {
+			// Collision with a global-enum value (e.g. type_string vs
+			// Variant.Type.TYPE_STRING). Suffix the utility so the enum
+			// constant keeps its natural name.
+			goName += "Func"
+		}
 		cacheName := "util" + goName
 		cache := cacheVar{
 			Name: cacheName,
