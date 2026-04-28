@@ -19,34 +19,41 @@ tasks:
 
   test:
     desc: Run the Go test suite.
+    deps: [generate:bindings]
     cmds:
       - go test ./...
 
-  generate:types:
-    desc: Regenerate framework bindings from godot/extension_api.json into variant/, core/, etc.
+  generate:bindings:
+    desc: Generate the godot/ bindings package from godot/extension_api.json.
     cmds:
-      - go run ./cmd/godot-go-bindgen -api godot/extension_api.json -out . -build-config float_64
+      - go generate ./godot/...
     sources:
       - godot/extension_api.json
+      - godot/generate_bindings.go
       - cmd/godot-go-bindgen/**/*.go
     generates:
-      - variant/*.gen.go
+      - godot/*.gen.go
+      - godot/runtime/runtime.gen.go
 
   build:example:
-    desc: Build the Phase 0 smoke extension as a c-shared library.
+    desc: Build the smoke extension as a c-shared library.
+    deps: [generate:bindings]
     cmds:
       - mkdir -p {{.EXAMPLE_OUT_DIR}}
       - go build -buildmode=c-shared -o {{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}} {{.EXAMPLE_PKG}}
     sources:
       - examples/smoke/**/*.go
-      - internal/**/*.go
-      - internal/**/*.h
+      - godot/*.gen.go
+      - godot/runtime/runtime.gen.go
+      - gdextension/**/*.go
+      - gdextension/**/*.h
       - godot/gdextension_interface.h
     generates:
       - '{{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}}'
 
   build:locale_language:
     desc: Build the locale_language example (the canonical doctag showcase).
+    deps: [generate:bindings]
     vars:
       OUT_DIR: examples/locale_language/godot_project/bin
       LIB_NAME: godot_go_locale_language
@@ -58,14 +65,17 @@ tasks:
     sources:
       - examples/locale_language/**/*.go
       - cmd/godot-go/**/*.go
-      - internal/**/*.go
-      - internal/**/*.h
+      - godot/*.gen.go
+      - godot/runtime/runtime.gen.go
+      - gdextension/**/*.go
+      - gdextension/**/*.h
       - godot/gdextension_interface.h
     generates:
       - 'examples/locale_language/godot_project/bin/godot_go_locale_language{{.LIB_EXT}}'
 
   build:2d_demo:
     desc: Build the 2d_demo example — Node2D extension that oscillates a sprite via Process(delta).
+    deps: [generate:bindings]
     vars:
       OUT_DIR: examples/2d_demo/godot_project/bin
       LIB_NAME: godot_go_2d_demo
@@ -77,8 +87,10 @@ tasks:
     sources:
       - examples/2d_demo/**/*.go
       - cmd/godot-go/**/*.go
-      - internal/**/*.go
-      - internal/**/*.h
+      - godot/*.gen.go
+      - godot/runtime/runtime.gen.go
+      - gdextension/**/*.go
+      - gdextension/**/*.h
       - godot/gdextension_interface.h
     generates:
       - 'examples/2d_demo/godot_project/bin/godot_go_2d_demo{{.LIB_EXT}}'

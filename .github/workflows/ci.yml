@@ -81,6 +81,13 @@ jobs:
         # over the case where the script was committed from POSIX.
         run: bash .github/scripts/install-godot.sh "$GODOT_VERSION"
 
+      - name: Generate framework bindings
+        # godot/ ships only extension_api.json + the //go:generate
+        # trigger; the *.gen.go files are produced fresh from the JSON
+        # so the bindings always match the pinned Godot version. Must
+        # run before `go test` / `go build` so the package isn't empty.
+        run: go generate ./godot/...
+
       - name: Go test
         run: go test ./...
 
