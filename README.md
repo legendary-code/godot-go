@@ -1,5 +1,7 @@
 # godot-go
 
+[![CI](https://github.com/legendary-code/godot-go/actions/workflows/ci.yml/badge.svg)](https://github.com/legendary-code/godot-go/actions/workflows/ci.yml)
+
 A Go framework for writing [Godot 4](https://godotengine.org/)
 GDExtensions. Define your engine classes as plain Go structs; a code
 generator turns doc-tagged declarations into the C ABI Godot expects.

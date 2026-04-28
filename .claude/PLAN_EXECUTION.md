@@ -721,8 +721,33 @@ This is the headline feature. Steps:
       `>=`/`<=` so landing exactly on the bound triggers the bounce
       — more intuitive ("you walked into the wall, you turn around
       now") and removes a fence-post off-by-one in tests.
-- [ ] CI matrix: Windows / macOS / Linux × Godot 4.6 headless smoke test
-      that loads the extension and exits 0.
+- [x] CI matrix: Windows / macOS / Linux × Godot 4.6 headless smoke
+      test that loads the extension and exits 0.
+      `.github/workflows/ci.yml` runs on push/PR to main (skipping
+      doc-only edits) plus manual dispatch. Matrix expands to
+      ubuntu-latest, macos-latest, windows-latest with fail-fast
+      disabled. Per runner: setup-go matching go.mod's 1.26.1,
+      cached Godot 4.6.2-stable install via
+      `.github/scripts/install-godot.sh` (per-OS archive selection,
+      $RUNNER_TOOL_CACHE/godot/<version> cache key), `go test ./...`,
+      then for each of smoke/locale_language/2d_demo: install
+      codegen → regenerate → build c-shared with the right per-OS
+      extension (.so/.dylib/.dll) → one-shot --editor --quit-after
+      import → headless --script run, asserting "ALL CHECKS PASSED"
+      from the log. Windows runs ~5m, macOS ~5m, Linux ~3m.
+
+      Surfaced one substantive bug: the Phase 5e `os.Exit(0)` Core-
+      deinit hook in `internal/gdextension/shutdown.go` was scoped
+      universally, but on macOS the engine's static-destructor
+      mutex throws an uncaught `system_error: mutex lock failed`
+      when teardown is skipped, SIGABRTing the process AFTER our
+      tests have already passed. Original doc claim that "the call
+      is benign on Linux/macOS" was empirically false for macOS +
+      Node2D-derived classes. Fix in commit `c111eed` scopes the
+      hook to `runtime.GOOS == "windows"` — keeps the Windows fix
+      where it's needed, lets POSIX runners complete normal engine
+      teardown. CI green on all three OSes after the fix. README
+      gains a CI badge.
 - [x] User-facing README with quickstart. Top-level `README.md`
       covers the project tagline, a code-skeleton hello-world,
       Phases 0–6 status (with the not-yet-supported list and the
