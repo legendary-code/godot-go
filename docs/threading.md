@@ -189,8 +189,8 @@ not, it queues.
 
 ### Block a goroutine until the main thread runs your work
 
-The framework doesn't ship a `RunOnMainSync` (deferred — see
-`PLAN_EXECUTION.md`), but you can compose one:
+The framework doesn't ship a `RunOnMainSync`, but you can compose
+one:
 
 ```go
 done := make(chan struct{})
