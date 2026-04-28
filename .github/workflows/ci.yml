@@ -127,26 +127,41 @@ jobs:
       # Each example needs a one-shot --editor pass before its
       # headless --script run so Godot generates the project's
       # .godot/ cache and recognizes the .gdextension. Running with
-      # --quit-after 5 keeps the editor session bounded; the Go-side
-      # shutdown hook (os.Exit at Core deinit) means the editor-
-      # process exit can sometimes log noise after the framework's
-      # own teardown — we accept exit code 0 from these runs and
-      # don't grep for "BUG" lines.
+      # --quit-after 5 keeps the editor session bounded.
+      #
+      # The framework's Core-deinit os.Exit hook (see
+      # internal/gdextension/shutdown.go) is necessary on Windows
+      # to dodge Go's auxiliary-thread race against
+      # DLL_PROCESS_DETACH, but it side-effects the engine's
+      # post-deinit teardown across platforms — Godot logs "BUG:
+      # Unreferenced static string" on every OS, and on macOS the
+      # uncaught-exception path during teardown can SIGABRT the
+      # process AFTER our test has already passed.
+      #
+      # The "ALL CHECKS PASSED" log line is therefore the source of
+      # truth, NOT the engine process's exit code. We capture
+      # output to a file (`|| true` swallows the post-test abort),
+      # echo it for the action log, and grep for the success line.
+      # If the framework genuinely crashed mid-test, the line won't
+      # appear and grep fails the step.
 
       - name: Import + verify smoke
         run: |
-          godot --headless --editor --path examples/smoke/godot_project --quit-after 5 || true
-          godot --headless --path examples/smoke/godot_project --script test_mynode.gd | tee smoke.log
+          godot --headless --editor --path examples/smoke/godot_project --quit-after 5 > /dev/null 2>&1 || true
+          godot --headless --path examples/smoke/godot_project --script test_mynode.gd > smoke.log 2>&1 || true
+          cat smoke.log
           grep -F "test_mynode: ALL CHECKS PASSED" smoke.log
 
       - name: Import + verify locale_language
         run: |
-          godot --headless --editor --path examples/locale_language/godot_project --quit-after 5 || true
-          godot --headless --path examples/locale_language/godot_project --script test_locale_language.gd | tee locale.log
+          godot --headless --editor --path examples/locale_language/godot_project --quit-after 5 > /dev/null 2>&1 || true
+          godot --headless --path examples/locale_language/godot_project --script test_locale_language.gd > locale.log 2>&1 || true
+          cat locale.log
           grep -F "test_locale_language: ALL CHECKS PASSED" locale.log
 
       - name: Import + verify 2d_demo
         run: |
-          godot --headless --editor --path examples/2d_demo/godot_project --quit-after 5 || true
-          godot --headless --path examples/2d_demo/godot_project --script test_mover.gd | tee mover.log
+          godot --headless --editor --path examples/2d_demo/godot_project --quit-after 5 > /dev/null 2>&1 || true
+          godot --headless --path examples/2d_demo/godot_project --script test_mover.gd > mover.log 2>&1 || true
+          cat mover.log
           grep -F "test_mover: ALL CHECKS PASSED" mover.log
