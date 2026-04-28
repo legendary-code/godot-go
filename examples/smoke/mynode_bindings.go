@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/gdextension"
-	"github.com/legendary-code/godot-go/variant"
+	godot "github.com/legendary-code/godot-go/godot"
 )
 
 // Per-instance side table. The void* value the host hands back to us as
@@ -75,7 +75,7 @@ func (n *MyNode) SetNotes(v string) { n.Notes = v }
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.
 func (n *MyNode) Damaged(amount int64) {
-	arg0 := variant.NewVariantInt(amount)
+	arg0 := godot.NewVariantInt(amount)
 	defer arg0.Destroy()
 	args := []gdextension.VariantPtr{
 		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
@@ -94,7 +94,7 @@ func (n *MyNode) LeveledUp() {
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.
 func (n *MyNode) Tagged(label string) {
-	arg0 := variant.NewVariantString(label)
+	arg0 := godot.NewVariantString(label)
 	defer arg0.Destroy()
 	args := []gdextension.VariantPtr{
 		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
@@ -148,10 +148,10 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsInt64(args[0])
-			arg1 := variant.VariantAsInt64(args[1])
+			arg0 := godot.VariantAsInt64(args[0])
+			arg1 := godot.VariantAsInt64(args[1])
 			result := self.Add(arg0, arg1)
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -185,9 +185,9 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			result := self.Greet(arg0)
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -195,9 +195,9 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			result := self.Greet(arg0)
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -217,7 +217,7 @@ func registerMyNode() {
 			_ = instance
 			var self MyNode
 			result := self.Origin()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -241,7 +241,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetScore()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -266,7 +266,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetTag()
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -275,7 +275,7 @@ func registerMyNode() {
 				return
 			}
 			result := self.GetTag()
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -290,7 +290,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			self.SetTag(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -299,7 +299,7 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			self.SetTag(arg0)
 		},
 		ArgTypes: []gdextension.VariantType{
@@ -318,7 +318,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsFloat64(args[0])
+			arg0 := godot.VariantAsFloat64(args[0])
 			self.Process(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -347,7 +347,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetHealth()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -371,7 +371,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsInt64(args[0])
+			arg0 := godot.VariantAsInt64(args[0])
 			self.SetHealth(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -400,7 +400,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetMaxHealth()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -425,7 +425,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetDamageRange()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -449,7 +449,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsInt64(args[0])
+			arg0 := godot.VariantAsInt64(args[0])
 			self.SetDamageRange(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -478,7 +478,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetMode()
-			variant.VariantSetInt64(ret, result)
+			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -502,7 +502,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsInt64(args[0])
+			arg0 := godot.VariantAsInt64(args[0])
 			self.SetMode(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -531,7 +531,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetSkin()
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -540,7 +540,7 @@ func registerMyNode() {
 				return
 			}
 			result := self.GetSkin()
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -555,7 +555,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			self.SetSkin(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -564,7 +564,7 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			self.SetSkin(arg0)
 		},
 		ArgTypes: []gdextension.VariantType{
@@ -584,7 +584,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetDisplayName()
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -593,7 +593,7 @@ func registerMyNode() {
 				return
 			}
 			result := self.GetDisplayName()
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -608,7 +608,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			self.SetDisplayName(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -617,7 +617,7 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			self.SetDisplayName(arg0)
 		},
 		ArgTypes: []gdextension.VariantType{
@@ -637,7 +637,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetSaveDir()
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -646,7 +646,7 @@ func registerMyNode() {
 				return
 			}
 			result := self.GetSaveDir()
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -661,7 +661,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			self.SetSaveDir(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -670,7 +670,7 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			self.SetSaveDir(arg0)
 		},
 		ArgTypes: []gdextension.VariantType{
@@ -690,7 +690,7 @@ func registerMyNode() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetNotes()
-			variant.VariantSetString(ret, result)
+			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -699,7 +699,7 @@ func registerMyNode() {
 				return
 			}
 			result := self.GetNotes()
-			variant.PtrCallStoreString(ret, result)
+			godot.PtrCallStoreString(ret, result)
 		},
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
@@ -714,7 +714,7 @@ func registerMyNode() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			self.SetNotes(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -723,7 +723,7 @@ func registerMyNode() {
 			if self == nil {
 				return
 			}
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			self.SetNotes(arg0)
 		},
 		ArgTypes: []gdextension.VariantType{

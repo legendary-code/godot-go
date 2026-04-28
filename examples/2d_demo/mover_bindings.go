@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/gdextension"
-	"github.com/legendary-code/godot-go/variant"
+	godot "github.com/legendary-code/godot-go/godot"
 )
 
 // Per-instance side table. The void* value the host hands back to us as
@@ -53,7 +53,7 @@ func (n *Mover) SetRange(v float64) { n.Range = v }
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.
 func (n *Mover) Bounced(direction int64) {
-	arg0 := variant.NewVariantInt(direction)
+	arg0 := godot.NewVariantInt(direction)
 	defer arg0.Destroy()
 	args := []gdextension.VariantPtr{
 		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
@@ -87,7 +87,7 @@ func registerMover() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsFloat64(args[0])
+			arg0 := godot.VariantAsFloat64(args[0])
 			self.Process(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -136,7 +136,7 @@ func registerMover() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetSpeed()
-			variant.VariantSetFloat64(ret, result)
+			godot.VariantSetFloat64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -160,7 +160,7 @@ func registerMover() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsFloat64(args[0])
+			arg0 := godot.VariantAsFloat64(args[0])
 			self.SetSpeed(arg0)
 			return gdextension.CallErrorOK
 		},
@@ -189,7 +189,7 @@ func registerMover() {
 				return gdextension.CallErrorInstanceIsNull
 			}
 			result := self.GetRange()
-			variant.VariantSetFloat64(ret, result)
+			godot.VariantSetFloat64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
@@ -213,7 +213,7 @@ func registerMover() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := variant.VariantAsFloat64(args[0])
+			arg0 := godot.VariantAsFloat64(args[0])
 			self.SetRange(arg0)
 			return gdextension.CallErrorOK
 		},

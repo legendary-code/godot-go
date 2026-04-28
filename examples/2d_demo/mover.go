@@ -2,10 +2,7 @@ package main
 
 //go:generate godot-go
 
-import (
-	"github.com/legendary-code/godot-go/core"
-	"github.com/legendary-code/godot-go/variant"
-)
+import "github.com/legendary-code/godot-go/godot"
 
 // Mover oscillates its position along the X axis between -Range and
 // +Range relative to its starting point, moving at Speed pixels per
@@ -21,7 +18,7 @@ import (
 // @class
 type Mover struct {
 	// @extends
-	core.Node2D
+	godot.Node2D
 
 	// @group("Motion")
 	// @export_range(0, 500, 10)
@@ -106,7 +103,7 @@ func (m *Mover) Reset() {
 	// are pointer-receiver (host ABI requires an addressable slot to
 	// pass as `self`), so capture into a local before reading Y.
 	cur := m.GetPosition()
-	pos := variant.NewVector2XY(m.origin, cur.Y())
+	pos := godot.NewVector2XY(m.origin, cur.Y())
 	m.SetPosition(pos)
 	m.direction = 1
 }

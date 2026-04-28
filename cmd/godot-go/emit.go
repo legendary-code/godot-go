@@ -34,12 +34,23 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		enumSet[e.Name] = true
 	}
 
-	supported, needsVariant, err := classifyForEmit(fset, d.MainClass.Methods, enumSet)
+	// Bindings alias: the local name the user's source uses for the
+	// bindings package (e.g. "godot"). The parent's import comes from
+	// the @extends embed; that same import IS the bindings package
+	// (single-package layout means engine classes and variant helpers
+	// live together). Walk the user's imports to find the local name.
+	bindingsImport := d.MainClass.ParentImport
+	bindingsAlias := localNameFor(d.Imports, bindingsImport)
+	if bindingsAlias == "" {
+		return fmt.Errorf("internal: bindings import %q not in file imports — discover should have rejected this", bindingsImport)
+	}
+
+	supported, needsVariant, err := classifyForEmit(fset, d.MainClass.Methods, enumSet, bindingsAlias)
 	if err != nil {
 		return err
 	}
 
-	accessors, propMethods, properties, err := buildEmitProperties(d.MainClass.Properties, enumSet)
+	accessors, propMethods, properties, err := buildEmitProperties(d.MainClass.Properties, enumSet, bindingsAlias)
 	if err != nil {
 		return err
 	}
@@ -48,7 +59,7 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		needsVariant = true
 	}
 
-	signals, err := buildEmitSignals(d.MainClass.Signals, enumSet)
+	signals, err := buildEmitSignals(d.MainClass.Signals, enumSet, bindingsAlias)
 	if err != nil {
 		return err
 	}
@@ -62,18 +73,20 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 	}
 
 	data := emitData{
-		PackageName:  d.PackageName,
-		SourceFile:   filepath.Base(d.FilePath),
-		Class:        d.MainClass.Name,
-		Parent:       d.MainClass.Parent,
-		Lower:        lowerFirst(d.MainClass.Name),
-		IsAbstract:   d.MainClass.IsAbstract,
-		InitLevel:    initLevel,
-		Methods:      supported,
-		Accessors:    accessors,
-		Properties:   properties,
-		Signals:      signals,
-		NeedsVariant: needsVariant,
+		PackageName:    d.PackageName,
+		SourceFile:     filepath.Base(d.FilePath),
+		Class:          d.MainClass.Name,
+		Parent:         d.MainClass.Parent,
+		Lower:          lowerFirst(d.MainClass.Name),
+		IsAbstract:     d.MainClass.IsAbstract,
+		InitLevel:      initLevel,
+		Methods:        supported,
+		Accessors:      accessors,
+		Properties:     properties,
+		Signals:        signals,
+		NeedsVariant:   needsVariant,
+		BindingsImport: bindingsImport,
+		BindingsAlias:  bindingsAlias,
 	}
 
 	var buf bytes.Buffer
@@ -100,7 +113,16 @@ type emitData struct {
 	Accessors    []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
 	Properties   []emitProperty // RegisterClassProperty calls (one per @property, both forms)
 	Signals      []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
-	NeedsVariant bool           // any method touches a primitive (gates the variant import)
+	NeedsVariant bool           // any method touches a primitive (gates the bindings-package import)
+
+	// BindingsImport / BindingsAlias identify the user's bindings
+	// package — the import path and the local name the source uses for
+	// it (e.g. "github.com/foo/me/godot" + "godot"). Variant marshal
+	// helpers (VariantAsInt64, NewVariantString, …) live there in the
+	// single-package layout, so generated calls are qualified through
+	// the alias.
+	BindingsImport string
+	BindingsAlias  string
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -212,20 +234,22 @@ type emitMethod struct {
 
 // classifyForEmit walks the discovered methods and returns:
 //   - the supported methods, with arg/return marshalling fragments pre-rendered;
-//   - whether the variant package import is needed (true iff any supported
+//   - whether the bindings package import is needed (true iff any supported
 //     method has at least one arg or a return);
 //   - the first reason a method couldn't be supported, with file:line.
 //
-// Phase 5e folds in static methods (unnamed receiver) and virtual-candidate
-// methods (lowercase Go name → engine `_name` virtual). Any unsupported
-// arg/return type or multi-result return propagates as an error. The
-// enums set lets resolveType accept user-defined int enum types declared
-// in the same file (Phase 5f).
-func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]bool) ([]emitMethod, bool, error) {
+// Static methods (unnamed receiver) and virtual-candidate methods
+// (lowercase Go name → engine `_name` virtual) are folded in. Any
+// unsupported arg/return type or multi-result return propagates as an
+// error. The enums set lets resolveType accept user-defined int enum
+// types declared in the same file. `bindings` is the local alias the
+// user's source uses for the bindings package; it qualifies every
+// VariantAs* / VariantSet* call in the rendered fragments.
+func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]bool, bindings string) ([]emitMethod, bool, error) {
 	var out []emitMethod
 	needsVariant := false
 	for _, m := range methods {
-		em, err := buildEmitMethod(m, enums)
+		em, err := buildEmitMethod(m, enums, bindings)
 		if err != nil {
 			return nil, false, fmt.Errorf("%s: %s: %w", posStr(fset, m.Pos), m.GoName, err)
 		}
@@ -240,7 +264,7 @@ func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[strin
 // buildEmitMethod resolves arg / return types via the type table and
 // pre-renders the marshalling fragments. The caller is responsible for
 // rejecting non-instance method kinds before calling.
-func buildEmitMethod(m *methodInfo, enums map[string]bool) (emitMethod, error) {
+func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emitMethod, error) {
 	em := emitMethod{
 		GoName:    m.GoName,
 		GodotName: m.GodotName,
@@ -262,8 +286,8 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool) (emitMethod, error) {
 			count = 1 // unnamed param — still counts as one positional slot
 		}
 		for k := 0; k < count; k++ {
-			em.PtrCallArgReads = append(em.PtrCallArgReads, info.PtrCallReadArg(idx))
-			em.CallArgReads = append(em.CallArgReads, info.CallReadArg(idx))
+			em.PtrCallArgReads = append(em.PtrCallArgReads, info.PtrCallReadArg(bindings, idx))
+			em.CallArgReads = append(em.CallArgReads, info.CallReadArg(bindings, idx))
 			em.ArgTypes = append(em.ArgTypes, info.VariantType)
 			em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
 			idx++
@@ -298,13 +322,25 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool) (emitMethod, error) {
 		em.HasReturn = true
 		em.ReturnType = info.VariantType
 		em.ReturnMeta = info.ArgMeta
-		em.PtrCallReturn = info.PtrCallWriteReturn("result")
-		em.CallReturn = info.CallWriteReturn("result")
+		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
+		em.CallReturn = info.CallWriteReturn(bindings, "result")
 	default:
 		return em, fmt.Errorf("multi-return methods unsupported (Godot exposes a single return slot)")
 	}
 
 	return em, nil
+}
+
+// localNameFor returns the local alias for an import path in the user's
+// file, falling back to the path's last segment when no explicit alias
+// is set. Empty if the path isn't imported by the file at all.
+func localNameFor(imports map[string]string, path string) string {
+	for local, p := range imports {
+		if p == path {
+			return local
+		}
+	}
+	return ""
 }
 
 // buildEmitProperties walks the discovered @property declarations and
@@ -319,7 +355,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool) (emitMethod, error) {
 // Method-form properties contribute a property entry only — the user's
 // Get/Set methods already live in the source file and were classified by
 // classifyForEmit upstream.
-func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
+func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings string) (
 	accessors []emitAccessor,
 	methods []emitMethod,
 	out []emitProperty,
@@ -383,7 +419,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 			Field:  p.Name,
 			GoType: info.GoType,
 		})
-		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info))
+		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info, bindings))
 
 		if p.ReadOnly {
 			continue
@@ -394,7 +430,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 			GoType:   info.GoType,
 			IsSetter: true,
 		})
-		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info))
+		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info, bindings))
 	}
 	return accessors, methods, out, nil
 }
@@ -413,7 +449,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool) (
 // methods. We do NOT register it with ClassDB; GDScript callers use the
 // standard `emit_signal("name", args...)` to trigger emission from
 // outside the class, matching Godot's idiomatic model.
-func buildEmitSignals(signals []*signalInfo, enums map[string]bool) ([]emitSignal, error) {
+func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings string) ([]emitSignal, error) {
 	if len(signals) == 0 {
 		return nil, nil
 	}
@@ -442,7 +478,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool) ([]emitSigna
 					Index:    idx,
 					GoName:   goArgName,
 					GoType:   info.GoType,
-					BuildVar: info.BuildVariant(idx, goArgName),
+					BuildVar: info.BuildVariant(bindings, idx, goArgName),
 				})
 				es.ArgTypes = append(es.ArgTypes, info.VariantType)
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
@@ -459,26 +495,26 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool) ([]emitSigna
 // Dispatch uses the same `result := self.<GoName>()` shape the template
 // already emits — the synthesized Go method we render alongside is what
 // closes the loop.
-func syntheticGetterMethod(goName, godotName string, info *typeInfo) emitMethod {
+func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings string) emitMethod {
 	return emitMethod{
 		GoName:        goName,
 		GodotName:     godotName,
 		HasReturn:     true,
 		ReturnType:    info.VariantType,
 		ReturnMeta:    info.ArgMeta,
-		PtrCallReturn: info.PtrCallWriteReturn("result"),
-		CallReturn:    info.CallWriteReturn("result"),
+		PtrCallReturn: info.PtrCallWriteReturn(bindings, "result"),
+		CallReturn:    info.CallWriteReturn(bindings, "result"),
 	}
 }
 
 // syntheticSetterMethod hand-builds an emitMethod equivalent to
 // `func (n *T) Set<Name>(v <Type>)` — one arg, no return.
-func syntheticSetterMethod(goName, godotName string, info *typeInfo) emitMethod {
+func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings string) emitMethod {
 	return emitMethod{
 		GoName:          goName,
 		GodotName:       godotName,
-		PtrCallArgReads: []string{info.PtrCallReadArg(0)},
-		CallArgReads:    []string{info.CallReadArg(0)},
+		PtrCallArgReads: []string{info.PtrCallReadArg(bindings, 0)},
+		CallArgReads:    []string{info.CallReadArg(bindings, 0)},
 		DispatchArgs:    "arg0",
 		HasArgs:         true,
 		ArgTypes:        []string{info.VariantType},
@@ -521,7 +557,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/gdextension"
-{{if .NeedsVariant}}	"github.com/legendary-code/godot-go/variant"
+{{if .NeedsVariant}}	{{.BindingsAlias}} "{{.BindingsImport}}"
 {{end}})
 
 // Per-instance side table. The void* value the host hands back to us as

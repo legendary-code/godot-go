@@ -173,17 +173,6 @@ type enumValue struct {
 	Pos  token.Pos
 }
 
-// frameworkPkgs lists the import paths whose exported types are recognized
-// as candidate base classes for a user extension. User-defined parents
-// (extension classes from another module) aren't supported in Phase 5b —
-// see PLAN_EXECUTION.md Phase 5 step 3.
-var frameworkPkgs = map[string]bool{
-	"github.com/legendary-code/godot-go/core":    true,
-	"github.com/legendary-code/godot-go/editor":  true,
-	"github.com/legendary-code/godot-go/godot":   true,
-	"github.com/legendary-code/godot-go/variant": true,
-}
-
 func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered, error) {
 	d := &discovered{
 		PackageName: pkgName,
@@ -889,9 +878,9 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.
 				posStr(fset, f.Pos()))
 		}
 		path, ok := imports[pkgIdent.Name]
-		if !ok || !frameworkPkgs[path] {
-			return "", "", fmt.Errorf("%s: @extends on %s.%s — type must come from a framework package (core, editor, godot, variant); cross-module class inheritance isn't supported",
-				posStr(fset, f.Pos()), pkgIdent.Name, sel.Sel.Name)
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
+				posStr(fset, f.Pos()), pkgIdent.Name, sel.Sel.Name, pkgIdent.Name)
 		}
 		parent = sel.Sel.Name
 		parentImport = path

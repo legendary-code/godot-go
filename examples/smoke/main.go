@@ -15,9 +15,9 @@
 //   - Array.Append three Variants → Size() must agree (Variant arg path)
 //   - Engine.Singleton().GetVersionInfo()["major"] must equal 4 (engine-class
 //     ABI: classdb singleton lookup + method bind + Dictionary return)
-//   - util.Lerpf(0, 10, 0.5) must equal 5 (utility-function ABI: a free
+//   - godot.Lerpf(0, 10, 0.5) must equal 5 (utility-function ABI: a free
 //     ptrcall via variant_get_ptr_utility_function with three float args)
-//   - enums.SideRight must equal 2 and enums.Ok must equal 0 (typed
+//   - godot.SideRight must equal 2 and godot.Ok must equal 0 (typed
 //     global enums import cleanly from downstream packages)
 package main
 
@@ -25,12 +25,9 @@ import (
 	"sync"
 	goruntime "runtime"
 
-	"github.com/legendary-code/godot-go/core"
-	"github.com/legendary-code/godot-go/enums"
 	"github.com/legendary-code/godot-go/gdextension"
-	"github.com/legendary-code/godot-go/internal/runtime"
-	"github.com/legendary-code/godot-go/util"
-	"github.com/legendary-code/godot-go/variant"
+	"github.com/legendary-code/godot-go/godot"
+	"github.com/legendary-code/godot-go/godot/runtime"
 )
 
 func init() {
@@ -61,13 +58,13 @@ func runSmokeChecks() {
 	// Godot encodes "float" as 8-byte double regardless of the engine's
 	// real_t precision, so the generated bindings widen to float64 buffers
 	// at the boundary even though the user-facing type is float32.
-	pos := variant.NewVector2XY(3, 4)
+	pos := godot.NewVector2XY(3, 4)
 	check("Vector2(3,4).Length()", pos.Length() == 5, pos.Length(), float32(5))
 
 	// Vector2 → Variant → Vector2.
 	slot := pos.ToVariant()
 	defer slot.Destroy()
-	recovered := variant.Vector2FromVariant(slot)
+	recovered := godot.Vector2FromVariant(slot)
 	rx, ry := recovered.X(), recovered.Y()
 	check("Vector2 → Variant → Vector2",
 		rx == 3 && ry == 4,
@@ -76,7 +73,7 @@ func runSmokeChecks() {
 	// Transparent string boundary: NewStringFromString takes a Go string,
 	// String.Length() returns int64 — the user never sees the opaque type.
 	// Find exercises the int arg path (the from offset).
-	greeting := variant.NewStringFromString("hello")
+	greeting := godot.NewStringFromString("hello")
 	defer greeting.Destroy()
 	gotLen := greeting.Length()
 	check("String(\"hello\").Length()", gotLen == 5, gotLen, int64(5))
@@ -89,10 +86,10 @@ func runSmokeChecks() {
 	// half alone would give 1).
 	const big int64 = (int64(1) << 32) + 7
 	const bigStr = "4294967303"
-	gotNum := variant.StringNumInt64(big, 10, false)
+	gotNum := godot.StringNumInt64(big, 10, false)
 	check("StringNumInt64(1<<32+7, 10, false)", gotNum == bigStr, gotNum, bigStr)
 
-	bigGo := variant.NewStringFromString(bigStr)
+	bigGo := godot.NewStringFromString(bigStr)
 	defer bigGo.Destroy()
 	gotInt := bigGo.ToInt()
 	check("String(\"4294967303\").ToInt()", gotInt == big, gotInt, big)
@@ -100,12 +97,12 @@ func runSmokeChecks() {
 	// Array.Append exercises the Variant arg path; Size() exercises an
 	// int return on a stateful builtin. Each Append takes a Variant whose
 	// underlying slot is freed when the Array is destroyed.
-	arr := variant.NewArray()
+	arr := godot.NewArray()
 	defer arr.Destroy()
-	for _, v := range []variant.Vector2{
-		variant.NewVector2XY(1, 0),
-		variant.NewVector2XY(0, 1),
-		variant.NewVector2XY(1, 1),
+	for _, v := range []godot.Vector2{
+		godot.NewVector2XY(1, 0),
+		godot.NewVector2XY(0, 1),
+		godot.NewVector2XY(1, 1),
 	} {
 		slot := v.ToVariant()
 		arr.Append(*slot)
@@ -118,15 +115,15 @@ func runSmokeChecks() {
 	// Dictionary["major"]. Touches classdb_construct/global_get_singleton,
 	// classdb_get_method_bind, object_method_bind_ptrcall, and the
 	// Variant<->int converter all in one call chain.
-	eng := core.EngineSingleton()
+	eng := godot.EngineSingleton()
 	if eng == nil || eng.IsNil() {
 		check("Engine singleton resolved", false, eng, "non-nil")
 	} else {
 		info := eng.GetVersionInfo()
 		defer info.Destroy()
-		key := variant.NewVariantString("major")
+		key := godot.NewVariantString("major")
 		defer key.Destroy()
-		def := variant.NewVariantInt(-1)
+		def := godot.NewVariantInt(-1)
 		defer def.Destroy()
 		got := info.Get(key, def)
 		defer got.Destroy()
@@ -138,13 +135,13 @@ func runSmokeChecks() {
 	// rather than the builtin-method or method-bind dispatchers. Lerpf(0, 10, 0.5)
 	// pushes three float args and pulls one float back, all widened to/from
 	// 8-byte slots at the boundary.
-	gotLerp := util.Lerpf(0, 10, 0.5)
-	check("util.Lerpf(0, 10, 0.5)", gotLerp == 5, gotLerp, float32(5))
+	gotLerp := godot.Lerpf(0, 10, 0.5)
+	check("godot.Lerpf(0, 10, 0.5)", gotLerp == 5, gotLerp, float32(5))
 
 	// Typed global enums: pure constants, no ABI surface — the only thing
 	// to confirm is that the package imports and the values are sane.
-	check("enums.SideRight == 2", int64(enums.SideRight) == 2, int64(enums.SideRight), int64(2))
-	check("enums.Ok == 0", int64(enums.Ok) == 0, int64(enums.Ok), int64(0))
+	check("godot.SideRight == 2", int64(godot.SideRight) == 2, int64(godot.SideRight), int64(2))
+	check("godot.Ok == 0", int64(godot.Ok) == 0, int64(godot.Ok), int64(0))
 
 	// runtime.IsEditorHint() — wraps Engine.is_editor_hint(). In a
 	// headless game-mode run (no --editor), the engine reports false.
@@ -197,7 +194,7 @@ func runSmokeChecks() {
 	// path. We don't observe the final destruction (the wrapper is
 	// gone by then), but we do confirm that draining queued
 	// finalizers doesn't crash the process.
-	r := core.RegExCreateFromString("h.llo", false)
+	r := godot.RegExCreateFromString("h.llo", false)
 	check("RegEx refcount after construction == 1",
 		r.GetReferenceCount() == 1, r.GetReferenceCount(), int64(1))
 	r.Reference()
@@ -214,7 +211,7 @@ func runSmokeChecks() {
 	// would either deadlock or leak; we'd see it as a stuck or
 	// memory-bloated test.
 	for i := 0; i < 100; i++ {
-		_ = core.RegExCreateFromString("loop", false)
+		_ = godot.RegExCreateFromString("loop", false)
 	}
 	goruntime.GC()
 	goruntime.GC()

@@ -323,20 +323,6 @@ type Wrong struct {
 	mustFailDiscover(t, src, "@extends on named field")
 }
 
-func TestDiscoverErrorOnExtendsNonFramework(t *testing.T) {
-	// @extends on an embedded type that isn't from a framework
-	// package. Cross-module class inheritance isn't supported yet.
-	src := `package x
-import "fmt"
-// @class
-type Wrong struct {
-	// @extends
-	fmt.Stringer
-}
-`
-	mustFailDiscover(t, src, "must come from a framework package")
-}
-
 func TestDiscoverErrorOnClassAndInnerClass(t *testing.T) {
 	// @class and @innerclass are mutually exclusive — pick one role.
 	src := `package x

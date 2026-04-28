@@ -8,7 +8,7 @@ package main
 
 import (
 	"github.com/legendary-code/godot-go/gdextension"
-	"github.com/legendary-code/godot-go/internal/runtime"
+	"github.com/legendary-code/godot-go/godot/runtime"
 )
 
 func init() {

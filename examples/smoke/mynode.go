@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/legendary-code/godot-go/core"
-	"github.com/legendary-code/godot-go/internal/runtime"
+	"github.com/legendary-code/godot-go/godot"
+	"github.com/legendary-code/godot-go/godot/runtime"
 )
 
 //go:generate godot-go
@@ -29,7 +29,7 @@ type Signals interface {
 	Tagged(label string)
 }
 
-// MyNode is a minimal Go-defined extension class — embeds core.Node so the
+// MyNode is a minimal Go-defined extension class — embeds godot.Node so the
 // host treats instances as nodes, and exposes Hello/Add/Greet to GDScript.
 //
 // Properties exercise the four cells of the @property matrix:
@@ -43,7 +43,7 @@ type Signals interface {
 // @class
 type MyNode struct {
 	// @extends
-	core.Node
+	godot.Node
 
 	// @property
 	Health int64

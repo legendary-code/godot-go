@@ -168,13 +168,13 @@ func (n *MyNode) Add(a, b int64) int64 { return a + b }
 	out := emitFor(t, src)
 
 	// Variant import is needed once a method touches a primitive.
-	mustContain(t, out, `"github.com/legendary-code/godot-go/variant"`)
+	mustContain(t, out, `core "github.com/legendary-code/godot-go/core"`)
 	// Both bodies should read both args and store the result.
 	mustContain(t, out, "arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))")
 	mustContain(t, out, "arg1 := *(*int64)(gdextension.PtrCallArg(args, 1))")
 	mustContain(t, out, "*(*int64)(ret) = result")
-	mustContain(t, out, "arg0 := variant.VariantAsInt64(args[0])")
-	mustContain(t, out, "variant.VariantSetInt64(ret, result)")
+	mustContain(t, out, "arg0 := core.VariantAsInt64(args[0])")
+	mustContain(t, out, "core.VariantSetInt64(ret, result)")
 	// Dispatch must thread arg0/arg1 through.
 	mustContain(t, out, "self.Add(arg0, arg1)")
 	// Registration metadata: HasReturn + parallel arg slices.
@@ -201,8 +201,8 @@ func (n *N) Mix(b bool, i int32, f float32, s string) string { return s }
 	mustContain(t, out, "arg0 := *(*bool)(gdextension.PtrCallArg(args, 0))")
 	mustContain(t, out, "arg1 := int32(*(*int64)(gdextension.PtrCallArg(args, 1)))")
 	mustContain(t, out, "arg2 := float32(*(*float64)(gdextension.PtrCallArg(args, 2)))")
-	mustContain(t, out, "arg3 := variant.PtrCallArgString(args, 3)")
-	mustContain(t, out, "variant.PtrCallStoreString(ret, result)")
+	mustContain(t, out, "arg3 := core.PtrCallArgString(args, 3)")
+	mustContain(t, out, "core.PtrCallStoreString(ret, result)")
 	// Variant-side metadata reflects the narrower types.
 	mustContain(t, out, "gdextension.ArgMetaIntIsInt32,")
 	mustContain(t, out, "gdextension.ArgMetaRealIsFloat,")
@@ -349,8 +349,8 @@ type Signals interface {
 	mustContain(t, out, "func (n *N) Tagged(label string) {")
 
 	// Per-arg Variant construction + dispatch.
-	mustContain(t, out, "arg0 := variant.NewVariantInt(amount)")
-	mustContain(t, out, "arg0 := variant.NewVariantString(label)")
+	mustContain(t, out, "arg0 := core.NewVariantInt(amount)")
+	mustContain(t, out, "arg0 := core.NewVariantString(label)")
 	mustContain(t, out, `gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("damaged"), args)`)
 	mustContain(t, out, `gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("leveled_up"), nil)`)
 

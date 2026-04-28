@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/legendary-code/godot-go/gdextension"
-	"github.com/legendary-code/godot-go/variant"
+	godot "github.com/legendary-code/godot-go/godot"
 )
 
 // Per-instance side table. The void* value the host hands back to us as
@@ -66,15 +66,15 @@ func registerLocaleLanguage() {
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
 			var self LocaleLanguage
-			arg0 := variant.VariantAsString(args[0])
+			arg0 := godot.VariantAsString(args[0])
 			result := self.Parse(arg0)
-			variant.VariantSetInt64(ret, int64(result))
+			godot.VariantSetInt64(ret, int64(result))
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
 			var self LocaleLanguage
-			arg0 := variant.PtrCallArgString(args, 0)
+			arg0 := godot.PtrCallArgString(args, 0)
 			result := self.Parse(arg0)
 			*(*int64)(ret) = int64(result)
 		},
@@ -118,7 +118,7 @@ func registerLocaleLanguage() {
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
-			arg0 := float32(variant.VariantAsFloat64(args[0]))
+			arg0 := float32(godot.VariantAsFloat64(args[0]))
 			self.Process(arg0)
 			return gdextension.CallErrorOK
 		},
