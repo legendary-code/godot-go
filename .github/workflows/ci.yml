@@ -75,7 +75,11 @@ jobs:
           key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}
 
       - name: Install Godot
-        run: .github/scripts/install-godot.sh "$GODOT_VERSION"
+        # Invoked via `bash` explicitly so the script's executable bit
+        # isn't a hard requirement — Windows runners can't preserve
+        # +x on commit, and `git update-index --chmod=+x` only papers
+        # over the case where the script was committed from POSIX.
+        run: bash .github/scripts/install-godot.sh "$GODOT_VERSION"
 
       - name: Go test
         run: go test ./...
