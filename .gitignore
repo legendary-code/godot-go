@@ -27,3 +27,10 @@ Thumbs.db
 # Stray .claude/ dirs from running Claude Code in subdirectories.
 **/.claude/
 !/.claude/
+
+# Generated bindings. The bindgen writes godot/*.gen.go and the
+# godot/runtime/ sub-package on `go generate ./godot/...`; the
+# framework's CI / Taskfile regenerates them before any build that
+# uses them, so we never commit the output.
+godot/**/*.gen.go
+godot/runtime/
