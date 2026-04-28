@@ -3,6 +3,8 @@
 package core
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
@@ -12,12 +14,20 @@ type GLTFDocumentExtensionConvertImporterMesh struct {
 }
 
 // GLTFDocumentExtensionConvertImporterMeshFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *GLTFDocumentExtensionConvertImporterMesh. Returns nil on a nil input.
+// *GLTFDocumentExtensionConvertImporterMesh. Returns nil on a nil input. GLTFDocumentExtensionConvertImporterMesh descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func GLTFDocumentExtensionConvertImporterMeshFromPtr(p gdextension.ObjectPtr) *GLTFDocumentExtensionConvertImporterMesh {
 	if p == nil {
 		return nil
 	}
 	ret := &GLTFDocumentExtensionConvertImporterMesh{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *GLTFDocumentExtensionConvertImporterMesh) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

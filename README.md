@@ -71,12 +71,13 @@ The user's source above is the entire ergonomic surface.
 - Goroutine ↔ main-thread bridge: `runtime.IsMainThread()`,
   `runtime.RunOnMain(f)`, `runtime.DrainMain()`.
 - Editor-mode detection: `runtime.IsEditorHint()`.
+- Automatic refcount management for `RefCounted`-derived classes
+  (`Resource`, `Image`, `RegEx`, ...) via Go finalizers — drop the
+  Go reference and the engine cleanup happens automatically. See
+  [`docs/lifecycle.md`](./docs/lifecycle.md).
 
 ## Known limitations
 
-- **Refcounted ownership** (`RefCounted`/`Resource` subclasses) is
-  not yet wired — references aren't tracked, so refcounted instances
-  leak.
 - **Hot-reload** of extensions doesn't work because Go's runtime
   can't be cleanly unloaded; restart Godot to apply code changes.
   See [`docs/hot-reload.md`](./docs/hot-reload.md) for the full
@@ -158,6 +159,10 @@ are working references — copy from there.
 
 - [`docs/threading.md`](./docs/threading.md) — goroutines and
   Godot's main thread; `RunOnMain` / `DrainMain`.
+- [`docs/lifecycle.md`](./docs/lifecycle.md) — how the framework
+  handles refcounted resources (`Resource`, `Image`, `RegEx`, ...)
+  via Go finalizers, and when you'd reach for explicit
+  `Unreference`.
 - [`docs/hot-reload.md`](./docs/hot-reload.md) — why hot-reload of
   Go extensions doesn't work, and what dev workflow does.
 

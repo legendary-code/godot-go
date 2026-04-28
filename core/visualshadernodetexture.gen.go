@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type VisualShaderNodeTexture struct {
 }
 
 // VisualShaderNodeTextureFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeTexture. Returns nil on a nil input.
+// *VisualShaderNodeTexture. Returns nil on a nil input. VisualShaderNodeTexture descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeTextureFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeTexture {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeTexture{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeTexture) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type World3D struct {
 }
 
 // World3DFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *World3D. Returns nil on a nil input.
+// *World3D. Returns nil on a nil input. World3D descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func World3DFromPtr(p gdextension.ObjectPtr) *World3D {
 	if p == nil {
 		return nil
 	}
 	ret := &World3D{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *World3D) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

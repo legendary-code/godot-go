@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VisualShaderNodeResizableBase struct {
 }
 
 // VisualShaderNodeResizableBaseFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeResizableBase. Returns nil on a nil input.
+// *VisualShaderNodeResizableBase. Returns nil on a nil input. VisualShaderNodeResizableBase descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeResizableBaseFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeResizableBase {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeResizableBase{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeResizableBase) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

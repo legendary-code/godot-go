@@ -3,6 +3,8 @@
 package core
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
@@ -12,12 +14,20 @@ type OpenXRHapticBase struct {
 }
 
 // OpenXRHapticBaseFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *OpenXRHapticBase. Returns nil on a nil input.
+// *OpenXRHapticBase. Returns nil on a nil input. OpenXRHapticBase descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func OpenXRHapticBaseFromPtr(p gdextension.ObjectPtr) *OpenXRHapticBase {
 	if p == nil {
 		return nil
 	}
 	ret := &OpenXRHapticBase{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *OpenXRHapticBase) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

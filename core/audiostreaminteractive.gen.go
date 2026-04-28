@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type AudioStreamInteractive struct {
 }
 
 // AudioStreamInteractiveFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *AudioStreamInteractive. Returns nil on a nil input.
+// *AudioStreamInteractive. Returns nil on a nil input. AudioStreamInteractive descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func AudioStreamInteractiveFromPtr(p gdextension.ObjectPtr) *AudioStreamInteractive {
 	if p == nil {
 		return nil
 	}
 	ret := &AudioStreamInteractive{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *AudioStreamInteractive) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

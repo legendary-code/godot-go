@@ -1,4 +1,4 @@
-package runtime
+package gdextension
 
 import (
 	"sync"
@@ -6,11 +6,11 @@ import (
 )
 
 // The IsMainThread / RunOnMain / DrainMain semantics around "am I
-// already on main" depend on the gdextension package's captured
-// thread ID, which only gets recorded when Godot calls into us. In a
-// pure `go test` run there's no engine, so MainThreadID stays zero
-// and IsMainThread always reports false — which is exactly the
-// behavior we need to exercise the queue path.
+// already on main" depend on the captured thread ID, which only gets
+// recorded when Godot calls into us. In a pure `go test` run there's
+// no engine, so MainThreadID stays zero and IsMainThread always
+// reports false — which is exactly the behavior we need to exercise
+// the queue path.
 //
 // These tests cover the queue's behavior directly; the inline-when-
 // on-main fast path and the IsMainThread-true case get verified

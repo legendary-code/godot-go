@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type InputEventMIDI struct {
 }
 
 // InputEventMIDIFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *InputEventMIDI. Returns nil on a nil input.
+// *InputEventMIDI. Returns nil on a nil input. InputEventMIDI descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func InputEventMIDIFromPtr(p gdextension.ObjectPtr) *InputEventMIDI {
 	if p == nil {
 		return nil
 	}
 	ret := &InputEventMIDI{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *InputEventMIDI) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,8 @@
 package editor
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
@@ -12,12 +14,20 @@ type EditorExportPlatformLinuxBSD struct {
 }
 
 // EditorExportPlatformLinuxBSDFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *EditorExportPlatformLinuxBSD. Returns nil on a nil input.
+// *EditorExportPlatformLinuxBSD. Returns nil on a nil input. EditorExportPlatformLinuxBSD descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func EditorExportPlatformLinuxBSDFromPtr(p gdextension.ObjectPtr) *EditorExportPlatformLinuxBSD {
 	if p == nil {
 		return nil
 	}
 	ret := &EditorExportPlatformLinuxBSD{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *EditorExportPlatformLinuxBSD) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type ImageTexture struct {
 }
 
 // ImageTextureFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *ImageTexture. Returns nil on a nil input.
+// *ImageTexture. Returns nil on a nil input. ImageTexture descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ImageTextureFromPtr(p gdextension.ObjectPtr) *ImageTexture {
 	if p == nil {
 		return nil
 	}
 	ret := &ImageTexture{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *ImageTexture) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

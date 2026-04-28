@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VisualShaderNodeGroupBase struct {
 }
 
 // VisualShaderNodeGroupBaseFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeGroupBase. Returns nil on a nil input.
+// *VisualShaderNodeGroupBase. Returns nil on a nil input. VisualShaderNodeGroupBase descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeGroupBaseFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeGroupBase {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeGroupBase{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeGroupBase) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

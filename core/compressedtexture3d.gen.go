@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type CompressedTexture3D struct {
 }
 
 // CompressedTexture3DFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *CompressedTexture3D. Returns nil on a nil input.
+// *CompressedTexture3D. Returns nil on a nil input. CompressedTexture3D descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func CompressedTexture3DFromPtr(p gdextension.ObjectPtr) *CompressedTexture3D {
 	if p == nil {
 		return nil
 	}
 	ret := &CompressedTexture3D{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *CompressedTexture3D) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

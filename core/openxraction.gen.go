@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type OpenXRAction struct {
 }
 
 // OpenXRActionFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *OpenXRAction. Returns nil on a nil input.
+// *OpenXRAction. Returns nil on a nil input. OpenXRAction descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func OpenXRActionFromPtr(p gdextension.ObjectPtr) *OpenXRAction {
 	if p == nil {
 		return nil
 	}
 	ret := &OpenXRAction{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *OpenXRAction) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

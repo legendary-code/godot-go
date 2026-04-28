@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type Script struct {
 }
 
 // ScriptFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *Script. Returns nil on a nil input.
+// *Script. Returns nil on a nil input. Script descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ScriptFromPtr(p gdextension.ObjectPtr) *Script {
 	if p == nil {
 		return nil
 	}
 	ret := &Script{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *Script) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

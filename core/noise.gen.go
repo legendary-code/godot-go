@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type Noise struct {
 }
 
 // NoiseFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *Noise. Returns nil on a nil input.
+// *Noise. Returns nil on a nil input. Noise descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func NoiseFromPtr(p gdextension.ObjectPtr) *Noise {
 	if p == nil {
 		return nil
 	}
 	ret := &Noise{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *Noise) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

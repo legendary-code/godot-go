@@ -3,6 +3,7 @@
 package editor
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -17,13 +18,21 @@ type EditorScenePostImport struct {
 }
 
 // EditorScenePostImportFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *EditorScenePostImport. Returns nil on a nil input.
+// *EditorScenePostImport. Returns nil on a nil input. EditorScenePostImport descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func EditorScenePostImportFromPtr(p gdextension.ObjectPtr) *EditorScenePostImport {
 	if p == nil {
 		return nil
 	}
 	ret := &EditorScenePostImport{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *EditorScenePostImport) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type SkeletonModification2DJiggle struct {
 }
 
 // SkeletonModification2DJiggleFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *SkeletonModification2DJiggle. Returns nil on a nil input.
+// *SkeletonModification2DJiggle. Returns nil on a nil input. SkeletonModification2DJiggle descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func SkeletonModification2DJiggleFromPtr(p gdextension.ObjectPtr) *SkeletonModification2DJiggle {
 	if p == nil {
 		return nil
 	}
 	ret := &SkeletonModification2DJiggle{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *SkeletonModification2DJiggle) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

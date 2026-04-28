@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VisualShader struct {
 }
 
 // VisualShaderFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShader. Returns nil on a nil input.
+// *VisualShader. Returns nil on a nil input. VisualShader descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderFromPtr(p gdextension.ObjectPtr) *VisualShader {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShader{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShader) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

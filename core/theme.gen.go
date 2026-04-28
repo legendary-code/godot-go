@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type Theme struct {
 }
 
 // ThemeFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *Theme. Returns nil on a nil input.
+// *Theme. Returns nil on a nil input. Theme descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ThemeFromPtr(p gdextension.ObjectPtr) *Theme {
 	if p == nil {
 		return nil
 	}
 	ret := &Theme{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *Theme) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

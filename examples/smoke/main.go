@@ -23,6 +23,7 @@ package main
 
 import (
 	"sync"
+	goruntime "runtime"
 
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/enums"
@@ -188,6 +189,37 @@ func runSmokeChecks() {
 	runtime.DrainMain()
 	check("posted == true after drain",
 		posted == true, posted, true)
+
+	// Refcounted lifecycle: RegEx is a RefCounted-derived class, so
+	// the bindgen-emitted RegExFromPtr attached a Go finalizer that
+	// will drop the engine reference once the GC marks the wrapper.
+	// Exercise the explicit ref/unref path first, then the finalizer
+	// path. We don't observe the final destruction (the wrapper is
+	// gone by then), but we do confirm that draining queued
+	// finalizers doesn't crash the process.
+	r := core.RegExCreateFromString("h.llo", false)
+	check("RegEx refcount after construction == 1",
+		r.GetReferenceCount() == 1, r.GetReferenceCount(), int64(1))
+	r.Reference()
+	check("RegEx refcount after explicit Reference() == 2",
+		r.GetReferenceCount() == 2, r.GetReferenceCount(), int64(2))
+	r.Unreference()
+	check("RegEx refcount after explicit Unreference() == 1",
+		r.GetReferenceCount() == 1, r.GetReferenceCount(), int64(1))
+
+	// Leak smoke: allocate a bunch of RegEx wrappers, drop them,
+	// then force GC + drain. Each finalizer queues an Unreference
+	// onto the main-thread queue; after DrainMain they execute.
+	// If finalizers were broken or the bounce didn't work, this
+	// would either deadlock or leak; we'd see it as a stuck or
+	// memory-bloated test.
+	for i := 0; i < 100; i++ {
+		_ = core.RegExCreateFromString("loop", false)
+	}
+	goruntime.GC()
+	goruntime.GC()
+	runtime.DrainMain()
+	check("refcount leak smoke (100 RegEx alloc/drop) — main loop survives", true, true, true)
 
 	if failed == 0 {
 		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)

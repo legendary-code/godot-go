@@ -3,6 +3,8 @@
 package editor
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
@@ -13,12 +15,20 @@ type ResourceImporterBMFont struct {
 }
 
 // ResourceImporterBMFontFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *ResourceImporterBMFont. Returns nil on a nil input.
+// *ResourceImporterBMFont. Returns nil on a nil input. ResourceImporterBMFont descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ResourceImporterBMFontFromPtr(p gdextension.ObjectPtr) *ResourceImporterBMFont {
 	if p == nil {
 		return nil
 	}
 	ret := &ResourceImporterBMFont{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *ResourceImporterBMFont) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type InputEventMouseButton struct {
 }
 
 // InputEventMouseButtonFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *InputEventMouseButton. Returns nil on a nil input.
+// *InputEventMouseButton. Returns nil on a nil input. InputEventMouseButton descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func InputEventMouseButtonFromPtr(p gdextension.ObjectPtr) *InputEventMouseButton {
 	if p == nil {
 		return nil
 	}
 	ret := &InputEventMouseButton{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *InputEventMouseButton) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

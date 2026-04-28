@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type PhysicsTestMotionResult3D struct {
 }
 
 // PhysicsTestMotionResult3DFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *PhysicsTestMotionResult3D. Returns nil on a nil input.
+// *PhysicsTestMotionResult3D. Returns nil on a nil input. PhysicsTestMotionResult3D descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func PhysicsTestMotionResult3DFromPtr(p gdextension.ObjectPtr) *PhysicsTestMotionResult3D {
 	if p == nil {
 		return nil
 	}
 	ret := &PhysicsTestMotionResult3D{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *PhysicsTestMotionResult3D) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type XRPositionalTracker struct {
 }
 
 // XRPositionalTrackerFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *XRPositionalTracker. Returns nil on a nil input.
+// *XRPositionalTracker. Returns nil on a nil input. XRPositionalTracker descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func XRPositionalTrackerFromPtr(p gdextension.ObjectPtr) *XRPositionalTracker {
 	if p == nil {
 		return nil
 	}
 	ret := &XRPositionalTracker{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *XRPositionalTracker) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

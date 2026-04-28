@@ -1,115 +1,28 @@
 package runtime
 
 import (
-	"sync"
-
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
-// Main-thread queue.
+// User-facing aliases for the main-thread work queue. The actual
+// implementation lives in internal/gdextension/mainqueue.go because
+// framework-internal code (bindgen-emitted RefCounted finalizers in
+// core/) needs to reach RunOnMain without an import cycle through
+// internal/runtime.
 //
-// Godot's engine state is single-threaded — most engine method calls
-// assume exclusive access from the engine's main thread, and racing
-// them with goroutine-spawned work produces crashes or silent
-// corruption. The framework provides:
-//
-//   - IsMainThread()  — runtime check.
-//   - RunOnMain(f)    — schedule f for main-thread execution. Inline
-//                       if already on main; queued otherwise.
-//   - DrainMain()     — main-thread caller pulls all queued work and
-//                       runs it. Typically called from the user's
-//                       per-frame Process override.
-//
-// The queue is unbounded (slice + mutex). Bounded would risk
-// deadlocking — a producer waiting for the main thread to drain,
-// when main is waiting on the producer, is the worst kind of bug.
-// Practical workloads post a handful of funcs per frame; the slice
-// grows as needed and shrinks back to a small cap on each drain.
-//
-// Drain timing is user-driven in the MVP. The recommended recipe is
-// to call runtime.DrainMain at the top of your @override Process:
-//
-//	// @override
-//	func (n *MyNode) Process(delta float64) {
-//	    runtime.DrainMain()
-//	    // ... your per-frame logic ...
-//	}
-//
-// Auto-drain (codegen-injected, hidden-node-driven, or per-engine-
-// callback) is deferred — see PLAN_EXECUTION.md.
+// Behavior, semantics, and surface are unchanged from the original
+// definitions; this file is just where user-package callers reach
+// for them.
 
-var (
-	mainQueueMu sync.Mutex
-	mainQueue   []func()
-)
-
-// IsMainThread is a thin pass-through to gdextension.IsMainThread so
-// user code can keep its imports clean (the runtime package is the
-// canonical user-facing convenience layer; gdextension is the lower
-// ABI surface).
-func IsMainThread() bool {
-	return gdextension.IsMainThread()
-}
+// IsMainThread reports whether the calling goroutine is currently
+// running on the engine's main thread.
+func IsMainThread() bool { return gdextension.IsMainThread() }
 
 // RunOnMain schedules f to execute on the engine's main thread.
-//
-// If the caller is already on the main thread (IsMainThread is true),
-// f runs synchronously and RunOnMain returns when f returns. Use
-// this defensively when a code path might run from main or from a
-// goroutine and you want the same behavior either way.
-//
-// Otherwise f is appended to the main-thread queue and runs on the
-// next DrainMain. RunOnMain returns immediately in that case;
-// callers that need to wait for f's completion should compose with
-// a sync.WaitGroup or a result channel themselves.
-//
-// f must not panic. A panic in f, when DrainMain executes it, will
-// take down the main thread and the entire process — there is no
-// per-func recovery. Wrap with defer/recover inside f if you need
-// fault tolerance.
-func RunOnMain(f func()) {
-	if f == nil {
-		return
-	}
-	if gdextension.IsMainThread() {
-		f()
-		return
-	}
-	mainQueueMu.Lock()
-	mainQueue = append(mainQueue, f)
-	mainQueueMu.Unlock()
-}
+// Inline if already on main; queued otherwise. See
+// internal/gdextension.RunOnMain for full semantics.
+func RunOnMain(f func()) { gdextension.RunOnMain(f) }
 
-// DrainMain executes every func currently queued via RunOnMain. Must
-// be called from the main thread; calling from a worker is a logic
-// bug (the funcs were queued precisely to avoid running off-main).
-//
-// Drain is single-pass — funcs queued by other goroutines DURING
-// drain stay in the queue for the next DrainMain. This avoids
-// pathological loops where each drained func enqueues another and
-// the main thread never makes progress on its own per-frame work.
-//
-// Funcs are run in the order they were queued. The mutex is released
-// while running each func so RunOnMain calls from inside a drained
-// func don't deadlock — they just append to the queue and run on
-// the NEXT drain.
-//
-// Calling DrainMain on an empty queue is a cheap no-op.
-func DrainMain() {
-	mainQueueMu.Lock()
-	if len(mainQueue) == 0 {
-		mainQueueMu.Unlock()
-		return
-	}
-	// Atomic swap: take everything that's queued right now into a
-	// local slice, leave the queue empty (with cap preserved for
-	// the next round to avoid re-allocating). Anything posted by
-	// the funcs we're about to run lands in the next batch.
-	batch := mainQueue
-	mainQueue = mainQueue[:0:0]
-	mainQueueMu.Unlock()
-
-	for _, fn := range batch {
-		fn()
-	}
-}
+// DrainMain executes every func currently queued via RunOnMain.
+// Must be called from the main thread.
+func DrainMain() { gdextension.DrainMain() }

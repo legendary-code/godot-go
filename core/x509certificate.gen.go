@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type X509Certificate struct {
 }
 
 // X509CertificateFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *X509Certificate. Returns nil on a nil input.
+// *X509Certificate. Returns nil on a nil input. X509Certificate descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func X509CertificateFromPtr(p gdextension.ObjectPtr) *X509Certificate {
 	if p == nil {
 		return nil
 	}
 	ret := &X509Certificate{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *X509Certificate) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

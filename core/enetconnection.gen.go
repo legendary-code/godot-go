@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type ENetConnection struct {
 }
 
 // ENetConnectionFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *ENetConnection. Returns nil on a nil input.
+// *ENetConnection. Returns nil on a nil input. ENetConnection descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ENetConnectionFromPtr(p gdextension.ObjectPtr) *ENetConnection {
 	if p == nil {
 		return nil
 	}
 	ret := &ENetConnection{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *ENetConnection) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

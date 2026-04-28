@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VisualShaderNodeVec2Parameter struct {
 }
 
 // VisualShaderNodeVec2ParameterFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeVec2Parameter. Returns nil on a nil input.
+// *VisualShaderNodeVec2Parameter. Returns nil on a nil input. VisualShaderNodeVec2Parameter descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeVec2ParameterFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeVec2Parameter {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeVec2Parameter{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeVec2Parameter) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

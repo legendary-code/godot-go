@@ -3,6 +3,8 @@
 package core
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
@@ -12,12 +14,20 @@ type Texture struct {
 }
 
 // TextureFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *Texture. Returns nil on a nil input.
+// *Texture. Returns nil on a nil input. Texture descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func TextureFromPtr(p gdextension.ObjectPtr) *Texture {
 	if p == nil {
 		return nil
 	}
 	ret := &Texture{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *Texture) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

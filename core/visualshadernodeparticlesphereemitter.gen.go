@@ -3,6 +3,8 @@
 package core
 
 import (
+	"runtime"
+
 	"github.com/legendary-code/godot-go/internal/gdextension"
 )
 
@@ -12,12 +14,20 @@ type VisualShaderNodeParticleSphereEmitter struct {
 }
 
 // VisualShaderNodeParticleSphereEmitterFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeParticleSphereEmitter. Returns nil on a nil input.
+// *VisualShaderNodeParticleSphereEmitter. Returns nil on a nil input. VisualShaderNodeParticleSphereEmitter descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeParticleSphereEmitterFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeParticleSphereEmitter {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeParticleSphereEmitter{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeParticleSphereEmitter) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }

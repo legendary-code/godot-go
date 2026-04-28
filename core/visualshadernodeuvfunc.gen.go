@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type VisualShaderNodeUVFunc struct {
 }
 
 // VisualShaderNodeUVFuncFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeUVFunc. Returns nil on a nil input.
+// *VisualShaderNodeUVFunc. Returns nil on a nil input. VisualShaderNodeUVFunc descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeUVFuncFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeUVFunc {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeUVFunc{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeUVFunc) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

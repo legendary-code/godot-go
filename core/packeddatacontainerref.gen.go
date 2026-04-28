@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type PackedDataContainerRef struct {
 }
 
 // PackedDataContainerRefFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *PackedDataContainerRef. Returns nil on a nil input.
+// *PackedDataContainerRef. Returns nil on a nil input. PackedDataContainerRef descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func PackedDataContainerRefFromPtr(p gdextension.ObjectPtr) *PackedDataContainerRef {
 	if p == nil {
 		return nil
 	}
 	ret := &PackedDataContainerRef{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *PackedDataContainerRef) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type StyleBoxFlat struct {
 }
 
 // StyleBoxFlatFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *StyleBoxFlat. Returns nil on a nil input.
+// *StyleBoxFlat. Returns nil on a nil input. StyleBoxFlat descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func StyleBoxFlatFromPtr(p gdextension.ObjectPtr) *StyleBoxFlat {
 	if p == nil {
 		return nil
 	}
 	ret := &StyleBoxFlat{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *StyleBoxFlat) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

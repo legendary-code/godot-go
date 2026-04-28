@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type OpenXRSpatialComponentMesh3DList struct {
 }
 
 // OpenXRSpatialComponentMesh3DListFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *OpenXRSpatialComponentMesh3DList. Returns nil on a nil input.
+// *OpenXRSpatialComponentMesh3DList. Returns nil on a nil input. OpenXRSpatialComponentMesh3DList descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func OpenXRSpatialComponentMesh3DListFromPtr(p gdextension.ObjectPtr) *OpenXRSpatialComponentMesh3DList {
 	if p == nil {
 		return nil
 	}
 	ret := &OpenXRSpatialComponentMesh3DList{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *OpenXRSpatialComponentMesh3DList) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

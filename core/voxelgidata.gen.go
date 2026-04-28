@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VoxelGIData struct {
 }
 
 // VoxelGIDataFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VoxelGIData. Returns nil on a nil input.
+// *VoxelGIData. Returns nil on a nil input. VoxelGIData descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VoxelGIDataFromPtr(p gdextension.ObjectPtr) *VoxelGIData {
 	if p == nil {
 		return nil
 	}
 	ret := &VoxelGIData{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VoxelGIData) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

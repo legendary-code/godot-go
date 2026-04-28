@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type InputEventShortcut struct {
 }
 
 // InputEventShortcutFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *InputEventShortcut. Returns nil on a nil input.
+// *InputEventShortcut. Returns nil on a nil input. InputEventShortcut descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func InputEventShortcutFromPtr(p gdextension.ObjectPtr) *InputEventShortcut {
 	if p == nil {
 		return nil
 	}
 	ret := &InputEventShortcut{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *InputEventShortcut) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

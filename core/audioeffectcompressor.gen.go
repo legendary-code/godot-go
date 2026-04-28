@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type AudioEffectCompressor struct {
 }
 
 // AudioEffectCompressorFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *AudioEffectCompressor. Returns nil on a nil input.
+// *AudioEffectCompressor. Returns nil on a nil input. AudioEffectCompressor descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func AudioEffectCompressorFromPtr(p gdextension.ObjectPtr) *AudioEffectCompressor {
 	if p == nil {
 		return nil
 	}
 	ret := &AudioEffectCompressor{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *AudioEffectCompressor) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

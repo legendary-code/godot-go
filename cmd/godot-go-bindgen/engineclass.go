@@ -63,6 +63,12 @@ func emitEngineClass(api *API, c *Class, pkgRoot string) error {
 			"github.com/legendary-code/godot-go/internal/gdextension": true,
 		},
 	}
+	// RefCounted-derived classes attach a Go finalizer in FromPtr so
+	// the engine reference drops when GC marks the wrapper. Pull
+	// stdlib runtime into the imports for those classes.
+	if view.IsRefcounted {
+		view.Imports["runtime"] = true
+	}
 
 	if c.Inherits != "" {
 		basePkg := classPkg(c.Inherits)
@@ -523,7 +529,38 @@ func (self *Object) BindPtr(p gdextension.ObjectPtr) { self.ptr = p }
 	}
 
 	// fromPtr helper — used by method returns to wrap a ObjectPtr.
-	fmt.Fprintf(buf, "// %sFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a\n// *%s. Returns nil on a nil input.\nfunc %sFromPtr(p gdextension.ObjectPtr) *%s {\n\tif p == nil { return nil }\n\tret := &%s{}\n\tret.BindPtr(p)\n\treturn ret\n}\n\n", view.GoName, view.GoName, view.GoName, view.GoName, view.GoName)
+	// For RefCounted-derived classes, the wrapper picks up a Go-side
+	// finalizer so the engine reference drops automatically when the
+	// last Go reference is gone. Engine method returns of Ref<T> are
+	// already +1; the finalizer just calls Unreference. The
+	// Unreference call dispatches through gdextension.RunOnMain so
+	// the engine call lands on the main thread regardless of which
+	// goroutine the Go GC happens to use for finalizer dispatch.
+	//
+	// Plain Object subclasses (Node, Node2D, etc.) keep the simpler
+	// FromPtr — those are host-managed via the scene tree.
+	if view.IsRefcounted {
+		fmt.Fprintf(buf, `// %sFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
+// *%s. Returns nil on a nil input. %s descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
+func %sFromPtr(p gdextension.ObjectPtr) *%s {
+	if p == nil { return nil }
+	ret := &%s{}
+	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *%s) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
+	return ret
+}
+
+`, view.GoName, view.GoName, view.GoName, view.GoName, view.GoName, view.GoName, view.GoName)
+	} else {
+		fmt.Fprintf(buf, "// %sFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a\n// *%s. Returns nil on a nil input.\nfunc %sFromPtr(p gdextension.ObjectPtr) *%s {\n\tif p == nil { return nil }\n\tret := &%s{}\n\tret.BindPtr(p)\n\treturn ret\n}\n\n", view.GoName, view.GoName, view.GoName, view.GoName, view.GoName)
+	}
 
 	// Constants.
 	if len(view.Constants) > 0 {

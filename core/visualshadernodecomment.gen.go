@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type VisualShaderNodeComment struct {
 }
 
 // VisualShaderNodeCommentFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *VisualShaderNodeComment. Returns nil on a nil input.
+// *VisualShaderNodeComment. Returns nil on a nil input. VisualShaderNodeComment descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func VisualShaderNodeCommentFromPtr(p gdextension.ObjectPtr) *VisualShaderNodeComment {
 	if p == nil {
 		return nil
 	}
 	ret := &VisualShaderNodeComment{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *VisualShaderNodeComment) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type SystemFont struct {
 }
 
 // SystemFontFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *SystemFont. Returns nil on a nil input.
+// *SystemFont. Returns nil on a nil input. SystemFont descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func SystemFontFromPtr(p gdextension.ObjectPtr) *SystemFont {
 	if p == nil {
 		return nil
 	}
 	ret := &SystemFont{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *SystemFont) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

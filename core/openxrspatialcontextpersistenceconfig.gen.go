@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type OpenXRSpatialContextPersistenceConfig struct {
 }
 
 // OpenXRSpatialContextPersistenceConfigFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *OpenXRSpatialContextPersistenceConfig. Returns nil on a nil input.
+// *OpenXRSpatialContextPersistenceConfig. Returns nil on a nil input. OpenXRSpatialContextPersistenceConfig descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func OpenXRSpatialContextPersistenceConfigFromPtr(p gdextension.ObjectPtr) *OpenXRSpatialContextPersistenceConfig {
 	if p == nil {
 		return nil
 	}
 	ret := &OpenXRSpatialContextPersistenceConfig{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *OpenXRSpatialContextPersistenceConfig) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type MeshConvexDecompositionSettings struct {
 }
 
 // MeshConvexDecompositionSettingsFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *MeshConvexDecompositionSettings. Returns nil on a nil input.
+// *MeshConvexDecompositionSettings. Returns nil on a nil input. MeshConvexDecompositionSettings descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func MeshConvexDecompositionSettingsFromPtr(p gdextension.ObjectPtr) *MeshConvexDecompositionSettings {
 	if p == nil {
 		return nil
 	}
 	ret := &MeshConvexDecompositionSettings{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *MeshConvexDecompositionSettings) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type ProceduralSkyMaterial struct {
 }
 
 // ProceduralSkyMaterialFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *ProceduralSkyMaterial. Returns nil on a nil input.
+// *ProceduralSkyMaterial. Returns nil on a nil input. ProceduralSkyMaterial descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func ProceduralSkyMaterialFromPtr(p gdextension.ObjectPtr) *ProceduralSkyMaterial {
 	if p == nil {
 		return nil
 	}
 	ret := &ProceduralSkyMaterial{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *ProceduralSkyMaterial) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

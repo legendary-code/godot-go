@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type UPNPDevice struct {
 }
 
 // UPNPDeviceFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *UPNPDevice. Returns nil on a nil input.
+// *UPNPDevice. Returns nil on a nil input. UPNPDevice descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func UPNPDeviceFromPtr(p gdextension.ObjectPtr) *UPNPDevice {
 	if p == nil {
 		return nil
 	}
 	ret := &UPNPDevice{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *UPNPDevice) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

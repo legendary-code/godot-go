@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type RandomNumberGenerator struct {
 }
 
 // RandomNumberGeneratorFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *RandomNumberGenerator. Returns nil on a nil input.
+// *RandomNumberGenerator. Returns nil on a nil input. RandomNumberGenerator descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func RandomNumberGeneratorFromPtr(p gdextension.ObjectPtr) *RandomNumberGenerator {
 	if p == nil {
 		return nil
 	}
 	ret := &RandomNumberGenerator{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *RandomNumberGenerator) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

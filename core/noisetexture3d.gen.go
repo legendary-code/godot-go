@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type NoiseTexture3D struct {
 }
 
 // NoiseTexture3DFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *NoiseTexture3D. Returns nil on a nil input.
+// *NoiseTexture3D. Returns nil on a nil input. NoiseTexture3D descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func NoiseTexture3DFromPtr(p gdextension.ObjectPtr) *NoiseTexture3D {
 	if p == nil {
 		return nil
 	}
 	ret := &NoiseTexture3D{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *NoiseTexture3D) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -774,32 +774,46 @@ The framework today only exercises plain Object construction
 `Resource`-derived types (or holding `Ref<>` members) will pile up
 heap until the process exits.
 
-- [ ] **Audit current refcount touchpoints.** Where do Ref<T>-typed
-      values cross the Go↔engine boundary today? (Probably nowhere
-      yet, since the smoke / locale_language examples don't take or
-      return Resources.) Map the cases that will arise as soon as
-      users ship Resource-handling extensions.
-- [ ] **Decide the ownership story.** Two viable shapes:
-      1. **Explicit ref/unref API** (godot-cpp style) — user calls
-         `obj.Reference()` / `obj.Unreference()` manually; Go's GC
-         doesn't help.
-      2. **Go-finalizer-driven** (godot-rs style) — wrapper structs
-         have `runtime.SetFinalizer` to call `unreference()`; engine
-         destructs when count hits 0.
-      Finalizers in Go run on a dedicated goroutine, not the main
-      thread — so finalizer-driven unref needs to bounce through
-      `runtime.RunOnMain` from Phase 6's threading bridge. Worth it
-      vs. the simpler explicit model is the live design question.
-- [ ] **Implement chosen model.** Likely codegen change to
-      Construct synthesis (refcounted classes call `init_ref` after
-      construction; user-facing wrappers track their lifecycle).
-- [ ] **Test path.** A small example that holds an `Image` or
-      `Resource` reference, verifies destructor fires when expected,
-      doesn't leak across many iterations (heap-watch in CI?).
-- [ ] **Document the contract.** `docs/lifecycle.md` covering Object
-      vs RefCounted, what godot-go users need to do (likely nothing
-      if we go Go-finalizer; explicit `Unreference` calls if we
-      don't), and the interaction with hot-paths.
+- [x] **Audit:** 652 of 1023 engine classes are RefCounted-derived
+      (~64%) — every asset type, plus standalone helpers like RegEx,
+      JSON, XMLParser. RefCounted itself has Reference/Unreference/
+      InitRef/GetReferenceCount methods exposed. Bindgen previously
+      treated RefCounted-derived classes identically to plain Object,
+      so every `Ref<T>` that crossed the boundary leaked. Singletons
+      are all plain Object (none refcounted) so the singleton cache
+      pattern needs no special-casing.
+- [x] **Ownership model: Go-finalizer-driven** (godot-rs style),
+      using Phase 6's main-thread bridge for the off-thread bounce.
+      Drop the Go reference and the engine cleanup happens for you,
+      eventually. Users who want deterministic free can call
+      `Unreference` directly — the finalizer is harmless after
+      refcount hits zero. Trade-off: GC-driven timing means
+      resources may live one or two frames longer than the user
+      "drops" them; acceptable for typical assets, manual
+      `Unreference` for hot paths.
+- [x] **Implementation:** bindgen emits finalizer attachment in
+      `XFromPtr` for every class with `is_refcounted: true`. The
+      finalizer body calls `gdextension.RunOnMain(func() { x.Unreference() })`
+      so the engine call lands on the main thread. Plain Object
+      subclasses (Node, Node2D, etc.) keep the simpler FromPtr — no
+      finalizer, since the host owns their lifetime. Required moving
+      the RunOnMain/DrainMain queue from `internal/runtime` down to
+      `internal/gdextension` to break what would have been a
+      `core` → `internal/runtime` → `core` import cycle;
+      `internal/runtime/thread.go` is now thin pass-throughs.
+- [x] **Test path:** smoke gains 4 refcount assertions exercising
+      RegEx (a simple RefCounted helper). After construction:
+      refcount 1; after explicit Reference: 2; after explicit
+      Unreference: 1. Plus a leak-smoke loop that constructs 100
+      RegEx wrappers, drops them, runs `runtime.GC()` + `DrainMain`,
+      asserts the process survives. Total framework checks: 21/21
+      (was 17). 5/5 stable shutdown.
+- [x] **Document:** `docs/lifecycle.md` covers Object vs RefCounted,
+      the framework's automatic finalizer model, drain timing, when
+      to reach for explicit `Unreference`, what gets a finalizer,
+      singletons, and edge cases. README cross-links and updates
+      its known-limitations list (refcount line removed; replaced
+      with a positive entry under "What's supported").
 
 ## 5. Cross-cutting concerns
 

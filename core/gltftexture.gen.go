@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type GLTFTexture struct {
 }
 
 // GLTFTextureFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *GLTFTexture. Returns nil on a nil input.
+// *GLTFTexture. Returns nil on a nil input. GLTFTexture descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func GLTFTextureFromPtr(p gdextension.ObjectPtr) *GLTFTexture {
 	if p == nil {
 		return nil
 	}
 	ret := &GLTFTexture{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *GLTFTexture) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

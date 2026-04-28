@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -15,13 +16,21 @@ type CameraAttributesPhysical struct {
 }
 
 // CameraAttributesPhysicalFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *CameraAttributesPhysical. Returns nil on a nil input.
+// *CameraAttributesPhysical. Returns nil on a nil input. CameraAttributesPhysical descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func CameraAttributesPhysicalFromPtr(p gdextension.ObjectPtr) *CameraAttributesPhysical {
 	if p == nil {
 		return nil
 	}
 	ret := &CameraAttributesPhysical{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *CameraAttributesPhysical) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 

@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -16,13 +17,21 @@ type HashingContext struct {
 }
 
 // HashingContextFromPtr wraps an existing host-allocated GDExtensionObjectPtr in a
-// *HashingContext. Returns nil on a nil input.
+// *HashingContext. Returns nil on a nil input. HashingContext descends from RefCounted, so the
+// returned wrapper carries a Go finalizer that drops one engine
+// reference (via Unreference, dispatched on the main thread) when
+// Go's GC determines the wrapper is unreachable. Users who want
+// deterministic free can call ret.Unreference() directly — the
+// finalizer is harmless after the refcount hits zero.
 func HashingContextFromPtr(p gdextension.ObjectPtr) *HashingContext {
 	if p == nil {
 		return nil
 	}
 	ret := &HashingContext{}
 	ret.BindPtr(p)
+	runtime.SetFinalizer(ret, func(r *HashingContext) {
+		gdextension.RunOnMain(func() { r.Unreference() })
+	})
 	return ret
 }
 
