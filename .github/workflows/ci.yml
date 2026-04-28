@@ -1,0 +1,148 @@
+name: CI
+
+# Run on every push to main and on pull requests targeting main. Skip
+# pure-doc edits to keep the matrix from churning over README tweaks
+# (the path filter intentionally only excludes top-level docs and the
+# docs/ tree — anything under examples/ or internal/ is real code
+# that affects the build).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - '.claude/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - '.claude/**'
+  workflow_dispatch: {}
+
+# Cancel in-flight runs on the same ref when a new commit lands —
+# stops PR pushes from queueing up redundant matrix expansions.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin to a specific Godot release so a future stable bump doesn't
+  # silently shift CI semantics. Update this value plus
+  # `compatibility_minimum` in each example's .gdextension when the
+  # framework moves to a newer Godot version.
+  GODOT_VERSION: 4.6.2-stable
+  # Match go.mod's toolchain. setup-go resolves arbitrary versions.
+  GO_VERSION: '1.26.1'
+
+jobs:
+  build-and-verify:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    defaults:
+      run:
+        # bash on every runner — Windows includes Git Bash, which
+        # handles the install script and the godot wrapper uniformly.
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # The default cache key (go.sum) is fine; this project has
+          # no third-party Go dependencies, but the cache action is
+          # cheap to keep enabled.
+          cache: true
+
+      - name: Cache Godot binary
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          # Cache by OS + version so each runner pulls its own image
+          # but skips re-downloading on subsequent runs at the same
+          # version. The install script idempotently writes here.
+          path: ${{ runner.tool_cache }}/godot/${{ env.GODOT_VERSION }}
+          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot
+        run: .github/scripts/install-godot.sh "$GODOT_VERSION"
+
+      - name: Go test
+        run: go test ./...
+
+      - name: Install codegen
+        run: go install ./cmd/godot-go
+
+      - name: Generate + build smoke
+        run: |
+          go generate ./examples/smoke/...
+          mkdir -p examples/smoke/godot_project/bin
+          # Output suffix matches what the .gdextension config
+          # expects per platform; the install-godot wrapper also
+          # adapts to OS, but here we hand-pick by RUNNER_OS so the
+          # output filename hits whatever the host can load.
+          case "$RUNNER_OS" in
+            Linux)   ext=so ;;
+            macOS)   ext=dylib ;;
+            Windows) ext=dll ;;
+          esac
+          go build -buildmode=c-shared -o "examples/smoke/godot_project/bin/godot_go_smoke.${ext}" ./examples/smoke
+
+      - name: Generate + build locale_language
+        run: |
+          go generate ./examples/locale_language/...
+          mkdir -p examples/locale_language/godot_project/bin
+          case "$RUNNER_OS" in
+            Linux)   ext=so ;;
+            macOS)   ext=dylib ;;
+            Windows) ext=dll ;;
+          esac
+          go build -buildmode=c-shared -o "examples/locale_language/godot_project/bin/godot_go_locale_language.${ext}" ./examples/locale_language
+
+      - name: Generate + build 2d_demo
+        run: |
+          go generate ./examples/2d_demo/...
+          mkdir -p examples/2d_demo/godot_project/bin
+          case "$RUNNER_OS" in
+            Linux)   ext=so ;;
+            macOS)   ext=dylib ;;
+            Windows) ext=dll ;;
+          esac
+          go build -buildmode=c-shared -o "examples/2d_demo/godot_project/bin/godot_go_2d_demo.${ext}" ./examples/2d_demo
+
+      # Each example needs a one-shot --editor pass before its
+      # headless --script run so Godot generates the project's
+      # .godot/ cache and recognizes the .gdextension. Running with
+      # --quit-after 5 keeps the editor session bounded; the Go-side
+      # shutdown hook (os.Exit at Core deinit) means the editor-
+      # process exit can sometimes log noise after the framework's
+      # own teardown — we accept exit code 0 from these runs and
+      # don't grep for "BUG" lines.
+
+      - name: Import + verify smoke
+        run: |
+          godot --headless --editor --path examples/smoke/godot_project --quit-after 5 || true
+          godot --headless --path examples/smoke/godot_project --script test_mynode.gd | tee smoke.log
+          grep -F "test_mynode: ALL CHECKS PASSED" smoke.log
+
+      - name: Import + verify locale_language
+        run: |
+          godot --headless --editor --path examples/locale_language/godot_project --quit-after 5 || true
+          godot --headless --path examples/locale_language/godot_project --script test_locale_language.gd | tee locale.log
+          grep -F "test_locale_language: ALL CHECKS PASSED" locale.log
+
+      - name: Import + verify 2d_demo
+        run: |
+          godot --headless --editor --path examples/2d_demo/godot_project --quit-after 5 || true
+          godot --headless --path examples/2d_demo/godot_project --script test_mover.gd | tee mover.log
+          grep -F "test_mover: ALL CHECKS PASSED" mover.log
