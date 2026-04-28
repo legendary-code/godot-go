@@ -39,6 +39,10 @@ type classInfo struct {
 
 	IsAbstract bool
 	IsInner    bool
+	// IsClass marks structs explicitly tagged `@class` — the
+	// registered extension class for this file. Exactly one struct
+	// per file must carry @class. Mutually exclusive with @innerclass.
+	IsClass bool
 	// IsEditor flips registration from INIT_LEVEL_SCENE to
 	// INIT_LEVEL_EDITOR — Godot only fires editor-level init callbacks
 	// when the engine is in editor mode, so the class is invisible to
@@ -223,6 +227,12 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			tags := doctag.Parse(doc)
 			switch t := ts.Type.(type) {
 			case *ast.StructType:
+				isClass := doctag.Has(tags, "class")
+				isInner := doctag.Has(tags, "innerclass")
+				if isClass && isInner {
+					return nil, fmt.Errorf("%s: %s carries both @class and @innerclass — pick one (the framework registers @class structs and discovers @innerclass structs as nested types)",
+						posStr(fset, ts.Pos()), ts.Name.Name)
+				}
 				ci := &classInfo{
 					Name:        ts.Name.Name,
 					Pos:         ts.Pos(),
@@ -230,12 +240,21 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 					Doc:         tags,
 					Description: synthDescription(ts.Name.Name, doc, tags),
 					IsAbstract:  doctag.Has(tags, "abstract"),
-					IsInner:     doctag.Has(tags, "innerclass"),
+					IsInner:     isInner,
+					IsClass:     isClass,
 					IsEditor:    doctag.Has(tags, "editor"),
 				}
-				if parent, parentImport, err := findEmbeddedParent(t, d.Imports); err != nil {
-					return nil, fmt.Errorf("%s: %w", posStr(fset, ts.Pos()), err)
-				} else {
+				// Parent resolution: only @class structs need (and get)
+				// a parent. Inner classes embed framework types
+				// without that meaning "extends" — they're just nested
+				// declarations the codegen records but doesn't
+				// register. For @class structs, exactly one embedded
+				// field must carry @extends; that's the parent.
+				if isClass {
+					parent, parentImport, perr := findExtendsParent(fset, t, d.Imports)
+					if perr != nil {
+						return nil, perr
+					}
 					ci.Parent = parent
 					ci.ParentImport = parentImport
 				}
@@ -252,8 +271,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
-	// Identify the main class — the unique struct without @innerclass. Zero
-	// or multiple top-level non-inner structs is a configuration error.
+	// Identify the main class — the struct explicitly tagged @class.
+	// Inner classes get bucketed by @innerclass; everything else (no
+	// tag at all) is a regular Go struct that codegen ignores.
 	var mainCandidates []*classInfo
 	for _, ci := range structs {
 		if ci.IsInner {
@@ -264,11 +284,14 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			d.InnerClasses = append(d.InnerClasses, ci)
 			continue
 		}
-		mainCandidates = append(mainCandidates, ci)
+		if ci.IsClass {
+			mainCandidates = append(mainCandidates, ci)
+		}
 	}
 	switch len(mainCandidates) {
 	case 0:
-		return nil, fmt.Errorf("%s: no top-level extension class found (need exactly one struct without @innerclass)", file.Name.Name)
+		return nil, fmt.Errorf("%s: no @class struct found — tag exactly one top-level struct with @class to register it as a Godot extension class",
+			file.Name.Name)
 	case 1:
 		d.MainClass = mainCandidates[0]
 	default:
@@ -276,7 +299,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		for _, c := range mainCandidates {
 			names = append(names, c.Name+"@"+posStr(fset, c.Pos))
 		}
-		return nil, fmt.Errorf("multiple top-level extension classes (need exactly one without @innerclass): %s", strings.Join(names, ", "))
+		return nil, fmt.Errorf("multiple @class structs (one per file is allowed): %s", strings.Join(names, ", "))
 	}
 
 	// Methods: walk all FuncDecls with named receivers matching one of the
@@ -390,11 +413,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		return nil, err
 	}
 
-	// Validate: a non-inner class must have a parent. Inner classes don't.
-	if d.MainClass.Parent == "" {
-		return nil, fmt.Errorf("%s: class %s has no recognized base class — embed a framework type (e.g. core.Node) to inherit from a Godot class",
-			posStr(fset, d.MainClass.Pos), d.MainClass.Name)
-	}
+	// Parent is guaranteed non-empty here — findExtendsParent errors
+	// out at type-collection time if the @class struct is missing
+	// @extends or has more than one. No further validation needed.
 
 	return d, nil
 }
@@ -824,42 +845,63 @@ func validateGroupOrdering(fset *token.FileSet, props []*propertyInfo) error {
 	return nil
 }
 
-// findEmbeddedParent walks the struct fields looking for a *single*
-// anonymous (embedded) field whose type lives in a framework package.
-// Returns ("", "", nil) when no embedded framework field is present —
-// the caller decides whether that's an error (main class) or fine
-// (inner class).
+// findExtendsParent locates the parent class for a `@class` struct by
+// walking its fields for the one tagged with `@extends`. The tag must
+// sit on an *embedded* (anonymous) field whose type resolves to a
+// framework package — that's the GDScript-equivalent `extends Node`
+// declaration.
 //
-// More than one framework embed → error (Godot is single-inheritance).
-func findEmbeddedParent(st *ast.StructType, imports map[string]string) (parent, parentImport string, err error) {
+// Validation surfaces:
+//   - no field carries @extends → error (the class needs a parent).
+//   - multiple fields carry @extends → error (single inheritance).
+//   - @extends on a named (non-embedded) field → error (parent
+//     inheritance must come from an embed; named fields are
+//     composition).
+//   - @extends on an embed whose type isn't a framework package →
+//     error (cross-module class inheritance isn't supported yet).
+//
+// Returns the bare class name (e.g. "Node") + the framework import
+// path it came from.
+func findExtendsParent(fset *token.FileSet, st *ast.StructType, imports map[string]string) (parent, parentImport string, err error) {
 	if st.Fields == nil {
-		return "", "", nil
+		return "", "", fmt.Errorf("@class struct has no fields — it needs an embedded framework type tagged @extends")
 	}
 	hits := 0
 	for _, f := range st.Fields.List {
-		if len(f.Names) != 0 {
-			continue // named field, not embedded
-		}
-		sel, ok := f.Type.(*ast.SelectorExpr)
-		if !ok {
-			continue
-		}
-		pkgIdent, ok := sel.X.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		path, ok := imports[pkgIdent.Name]
-		if !ok || !frameworkPkgs[path] {
+		if !doctag.Has(doctag.Parse(f.Doc), "extends") {
 			continue
 		}
 		hits++
+		if len(f.Names) != 0 {
+			return "", "", fmt.Errorf("%s: @extends on named field %q — @extends marks the *embedded* parent type (anonymous field), not a regular composition field",
+				posStr(fset, f.Pos()), f.Names[0].Name)
+		}
+		sel, ok := f.Type.(*ast.SelectorExpr)
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded framework type like core.Node",
+				posStr(fset, f.Pos()), f.Type)
+		}
+		pkgIdent, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded framework type like core.Node",
+				posStr(fset, f.Pos()))
+		}
+		path, ok := imports[pkgIdent.Name]
+		if !ok || !frameworkPkgs[path] {
+			return "", "", fmt.Errorf("%s: @extends on %s.%s — type must come from a framework package (core, editor, godot, variant); cross-module class inheritance isn't supported",
+				posStr(fset, f.Pos()), pkgIdent.Name, sel.Sel.Name)
+		}
 		parent = sel.Sel.Name
 		parentImport = path
 	}
-	if hits > 1 {
-		return "", "", fmt.Errorf("multiple embedded framework types — Godot is single-inheritance, pick one")
+	switch hits {
+	case 0:
+		return "", "", fmt.Errorf("@class struct has no @extends — tag the embedded framework type that this class extends (Godot's single-inheritance equivalent of `extends Node` in GDScript)")
+	case 1:
+		return parent, parentImport, nil
+	default:
+		return "", "", fmt.Errorf("multiple @extends fields — Godot is single-inheritance, pick one")
 	}
-	return parent, parentImport, nil
 }
 
 // receiverTypeName returns the bare type name of a method receiver and

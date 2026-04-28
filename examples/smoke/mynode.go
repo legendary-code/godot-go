@@ -32,14 +32,17 @@ type Signals interface {
 // MyNode is a minimal Go-defined extension class — embeds core.Node so the
 // host treats instances as nodes, and exposes Hello/Add/Greet to GDScript.
 //
-// Properties exercise the four cells of the @property matrix (Phase 6):
+// Properties exercise the four cells of the @property matrix:
 //   - Health     — field form, read-write. Codegen synthesizes Get/Set.
 //   - MaxHealth  — field form, read-only. @readonly drops the setter.
 //   - Score      — method form, read-only. User wrote GetScore only;
 //                  no SetScore means the property is read-only.
 //   - Tag        — method form, read-write. User wrote both GetTag
 //                  and SetTag; codegen wires both as a normal property.
+//
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 
 	// @property

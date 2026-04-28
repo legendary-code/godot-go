@@ -23,7 +23,11 @@ func emitFor(t *testing.T, src string) string {
 func TestEmitMainClassWithMethod(t *testing.T) {
 	src := `package mypkg
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (n *MyNode) Hello() {}
 `
 	out := emitFor(t, src)
@@ -46,7 +50,11 @@ func (n *MyNode) Hello() {}
 func TestEmitNoMethods(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type Lonely struct { core.Node }
+// @class
+type Lonely struct {
+	// @extends
+	core.Node
+}
 `
 	out := emitFor(t, src)
 	if strings.Contains(out, "RegisterClassMethod") {
@@ -58,7 +66,11 @@ type Lonely struct { core.Node }
 func TestEmitStaticMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 func (N) Origin() int64 { return 42 }
 `
 	out := emitFor(t, src)
@@ -80,7 +92,11 @@ func (N) Origin() int64 { return 42 }
 func TestEmitOverrideMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 // @override
 func (n *N) process(delta float64) {}
 `
@@ -107,7 +123,11 @@ func TestEmitOverrideExportedReceiver(t *testing.T) {
 	// override, not because of case.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 // @override
 func (n *N) Process(delta float64) {}
 `
@@ -120,7 +140,11 @@ func (n *N) Process(delta float64) {}
 func TestEmitOverrideWithExplicitName(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 // @override
 // @name _physics_process
 func (n *N) PhysicsTick(delta float64) {}
@@ -134,7 +158,11 @@ func (n *N) PhysicsTick(delta float64) {}
 func TestEmitMethodWithIntArgsAndReturn(t *testing.T) {
 	src := `package mypkg
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (n *MyNode) Add(a, b int64) int64 { return a + b }
 `
 	out := emitFor(t, src)
@@ -160,7 +188,11 @@ func (n *MyNode) Add(a, b int64) int64 { return a + b }
 func TestEmitMethodWithMixedPrimitives(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 func (n *N) Mix(b bool, i int32, f float32, s string) string { return s }
 `
 	out := emitFor(t, src)
@@ -179,7 +211,11 @@ func (n *N) Mix(b bool, i int32, f float32, s string) string { return s }
 func TestEmitRejectsUnsupportedType(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 func (n *N) Foo(xs []int) {}
 `
 	d := mustDiscover(t, src)
@@ -196,7 +232,11 @@ func (n *N) Foo(xs []int) {}
 func TestEmitNameOverride(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 // @name shout
 func (n *N) Hello() {}
 `
@@ -207,7 +247,9 @@ func (n *N) Hello() {}
 func TestEmitPropertyFieldForm(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type N struct {
+	// @extends
 	core.Node
 	// @property
 	Health int64
@@ -232,7 +274,9 @@ type N struct {
 func TestEmitPropertyFieldFormReadOnly(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type N struct {
+	// @extends
 	core.Node
 	// @readonly
 	// @property
@@ -258,7 +302,11 @@ type N struct {
 func TestEmitPropertyMethodForm(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *N) GetHealth() int64 { return 0 }
 // @property
@@ -279,7 +327,11 @@ func (n *N) SetHealth(v int64) {}
 func TestEmitSignals(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 
 // @signals
 type Signals interface {
@@ -320,7 +372,9 @@ type Signals interface {
 func TestEmitPropertyGroupAndHints(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type N struct {
+	// @extends
 	core.Node
 
 	// @group("Combat")
@@ -362,7 +416,11 @@ type N struct {
 func TestEmitDefaultInitLevelIsScene(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 `
 	out := emitFor(t, src)
 	mustContain(t, out, "RegisterInitCallback(gdextension.InitLevelScene, registerN)")
@@ -373,7 +431,11 @@ func TestEmitEditorClassUsesEditorInitLevel(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @editor
-type N struct { core.Node }
+// @class
+type N struct {
+	// @extends
+	core.Node
+}
 `
 	out := emitFor(t, src)
 	mustContain(t, out, "RegisterInitCallback(gdextension.InitLevelEditor, registerN)")

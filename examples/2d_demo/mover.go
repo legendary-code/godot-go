@@ -17,7 +17,10 @@ import (
 // other CanvasItem) as a child for visual feedback, set Speed and
 // Range in the inspector, and the framework's Process override drives
 // the rest.
+//
+// @class
 type Mover struct {
+	// @extends
 	core.Node2D
 
 	// @group("Motion")

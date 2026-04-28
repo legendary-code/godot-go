@@ -40,7 +40,11 @@ func mustFailDiscover(t *testing.T, src string, wantSubstr string) {
 func TestDiscoverMainClassWithMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (n *MyNode) Hello() {}
 `
 	d := mustDiscover(t, src)
@@ -70,7 +74,11 @@ func (n *MyNode) Hello() {}
 func TestDiscoverStaticMethod(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (MyNode) Helper() {}
 `
 	d := mustDiscover(t, src)
@@ -84,7 +92,11 @@ func TestDiscoverOverrideLowercase(t *testing.T) {
 	// with a leading underscore on the snake-case name.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @override
 func (n *MyNode) process(delta float64) {}
 `
@@ -106,7 +118,11 @@ func TestDiscoverOverrideExported(t *testing.T) {
 	// the case decision is independent of override status.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @override
 func (n *MyNode) Process(delta float64) {}
 `
@@ -126,7 +142,11 @@ func TestDiscoverLowercaseNoTagSkipped(t *testing.T) {
 	// lowercase = unexported = invisible outside the package.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (n *MyNode) Hello() {}
 func (n *MyNode) helper() {}
 `
@@ -145,7 +165,11 @@ func TestDiscoverNameOverrideOnVirtualSkipsLeadingUnderscore(t *testing.T) {
 	// overrides — @name is the explicit escape hatch.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @override
 // @name _physics_process
 func (n *MyNode) Tick(delta float64) {}
@@ -163,7 +187,11 @@ func (n *MyNode) Tick(delta float64) {}
 func TestDiscoverNameOverride(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // Hello sends a greeting.
 // @name shout
 func (n *MyNode) Hello() {}
@@ -177,7 +205,11 @@ func (n *MyNode) Hello() {}
 func TestDiscoverInnerClass(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 
 // @innerclass
 type Helper struct {}
@@ -191,7 +223,11 @@ type Helper struct {}
 func TestDiscoverEnum(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 type Mode int
 const (
 	ModeA Mode = iota
@@ -209,47 +245,112 @@ const (
 }
 
 func TestDiscoverErrorOnNoMainClass(t *testing.T) {
+	// File has no @class struct at all — codegen has nothing to
+	// register. The diagnostic should point the user at the missing
+	// tag, not just say "no class found."
 	src := `package x
-// @innerclass
-type Only struct {}
+type SomethingElse struct {}
 `
-	mustFailDiscover(t, src, "no top-level extension class found")
+	mustFailDiscover(t, src, "no @class struct found")
 }
 
 func TestDiscoverErrorOnMultipleMainClasses(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type A struct { core.Node }
-type B struct { core.Node }
+// @class
+type A struct {
+	// @extends
+	core.Node
+}
+// @class
+type B struct {
+	// @extends
+	core.Node
+}
 `
-	mustFailDiscover(t, src, "multiple top-level extension classes")
+	mustFailDiscover(t, src, "multiple @class structs")
 }
 
-func TestDiscoverErrorOnMissingParent(t *testing.T) {
+func TestDiscoverErrorOnClassWithoutExtends(t *testing.T) {
+	// @class struct but no @extends — codegen has no parent to
+	// register. The error should say the class is missing @extends,
+	// not that it has "no recognized base class".
 	src := `package x
-type Lonely struct {}
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Lonely struct {
+	core.Node
+}
 `
-	mustFailDiscover(t, src, "no recognized base class")
+	mustFailDiscover(t, src, "no @extends")
 }
 
-func TestDiscoverErrorOnMultipleEmbeddedFramework(t *testing.T) {
+func TestDiscoverErrorOnMultipleExtends(t *testing.T) {
 	src := `package x
 import (
 	"github.com/legendary-code/godot-go/core"
 	"github.com/legendary-code/godot-go/editor"
 )
+// @class
 type Wrong struct {
+	// @extends
 	core.Node
+	// @extends
 	editor.EditorPlugin
 }
 `
 	mustFailDiscover(t, src, "single-inheritance")
 }
 
+func TestDiscoverErrorOnExtendsOnNamedField(t *testing.T) {
+	// @extends only makes sense on an embedded (anonymous) field —
+	// it's the GDScript-equivalent of `extends Node`. A named field
+	// is composition, not inheritance.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Wrong struct {
+	// @extends
+	parent core.Node
+}
+`
+	mustFailDiscover(t, src, "@extends on named field")
+}
+
+func TestDiscoverErrorOnExtendsNonFramework(t *testing.T) {
+	// @extends on an embedded type that isn't from a framework
+	// package. Cross-module class inheritance isn't supported yet.
+	src := `package x
+import "fmt"
+// @class
+type Wrong struct {
+	// @extends
+	fmt.Stringer
+}
+`
+	mustFailDiscover(t, src, "must come from a framework package")
+}
+
+func TestDiscoverErrorOnClassAndInnerClass(t *testing.T) {
+	// @class and @innerclass are mutually exclusive — pick one role.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+// @innerclass
+type Confused struct {
+	// @extends
+	core.Node
+}
+`
+	mustFailDiscover(t, src, "both @class and @innerclass")
+}
+
 func TestDiscoverPropertyFieldForm(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @property
 	Health int64
@@ -274,7 +375,9 @@ type MyNode struct {
 func TestDiscoverPropertyFieldFormReadOnly(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @readonly
 	// @property
@@ -291,7 +394,11 @@ func TestDiscoverPropertyMethodForm(t *testing.T) {
 	// Read-write method form: BOTH GetX and SetX must carry @property.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *MyNode) GetHealth() int64 { return 0 }
 // @property
@@ -319,7 +426,11 @@ func TestDiscoverPropertyMethodFormSetterUntagged(t *testing.T) {
 	// not wired as the property's setter).
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *MyNode) GetHealth() int64 { return 0 }
 func (n *MyNode) SetHealth(v int64) {}
@@ -337,7 +448,11 @@ func TestDiscoverPropertyMethodFormReadOnly(t *testing.T) {
 	// No matching SetHealth → read-only inferred.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *MyNode) GetHealth() int64 { return 0 }
 `
@@ -351,7 +466,9 @@ func TestDiscoverPropertyConflict(t *testing.T) {
 	// Same name as field-form AND method-form → ambiguous.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @property
 	Health int64
@@ -365,7 +482,9 @@ func (n *MyNode) GetHealth() int64 { return 0 }
 func TestDiscoverPropertyLowercaseFieldRejected(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @property
 	health int64
@@ -377,7 +496,9 @@ type MyNode struct {
 func TestDiscoverReadOnlyOnFieldWithoutPropertyRejected(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @readonly
 	Foo int64
@@ -393,7 +514,11 @@ func TestDiscoverReadOnlyOnMethodRejected(t *testing.T) {
 	// thing.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 // @readonly
 func (n *MyNode) GetHealth() int64 { return 0 }
@@ -406,7 +531,11 @@ func TestDiscoverPropertyMethodFormReadWrite(t *testing.T) {
 	// pairs them and registers a read-write property.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *MyNode) GetTag() string { return "" }
 // @property
@@ -430,7 +559,11 @@ func TestDiscoverPropertyOrphanSetter(t *testing.T) {
 	// — there's no property to attach the setter to.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @property
 func (n *MyNode) SetHealth(v int64) {}
 `
@@ -440,7 +573,11 @@ func (n *MyNode) SetHealth(v int64) {}
 func TestDiscoverSignalsInterface(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 
 // @signals
 type Signals interface {
@@ -475,7 +612,11 @@ func TestDiscoverSignalsCollidesWithMethod(t *testing.T) {
 	// time; discover catches it earlier with a clearer message.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 func (n *MyNode) Damaged(x int64) {}
 
 // @signals
@@ -489,7 +630,11 @@ type Signals interface {
 func TestDiscoverSignalsDuplicateAcrossInterfaces(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 
 // @signals
 type SignalsA interface {
@@ -509,7 +654,11 @@ func TestDiscoverSignalsRejectsReturn(t *testing.T) {
 	// get silent drops.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 
 // @signals
 type Signals interface {
@@ -522,7 +671,9 @@ type Signals interface {
 func TestDiscoverPropertyGroup(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @group("Combat")
 	// @property
@@ -542,7 +693,9 @@ type MyNode struct {
 func TestDiscoverPropertyExportRange(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @export_range(0, 100)
 	// @property
@@ -562,7 +715,9 @@ type MyNode struct {
 func TestDiscoverPropertyExportEnum(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @export_enum("Idle", "Run", "Jump")
 	// @property
@@ -584,7 +739,9 @@ func TestDiscoverPropertyExportPlaceholderWithComma(t *testing.T) {
 	// split it into two args.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @export_placeholder("Hello, world")
 	// @property
@@ -601,7 +758,9 @@ type MyNode struct {
 func TestDiscoverPropertySubgroupRequiresGroup(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @subgroup("Texture")
 	// @property
@@ -614,7 +773,9 @@ type MyNode struct {
 func TestDiscoverPropertyMultipleHintsRejected(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @export_range(0, 100)
 	// @export_enum("A", "B")
@@ -628,7 +789,11 @@ type MyNode struct {
 func TestDiscoverPropertyHintsRejectedOnMethodForm(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 // @export_range(0, 100)
 // @property
 func (n *MyNode) GetHealth() int64 { return 0 }
@@ -642,7 +807,9 @@ func TestDiscoverPropertyGroupNonContiguousRejected(t *testing.T) {
 	// inspector entry. Reject.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @group("A")
 	// @property
@@ -665,7 +832,9 @@ func TestDiscoverPropertyUngroupedFirstAcrossForms(t *testing.T) {
 	// register-ungrouped-first ordering Godot requires.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 type MyNode struct {
+	// @extends
 	core.Node
 	// @group("Combat")
 	// @property
@@ -690,8 +859,12 @@ func (n *MyNode) GetScore() int64 { return 0 }
 func TestDiscoverEditorClass(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
+// @class
 // @editor
-type MyEditorPlugin struct { core.Node }
+type MyEditorPlugin struct {
+	// @extends
+	core.Node
+}
 `
 	d := mustDiscover(t, src)
 	if !d.MainClass.IsEditor {
@@ -702,7 +875,11 @@ type MyEditorPlugin struct { core.Node }
 func TestDiscoverEditorOnInnerClassRejected(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
-type MyNode struct { core.Node }
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
 
 // @innerclass
 // @editor

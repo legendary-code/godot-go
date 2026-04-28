@@ -19,14 +19,18 @@ import "github.com/legendary-code/godot-go/godot"
 //
 // @abstract marks this class as abstract
 //
+// @class
 // @abstract
 // @description This is my overridden description
 // @deprecated
 type LocaleLanguage struct {
-	godot.Node // here we are specifying that this class extends Node in Godot.  Alternatively, `core.Node` could be
-	// used as well here, `godot.Node` is just an alias for `core.Node`.  Only one struct that represents
-	// a godot built-in type or another user-defined type can be embedded, since Godot only allows for single
-	// inheritance
+	// @extends specifies the parent class — this class extends Node in
+	// Godot. Alternatively, `core.Node` could be used; `godot.Node` is
+	// just an alias for `core.Node`. Only one embedded field per class
+	// can carry @extends since Godot only allows single inheritance.
+	//
+	// @extends
+	godot.Node
 }
 
 // InnerExample demonstrates how to declare inner classes

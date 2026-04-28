@@ -17,7 +17,10 @@ import (
 )
 
 // Player is exposed to Godot as a `Player` Node.
+//
+// @class
 type Player struct {
+    // @extends — Player extends Node, the same as `extends Node` in GDScript.
     core.Node
 
     // @property
