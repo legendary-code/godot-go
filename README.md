@@ -12,8 +12,8 @@ package main
 //go:generate godot-go
 
 import (
-    "github.com/legendary-code/godot-go/core"
-    "github.com/legendary-code/godot-go/internal/runtime"
+    "github.com/legendary-code/godot-go/godot"
+    "github.com/legendary-code/godot-go/godot/runtime"
 )
 
 // Player is exposed to Godot as a `Player` Node.
@@ -21,7 +21,7 @@ import (
 // @class
 type Player struct {
     // @extends — Player extends Node, the same as `extends Node` in GDScript.
-    core.Node
+    godot.Node
 
     // @property
     // @export_range(0, 100)
@@ -141,22 +141,44 @@ go test ./...
 
 ## Authoring a new extension
 
-1. Create a new directory with a `main.go` and your extension class.
-2. Embed `core.Node` (or any other framework class — `core/` covers
-   ~944 engine classes, `editor/` adds the 79 editor-side classes).
-3. Add `//go:generate godot-go` near the top of any file containing
-   tagged declarations.
-4. Run `go generate ./...` to produce `<file>_bindings.go`.
-5. Build with `go build -buildmode=c-shared -o yourext.dll
-   ./yourpkg`.
-6. Drop the `.dll` plus a `.gdextension` config file into your Godot
-   project's filesystem.
+The framework's bindings are generated against the version of Godot
+*you* target — not pinned by the framework. The full setup is in
+[`docs/setup.md`](./docs/setup.md); the short version:
+
+1. Create the bindings package once. Drop a `godot/` directory into
+   your project, copy in your Godot's `extension_api.json` (produced
+   by `godot --headless --dump-extension-api`), and add a setup
+   file that triggers the bindgen:
+
+   ```go
+   // godot/generate_bindings.go
+   package godot
+
+   //go:generate go run github.com/legendary-code/godot-go/cmd/godot-go-bindgen -api ./extension_api.json
+   ```
+
+   `go generate ./godot/...` then stamps out the bindings into the
+   same package — engine classes, builtins, enums, utility
+   functions, plus a `godot/runtime` sub-package with
+   `IsEditorHint`, `Print`, `RunOnMain`, etc.
+
+2. Author your extension class in any other directory. Embed
+   `godot.Node` (or any other engine class), add
+   `//go:generate godot-go` for the user-class codegen, run
+   `go generate ./...` to produce `<file>_bindings.go`.
+
+3. Build with `go build -buildmode=c-shared -o yourext.dll ./yourpkg`
+   and drop the resulting library + a `.gdextension` config file
+   into your Godot project.
 
 The `examples/smoke/` and `examples/locale_language/` directories
 are working references — copy from there.
 
 ## Documentation
 
+- [`docs/setup.md`](./docs/setup.md) — full walkthrough of setting
+  up a new project: `godot/` directory layout, `extension_api.json`
+  pinning, version drift behavior, multi-version targeting.
 - [`docs/threading.md`](./docs/threading.md) — goroutines and
   Godot's main thread; `RunOnMain` / `DrainMain`.
 - [`docs/lifecycle.md`](./docs/lifecycle.md) — how the framework
@@ -170,23 +192,22 @@ are working references — copy from there.
 
 Two code generators live under `cmd/`:
 
-- **`cmd/godot-go-bindgen`** — run by maintainers to regenerate the
-  framework bindings (`variant/`, `core/`, `editor/`, `util/`,
-  `enums/`, `native/`) from `godot/extension_api.json`. Most users
-  never invoke this directly.
+- **`cmd/godot-go-bindgen`** — run from your project's `godot/`
+  setup file via `go generate`. Reads `extension_api.json` and
+  emits the bindings package: engine classes, builtins, global
+  enums, utility functions, native structures, plus a sibling
+  `godot/runtime/` sub-package with `IsEditorHint` / `Print` /
+  `RunOnMain` / etc.
 
-- **`cmd/godot-go`** — the user-facing tool invoked by
+- **`cmd/godot-go`** — the user-class codegen invoked by
   `//go:generate godot-go`. Reads doc-tagged Go source, validates
   it, and emits a `<file>_bindings.go` containing the cgo
   trampolines, `RegisterClass*` calls, and any synthesized
   accessor / emit methods.
 
-The runtime layer `internal/gdextension` wraps the GDExtension C ABI;
-`internal/runtime` provides user-level conveniences
-(`Print` / `Printf`, `IsEditorHint`, `RunOnMain`, etc.). User
-extensions import these directly — they're "internal" in the Go
-sense (only importable from the same module), which the framework
-accepts as a simplification while the API stabilizes.
+The runtime layer `gdextension/` wraps the GDExtension C ABI; the
+generated `godot/runtime/` provides user-level conveniences
+(`Print` / `Printf`, `IsEditorHint`, `RunOnMain`, etc.).
 
 ## Build configuration
 
@@ -200,10 +221,10 @@ supported — the host Godot must match the build tag.
 
 ```sh
 task                          # list all targets
+task generate:bindings        # regenerate godot/ from extension_api.json
 task build:example            # build the smoke c-shared library
 task build:locale_language    # build the locale_language showcase
-task test                     # run the Go test suite
-task generate:types           # regenerate framework bindings (maintainers)
+task test                     # run the Go test suite (regenerates bindings first)
 ```
 
 ## Comparison with other Go-Godot projects
