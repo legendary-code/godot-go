@@ -707,8 +707,20 @@ This is the headline feature. Steps:
 ### Phase 7 — Examples, docs, CI
 
 - [x] `examples/locale_language` (verbatim from PLAN.md). [Phase 5f, item 0e]
-- [ ] `examples/2d_demo` — minimal Node2D extension that moves a sprite,
-      proves the virtual-method (`_process`) path end-to-end inside Godot.
+- [x] `examples/2d_demo` — `Mover` class extending `core.Node2D`,
+      oscillates along the X axis between `-Range` and `+Range`
+      relative to its starting point at `Speed` px/s. `Process(delta)`
+      drives motion; `Bounced(direction)` signal fires at each bound.
+      Two inspector-tweakable properties under a "Motion" group with
+      `@export_range` hints (Speed 0–500 step 10, Range 0–1000 step
+      10). `Reset()` returns to origin and reseeds direction.
+      Headless driver `test_mover.gd` instantiates `Mover.new()`,
+      drives `_process(delta)` manually, asserts position evolution
+      + bounce counter + signal direction (21 assertions, 5/5
+      stable). Taskfile gains `build:2d_demo`. Bound check uses
+      `>=`/`<=` so landing exactly on the bound triggers the bounce
+      — more intuitive ("you walked into the wall, you turn around
+      now") and removes a fence-post off-by-one in tests.
 - [ ] CI matrix: Windows / macOS / Linux × Godot 4.6 headless smoke test
       that loads the extension and exits 0.
 - [x] User-facing README with quickstart. Top-level `README.md`

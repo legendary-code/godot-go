@@ -46,7 +46,7 @@ tasks:
       - '{{.EXAMPLE_OUT_DIR}}/{{.EXAMPLE_LIB_NAME}}{{.LIB_EXT}}'
 
   build:locale_language:
-    desc: Build the Phase 5f locale_language example (the verbatim PLAN.md showcase).
+    desc: Build the locale_language example (the canonical doctag showcase).
     vars:
       OUT_DIR: examples/locale_language/godot_project/bin
       LIB_NAME: godot_go_locale_language
@@ -63,6 +63,25 @@ tasks:
       - godot/gdextension_interface.h
     generates:
       - 'examples/locale_language/godot_project/bin/godot_go_locale_language{{.LIB_EXT}}'
+
+  build:2d_demo:
+    desc: Build the 2d_demo example — Node2D extension that oscillates a sprite via Process(delta).
+    vars:
+      OUT_DIR: examples/2d_demo/godot_project/bin
+      LIB_NAME: godot_go_2d_demo
+    cmds:
+      - go install ./cmd/godot-go
+      - go generate ./examples/2d_demo/...
+      - mkdir -p {{.OUT_DIR}}
+      - go build -buildmode=c-shared -o {{.OUT_DIR}}/{{.LIB_NAME}}{{.LIB_EXT}} ./examples/2d_demo
+    sources:
+      - examples/2d_demo/**/*.go
+      - cmd/godot-go/**/*.go
+      - internal/**/*.go
+      - internal/**/*.h
+      - godot/gdextension_interface.h
+    generates:
+      - 'examples/2d_demo/godot_project/bin/godot_go_2d_demo{{.LIB_EXT}}'
 
   example:
     desc: Alias for build:example.
