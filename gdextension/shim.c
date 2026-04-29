@@ -432,13 +432,17 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
 
 static void godot_go_fill_property_info(GDExtensionPropertyInfo *p_info,
                                         uint32_t p_type,
+                                        GDExtensionConstStringNamePtr p_arg_name,
                                         GDExtensionConstStringNamePtr p_empty_string_name,
                                         GDExtensionConstStringPtr p_empty_string) {
     /* PROPERTY_USAGE_DEFAULT == 6 (PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_EDITOR).
      * Hardcoded so the helper doesn't need to import the global enum
      * header — the value is stable across Godot 4.x. */
     p_info->type        = (GDExtensionVariantType)p_type;
-    p_info->name        = (GDExtensionStringNamePtr)p_empty_string_name;
+    /* p_arg_name == NULL signals "no source name available" (return values,
+     * properties whose name is set elsewhere); fall back to empty so the
+     * editor renders an unnamed slot rather than dereferencing nil. */
+    p_info->name        = (GDExtensionStringNamePtr)(p_arg_name != NULL ? p_arg_name : p_empty_string_name);
     p_info->class_name  = (GDExtensionStringNamePtr)p_empty_string_name;
     p_info->hint        = 0;
     p_info->hint_string = (GDExtensionStringPtr)p_empty_string;
@@ -458,7 +462,8 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               uint32_t return_metadata,
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
-                                              const uint32_t *arg_metadata) {
+                                              const uint32_t *arg_metadata,
+                                              const GDExtensionConstStringNamePtr *arg_names) {
     GDExtensionPropertyInfo return_info;
     GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
     GDExtensionClassMethodArgumentMetadata arg_meta[GODOT_GO_MAX_METHOD_ARGS];
@@ -470,14 +475,19 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
     }
 
     for (uint32_t i = 0; i < arg_count; i++) {
+        /* arg_names is NULL when the caller doesn't supply per-arg names
+         * (legacy callers or empty slice); each entry may individually be
+         * NULL too, falling back to the empty StringName inside fill. */
+        GDExtensionConstStringNamePtr name_i = (arg_names != NULL ? arg_names[i] : NULL);
         godot_go_fill_property_info(&arg_infos[i], arg_types[i],
-                                    empty_string_name, empty_string);
+                                    name_i, empty_string_name, empty_string);
         arg_meta[i] = (GDExtensionClassMethodArgumentMetadata)arg_metadata[i];
     }
 
     if (has_return) {
+        /* Return value has no source-level name — it's a positional slot. */
         godot_go_fill_property_info(&return_info, return_type,
-                                    empty_string_name, empty_string);
+                                    NULL, empty_string_name, empty_string);
     }
 
     GDExtensionClassMethodInfo info;
@@ -548,7 +558,8 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
                                               GDExtensionConstStringPtr empty_string,
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
-                                              const uint32_t *arg_metadata) {
+                                              const uint32_t *arg_metadata,
+                                              const GDExtensionConstStringNamePtr *arg_names) {
     GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
 
     if (arg_count > GODOT_GO_MAX_METHOD_ARGS) {
@@ -556,8 +567,9 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
     }
 
     for (uint32_t i = 0; i < arg_count; i++) {
+        GDExtensionConstStringNamePtr name_i = (arg_names != NULL ? arg_names[i] : NULL);
         godot_go_fill_property_info(&arg_infos[i], arg_types[i],
-                                    empty_string_name, empty_string);
+                                    name_i, empty_string_name, empty_string);
         /* arg_metadata is currently unused by the engine for signal
          * argument descriptors — the metadata field on PropertyInfo is
          * about hint encoding, not int32-vs-int64 width. We carry the

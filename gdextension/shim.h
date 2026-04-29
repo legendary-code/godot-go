@@ -202,7 +202,8 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               uint32_t return_metadata,
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
-                                              const uint32_t *arg_metadata);
+                                              const uint32_t *arg_metadata,
+                                              const GDExtensionConstStringNamePtr *arg_names);
 
 /* Property registration. Mirrors classdb_register_extension_class_property —
  * the engine wires (class, property_name) → (setter_method, getter_method)
@@ -256,6 +257,7 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
                                               GDExtensionConstStringPtr empty_string,
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
-                                              const uint32_t *arg_metadata);
+                                              const uint32_t *arg_metadata,
+                                              const GDExtensionConstStringNamePtr *arg_names);
 
 #endif /* GODOT_GO_SHIM_H */

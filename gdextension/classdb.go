@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -102,6 +103,15 @@ type ClassMethodDef struct {
 	// a no-arg method.
 	ArgTypes    []VariantType
 	ArgMetadata []MethodArgumentMetadata
+
+	// ArgNames optionally carries the source-level identifier for each
+	// positional arg (parallel to ArgTypes). When supplied, the editor
+	// shows the name in autocomplete/hover (e.g. `take_damage(amount: int)`
+	// rather than `take_damage(arg0: int)`). Empty entries — or a nil/short
+	// slice — fall back to anonymous slots, keeping callers that don't
+	// care about names working unchanged. If non-nil, must be the same
+	// length as ArgTypes; the registration call panics otherwise.
+	ArgNames []string
 }
 
 type registeredClass struct {
@@ -157,6 +167,9 @@ type ClassVirtualDef struct {
 	// ArgTypes / ArgMetadata are parallel — same shape as ClassMethodDef.
 	ArgTypes    []VariantType
 	ArgMetadata []MethodArgumentMetadata
+	// ArgNames optionally carries the source-level identifier for each
+	// arg. See ClassMethodDef.ArgNames for semantics.
+	ArgNames []string
 }
 
 type registeredVirtual struct {
@@ -239,6 +252,10 @@ func RegisterClassMethod(def ClassMethodDef) {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgTypes (len %d) and ArgMetadata (len %d) must be parallel",
 			len(def.ArgTypes), len(def.ArgMetadata)))
 	}
+	if def.ArgNames != nil && len(def.ArgNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgNames), len(def.ArgTypes)))
+	}
 	if len(def.ArgTypes) > maxMethodArgs {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: too many args (%d > %d)",
 			len(def.ArgTypes), maxMethodArgs))
@@ -266,15 +283,33 @@ func RegisterClassMethod(def ClassMethodDef) {
 	// rule allows us to take their address as a direct call argument.
 	argCount := len(def.ArgTypes)
 	var argTypesPtr, argMetaPtr *C.uint32_t
+	var argNamesPtr *C.GDExtensionConstStringNamePtr
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
 	if argCount > 0 {
 		argTypes := make([]C.uint32_t, argCount)
 		argMeta := make([]C.uint32_t, argCount)
+		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
 		for i := range def.ArgTypes {
 			argTypes[i] = C.uint32_t(def.ArgTypes[i])
 			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
+			// Empty / unspecified entries leave the slot as a NULL
+			// StringNamePtr; the C trampoline falls back to the empty
+			// StringName for those. Names are interned through the
+			// shared cache so repeated args ("amount", "delta", etc.)
+			// across many methods share storage. The cache backs each
+			// slot with Go-heap memory (see intern.go), so cgo's
+			// "Go pointer to unpinned Go pointer" rule fires unless we
+			// pin the slot through the call.
+			if i < len(def.ArgNames) && def.ArgNames[i] != "" {
+				name := InternStringName(def.ArgNames[i])
+				pinner.Pin(name)
+				argNames[i] = C.GDExtensionConstStringNamePtr(name)
+			}
 		}
 		argTypesPtr = &argTypes[0]
 		argMetaPtr = &argMeta[0]
+		argNamesPtr = &argNames[0]
 	}
 
 	C.godot_go_register_extension_class_method(iface.classdbRegisterExtensionClassMethod,
@@ -290,7 +325,8 @@ func RegisterClassMethod(def ClassMethodDef) {
 		C.uint32_t(def.ReturnMetadata),
 		C.uint32_t(argCount),
 		argTypesPtr,
-		argMetaPtr)
+		argMetaPtr,
+		argNamesPtr)
 }
 
 // ClassPropertyDef registers a property on a previously-registered class.
@@ -420,6 +456,11 @@ type ClassSignalDef struct {
 	Name        string
 	ArgTypes    []VariantType
 	ArgMetadata []MethodArgumentMetadata
+	// ArgNames optionally carries the source-level identifier for each
+	// signal arg. See ClassMethodDef.ArgNames for the same semantics:
+	// names show up in the editor's signal-receiver autocomplete and
+	// docs; nil/short slices fall back to anonymous slots.
+	ArgNames []string
 }
 
 // RegisterClassSignal adds a signal on an extension class. After this
@@ -434,6 +475,10 @@ func RegisterClassSignal(def ClassSignalDef) {
 		panic(fmt.Sprintf("gdextension.RegisterClassSignal: ArgTypes (len %d) and ArgMetadata (len %d) must be parallel",
 			len(def.ArgTypes), len(def.ArgMetadata)))
 	}
+	if def.ArgNames != nil && len(def.ArgNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassSignal: ArgNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgNames), len(def.ArgTypes)))
+	}
 	if len(def.ArgTypes) > maxMethodArgs {
 		panic(fmt.Sprintf("gdextension.RegisterClassSignal: too many args (%d > %d)",
 			len(def.ArgTypes), maxMethodArgs))
@@ -446,15 +491,28 @@ func RegisterClassSignal(def ClassSignalDef) {
 
 	argCount := len(def.ArgTypes)
 	var argTypesPtr, argMetaPtr *C.uint32_t
+	var argNamesPtr *C.GDExtensionConstStringNamePtr
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
 	if argCount > 0 {
 		argTypes := make([]C.uint32_t, argCount)
 		argMeta := make([]C.uint32_t, argCount)
+		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
 		for i := range def.ArgTypes {
 			argTypes[i] = C.uint32_t(def.ArgTypes[i])
 			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
+			// See RegisterClassMethod for the same pin: the intern
+			// cache hands back Go-heap-allocated slots, so cgo's
+			// pointer check rejects the array unless we pin each name.
+			if i < len(def.ArgNames) && def.ArgNames[i] != "" {
+				name := InternStringName(def.ArgNames[i])
+				pinner.Pin(name)
+				argNames[i] = C.GDExtensionConstStringNamePtr(name)
+			}
 		}
 		argTypesPtr = &argTypes[0]
 		argMetaPtr = &argMeta[0]
+		argNamesPtr = &argNames[0]
 	}
 
 	C.godot_go_register_extension_class_signal(iface.classdbRegisterExtensionClassSignal,
@@ -465,7 +523,8 @@ func RegisterClassSignal(def ClassSignalDef) {
 		C.GDExtensionConstStringPtr(emptyStr),
 		C.uint32_t(argCount),
 		argTypesPtr,
-		argMetaPtr)
+		argMetaPtr,
+		argNamesPtr)
 }
 
 // UnregisterClass tears down a previously-registered class. Call from the
@@ -536,6 +595,7 @@ func RegisterClassVirtual(def ClassVirtualDef) {
 		ReturnMetadata: def.ReturnMetadata,
 		ArgTypes:       def.ArgTypes,
 		ArgMetadata:    def.ArgMetadata,
+		ArgNames:       def.ArgNames,
 	})
 }
 

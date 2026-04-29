@@ -134,6 +134,32 @@ func _initialize() -> void:
 	n.damage_range = 175
 	_check("hinted property still r/w (damage_range)", n.damage_range, 175)
 
+	# PLAN3 Phase A: registered methods carry the source-level arg names
+	# instead of arg0/arg1/... ClassDB.class_get_method_list returns an
+	# array of method-info dicts; each "args" entry is a dict with
+	# "name", "class_name", "type", etc. The assertions below introspect
+	# the slots so CI catches a regression even though the editor's
+	# autocomplete is the user-visible payoff.
+	var method_args: Dictionary = {}
+	for m: Dictionary in ClassDB.class_get_method_list("MyNode"):
+		method_args[m["name"]] = m["args"]
+	_check("add(a,b) arg[0].name == 'a'", method_args["add"][0]["name"], "a")
+	_check("add(a,b) arg[1].name == 'b'", method_args["add"][1]["name"], "b")
+	_check("greet(name) arg[0].name == 'name'", method_args["greet"][0]["name"], "name")
+	# Synthesized field-form setter takes a single arg conventionally
+	# named "value" so the editor's hover surfaces something readable.
+	_check("set_health(value) arg[0].name == 'value'", method_args["set_health"][0]["name"], "value")
+	# Virtual override: _process(delta) — name comes from the Go source.
+	_check("_process(delta) arg[0].name == 'delta'", method_args["_process"][0]["name"], "delta")
+
+	# Same introspection for signals — ClassDB.class_get_signal_list
+	# returns dicts shaped like the method-info entries.
+	var signal_args: Dictionary = {}
+	for s: Dictionary in ClassDB.class_get_signal_list("MyNode"):
+		signal_args[s["name"]] = s["args"]
+	_check("damaged(amount) arg[0].name == 'amount'", signal_args["damaged"][0]["name"], "amount")
+	_check("tagged(label) arg[0].name == 'label'", signal_args["tagged"][0]["name"], "label")
+
 	n.free()
 
 	if _failed == 0:

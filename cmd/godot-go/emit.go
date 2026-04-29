@@ -137,9 +137,12 @@ type emitSignal struct {
 	// argN variant.Variant = ...` statement and a Destroy via defer.
 	PerArg []emitSignalArg
 	// Registration metadata — parallel to ArgTypes / ArgMetadata on
-	// emitMethod so RegisterClassSignal sees the same shape.
+	// emitMethod so RegisterClassSignal sees the same shape. ArgNames
+	// carries the source-level identifier per arg; quoted as a Go string
+	// literal in the template.
 	ArgTypes []string
 	ArgMetas []string
+	ArgNames []string
 }
 
 type emitSignalArg struct {
@@ -211,6 +214,12 @@ type emitMethod struct {
 	ReturnMeta string // bare const name, e.g. "ArgMetaIntIsInt64"
 	ArgTypes   []string
 	ArgMetas   []string
+	// ArgNames carries the source-level identifier for each arg (one
+	// entry per positional slot, parallel to ArgTypes / ArgMetas). The
+	// template renders these as Go string literals into the
+	// RegisterClassMethod ArgNames field; safeIdent runs on them upstream
+	// so reserved Go keywords don't collide with locals.
+	ArgNames []string
 
 	// HasArgs is true when len(ArgTypes) > 0 — the template uses this to
 	// decide whether to render the ArgTypes / ArgMetadata slice fields
@@ -290,6 +299,18 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emi
 			em.CallArgReads = append(em.CallArgReads, info.CallReadArg(bindings, idx))
 			em.ArgTypes = append(em.ArgTypes, info.VariantType)
 			em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
+			// Arg names: take the source identifier when available so
+			// the editor renders `take_damage(amount: int)` instead of
+			// `take_damage(arg0: int)`. Unnamed params (`func F(int)`)
+			// get an empty entry, which the registration call surfaces
+			// as an anonymous slot.
+			argName := ""
+			if k < len(field.Names) {
+				if n := field.Names[k].Name; n != "_" {
+					argName = n
+				}
+			}
+			em.ArgNames = append(em.ArgNames, argName)
 			idx++
 		}
 	}
@@ -471,8 +492,10 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings str
 			}
 			for k := 0; k < count; k++ {
 				goArgName := fmt.Sprintf("arg%d", idx)
+				registeredName := ""
 				if k < len(field.Names) && field.Names[k].Name != "" && field.Names[k].Name != "_" {
 					goArgName = field.Names[k].Name
+					registeredName = field.Names[k].Name
 				}
 				es.PerArg = append(es.PerArg, emitSignalArg{
 					Index:    idx,
@@ -482,6 +505,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings str
 				})
 				es.ArgTypes = append(es.ArgTypes, info.VariantType)
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
+				es.ArgNames = append(es.ArgNames, registeredName)
 				idx++
 			}
 		}
@@ -519,6 +543,10 @@ func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings st
 		HasArgs:         true,
 		ArgTypes:        []string{info.VariantType},
 		ArgMetas:        []string{info.ArgMeta},
+		// Synthesized field-form setters take a single argument; "value"
+		// is the conventional name and matches how Godot's own
+		// PropertyInfo entries label property setter parameters in docs.
+		ArgNames: []string{"value"},
 	}
 }
 
@@ -689,6 +717,11 @@ func register{{.Class}}() {
 			gdextension.{{.}},
 			{{- end}}
 		},
+		ArgNames: []string{
+			{{- range .ArgNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
 		{{- end}}
 	})
 	{{- else}}
@@ -755,6 +788,11 @@ func register{{.Class}}() {
 			gdextension.{{.}},
 			{{- end}}
 		},
+		ArgNames: []string{
+			{{- range .ArgNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
 		{{- end}}
 	})
 	{{- end}}
@@ -804,6 +842,11 @@ func register{{.Class}}() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			{{- range .ArgMetas}}
 			gdextension.{{.}},
+			{{- end}}
+		},
+		ArgNames: []string{
+			{{- range .ArgNames}}
+			{{printf "%q" .}},
 			{{- end}}
 		},
 		{{- end}}

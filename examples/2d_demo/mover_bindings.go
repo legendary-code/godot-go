@@ -105,6 +105,9 @@ func registerMover() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaRealIsDouble,
 		},
+		ArgNames: []string{
+			"delta",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -178,6 +181,9 @@ func registerMover() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaRealIsDouble,
 		},
+		ArgNames: []string{
+			"value",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -231,6 +237,9 @@ func registerMover() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaRealIsDouble,
 		},
+		ArgNames: []string{
+			"value",
+		},
 	})
 
 	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
@@ -265,6 +274,9 @@ func registerMover() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"direction",
 		},
 	})
 }

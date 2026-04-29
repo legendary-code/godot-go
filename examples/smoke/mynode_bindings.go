@@ -175,6 +175,10 @@ func registerMyNode() {
 			gdextension.ArgMetaIntIsInt64,
 			gdextension.ArgMetaIntIsInt64,
 		},
+		ArgNames: []string{
+			"a",
+			"b",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -207,6 +211,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"name",
 		},
 	})
 
@@ -308,6 +315,9 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
 		},
+		ArgNames: []string{
+			"v",
+		},
 	})
 
 	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
@@ -335,6 +345,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaRealIsDouble,
+		},
+		ArgNames: []string{
+			"delta",
 		},
 	})
 
@@ -388,6 +401,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"value",
 		},
 	})
 
@@ -467,6 +483,9 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaIntIsInt64,
 		},
+		ArgNames: []string{
+			"value",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -519,6 +538,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"value",
 		},
 	})
 
@@ -573,6 +595,9 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
 		},
+		ArgNames: []string{
+			"value",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -625,6 +650,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"value",
 		},
 	})
 
@@ -679,6 +707,9 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
 		},
+		ArgNames: []string{
+			"value",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -731,6 +762,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"value",
 		},
 	})
 
@@ -843,6 +877,9 @@ func registerMyNode() {
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaIntIsInt64,
 		},
+		ArgNames: []string{
+			"amount",
+		},
 	})
 
 	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
@@ -858,6 +895,9 @@ func registerMyNode() {
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"label",
 		},
 	})
 }
