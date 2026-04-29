@@ -902,11 +902,11 @@ all three example test scripts pass (`smoke: 21/21`,
   before tests; bindgen is version-agnostic), but populating older
   `extension_api_4_4.json` / `4_5.json` requires running older Godot
   binaries. Documented in `docs/setup.md`.
-- A pre-existing wart in `examples/smoke/main.go`: the
-  `runtime.IsEditorHint() == false (headless)` assertion FAILs during
-  the one-shot `--editor` import pass (where IsEditorHint correctly
-  returns true). Game-mode `--headless` runs pass 21/21. The label
-  encodes the assumption; CI ignores the editor pass result.
+
+Smoke `IsEditorHint` assertion was tightened in 528a744: instead of
+pinning to a run mode, the check now confirms `runtime.IsEditorHint()`
+agrees with the bindings-package `Engine.is_editor_hint()` — both
+editor and game runs pass, with the actual value visible in the log.
 
 ## Source Control
 After each Phase step, create a commit for those changes.  If we make any
