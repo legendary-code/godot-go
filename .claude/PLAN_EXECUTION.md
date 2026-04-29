@@ -897,16 +897,20 @@ End-to-end verified 2026-04-28 against Godot 4.6.2.stable.official:
 all three example test scripts pass (`smoke: 21/21`,
 `locale_language: ALL CHECKS PASSED`, `2d_demo: ALL CHECKS PASSED`).
 
-**Not yet wired** (additive, doesn't block anything):
-- Multi-version CI matrix. Setup is ready (CI runs `go generate`
-  before tests; bindgen is version-agnostic), but populating older
-  `extension_api_4_4.json` / `4_5.json` requires running older Godot
-  binaries. Documented in `docs/setup.md`.
-
 Smoke `IsEditorHint` assertion was tightened in 528a744: instead of
 pinning to a run mode, the check now confirms `runtime.IsEditorHint()`
 agrees with the bindings-package `Engine.is_editor_hint()` — both
 editor and game runs pass, with the actual value visible in the log.
+
+Multi-version CI landed in 5e2ee10: `extension_api_4_4.json` and
+`extension_api_4_5.json` sourced from godot-cpp's version branches,
+the old single JSON renamed to `extension_api_4_6.json`. CI grows a
+`godot` matrix dimension (3 OS × 3 versions = 9 cells); each cell
+installs the matching Godot binary, regenerates bindings against
+its JSON, and runs the example scripts. Bindgen patched to accept
+JSONs that predate the `precision` header field (added in 4.5).
+Example `.gdextension` files lowered to `compatibility_minimum =
+"4.4"` so older Godot loads the rebuilt libraries.
 
 ## Source Control
 After each Phase step, create a commit for those changes.  If we make any
