@@ -291,7 +291,54 @@ func registerMover() {
 			"",
 		},
 	})
+
+	gdextension.LoadEditorDocXML(moverDocXML)
 }
+
+// moverDocXML is the rendered <class> document for Mover.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const moverDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="Mover" inherits="Node2D" version="4.4">
+    <brief_description>Oscillates its position along the X axis between -Range and +Range relative to its starting point, moving at Speed pixels per second.</brief_description>
+    <description>Oscillates its position along the X axis between -Range and&#xA;+Range relative to its starting point, moving at Speed pixels per&#xA;second. At each bound it reverses direction and emits the&#xA;` + "`" + `bounced` + "`" + ` signal so listeners can react.&#xA;&#xA;The class extends Node2D so position lives directly on the node&#xA;itself — drop a Mover into your scene, attach a Sprite2D (or any&#xA;other CanvasItem) as a child for visual feedback, set Speed and&#xA;Range in the inspector, and the framework&#39;s Process override drives&#xA;the rest.</description>
+    <methods>
+        <method name="_process">
+            <param index="0" name="delta" type="float"></param>
+            <description>Is the per-frame motion driver. Engine virtual override&#xA;(registered as ` + "`" + `_process` + "`" + `); Godot calls it on every live Mover&#xA;once per frame with the elapsed delta.</description>
+        </method>
+        <method name="reset">
+            <description>Returns the mover to its starting position and reseeds the&#xA;origin to the node&#39;s current location. Exposed to GDScript as&#xA;` + "`" + `reset()` + "`" + ` — useful to call from a button or input handler.</description>
+        </method>
+        <method name="get_speed">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_speed">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_range">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_range">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+    </methods>
+    <members>
+        <member name="speed" type="float" setter="set_speed" getter="get_speed"></member>
+        <member name="range" type="float" setter="set_range" getter="get_range"></member>
+    </members>
+    <signals>
+        <signal name="bounced">
+            <param index="0" name="direction" type="int"></param>
+            <description>Fires every time the mover hits a bound and reverses.&#xA;The argument is the new direction (+1 or -1).</description>
+        </signal>
+    </signals>
+</class>`
 
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerMover)

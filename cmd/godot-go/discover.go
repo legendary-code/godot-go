@@ -25,14 +25,64 @@ type discovered struct {
 	Enums        []*enumInfo
 }
 
+// docInfo carries the documentation metadata captured from a Go doc
+// comment (free-form prose) plus the structured doctags that surface
+// in Godot's class XML schema. Embedded into every kind of declaration
+// godot-go registers — classes, methods, properties, signals, enum
+// types, and enum values.
+type docInfo struct {
+	// Description is the free-form prose body of the doc comment
+	// (multi-paragraph, with `@`-prefixed doctag lines removed). The
+	// Go convention strips the "TypeName " prefix from the leading
+	// sentence and uppercases the first surviving rune. An explicit
+	// `@description "..."` overrides the auto-extraction.
+	Description string
+
+	// Deprecated / Experimental are pointer-tristate: nil means the
+	// declaration carries no flag; a non-nil pointer to "" means the
+	// flag was set with no reason (e.g. just `@deprecated`); a non-nil
+	// pointer to a non-empty string carries the reason text.
+	Deprecated   *string
+	Experimental *string
+
+	// Since carries the version string the declaration first appeared in
+	// (`@since "x.y"`). Godot's XML schema has no native field for this;
+	// the XML emitter renders it as a [br][i]Since: x.y[/i] suffix on the
+	// description so the editor's docs page surfaces the information.
+	Since string
+
+	// See accumulates each `@see "ref"` line. Refs pass through as
+	// Godot's BBCode cross-references ([ClassName], [method foo],
+	// [member bar]) — the editor resolves them at render time. The XML
+	// emitter renders these as a "See also: ..." footer block.
+	See []string
+}
+
+// tutorialInfo is one entry under <tutorials> on the class XML.
+// `@tutorial("title", "url")` repeats freely; each occurrence appends
+// one entry. Class-only — Godot's schema doesn't carry tutorials on
+// methods, properties, or signals.
+type tutorialInfo struct {
+	Title, URL string
+}
+
 // classInfo is one struct flagged for class-registration. Receiver-method
 // classification happens in collectMethods after structs are discovered.
 type classInfo struct {
-	Name        string
-	Pos         token.Pos
-	Decl        *ast.TypeSpec
-	Doc         []doctag.Tag
-	Description string
+	docInfo
+
+	Name string
+	Pos  token.Pos
+	Decl *ast.TypeSpec
+	Doc  []doctag.Tag
+
+	// Brief is the one-line summary surfaced as <brief_description>.
+	// Default: first sentence of the doc comment. `@brief "..."`
+	// overrides explicitly.
+	Brief string
+
+	// Tutorials accumulates `@tutorial("title", "url")` entries.
+	Tutorials []tutorialInfo
 
 	// Parent is the framework class this struct embeds. Empty for inner
 	// classes — those don't extend a Godot class.
@@ -64,6 +114,8 @@ type classInfo struct {
 // `*<MainClass>` for each signal — there's no embedded struct in the
 // user's source.
 type signalInfo struct {
+	docInfo
+
 	Name string // method identifier as it appeared on the interface (e.g. "Damaged")
 	// GodotName is the snake_case name Godot's ClassDB sees ("damaged").
 	GodotName string
@@ -92,6 +144,8 @@ type signalInfo struct {
 // Conflict rule: if the same Name appears in both forms (an exported field
 // `Foo` AND a `GetFoo` method), discovery errors with file:line. Pick one.
 type propertyInfo struct {
+	docInfo
+
 	// Name is the bare property identifier in PascalCase (e.g. "Health").
 	// The Godot name is snake_case(Name) ("health"); generated method
 	// names are GetHealth / SetHealth.
@@ -133,6 +187,8 @@ const (
 )
 
 type methodInfo struct {
+	docInfo
+
 	GoName       string // exact identifier in the source
 	GodotName    string // snake_case unless @name overrides
 	Pos          token.Pos
@@ -164,6 +220,8 @@ func (k methodKind) String() string {
 }
 
 type enumInfo struct {
+	docInfo
+
 	Name   string
 	Pos    token.Pos
 	Values []enumValue
@@ -184,6 +242,8 @@ type enumInfo struct {
 }
 
 type enumValue struct {
+	docInfo
+
 	Name  string
 	Pos   token.Pos
 	Value int64 // resolved from the const expression; populated by evalEnumValues
@@ -239,16 +299,27 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 					return nil, fmt.Errorf("%s: %s carries both @class and @innerclass — pick one (the framework registers @class structs and discovers @innerclass structs as nested types)",
 						posStr(fset, ts.Pos()), ts.Name.Name)
 				}
+				docs := parseDocInfo(doc, tags, ts.Name.Name)
+				brief := extractBrief(docs.Description)
+				if v, ok := doctag.Find(tags, "brief"); ok {
+					brief = v
+				}
+				tutorials, terr := parseTutorials(tags)
+				if terr != nil {
+					return nil, fmt.Errorf("%s: %s: %w", posStr(fset, ts.Pos()), ts.Name.Name, terr)
+				}
 				ci := &classInfo{
-					Name:        ts.Name.Name,
-					Pos:         ts.Pos(),
-					Decl:        ts,
-					Doc:         tags,
-					Description: synthDescription(ts.Name.Name, doc, tags),
-					IsAbstract:  doctag.Has(tags, "abstract"),
-					IsInner:     isInner,
-					IsClass:     isClass,
-					IsEditor:    doctag.Has(tags, "editor"),
+					docInfo:    docs,
+					Name:       ts.Name.Name,
+					Pos:        ts.Pos(),
+					Decl:       ts,
+					Doc:        tags,
+					Brief:      brief,
+					Tutorials:  tutorials,
+					IsAbstract: doctag.Has(tags, "abstract"),
+					IsInner:    isInner,
+					IsClass:    isClass,
+					IsEditor:   doctag.Has(tags, "editor"),
 				}
 				// Parent resolution: only @class structs need (and get)
 				// a parent. Inner classes embed framework types
@@ -274,6 +345,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 							posStr(fset, ts.Pos()), ts.Name.Name)
 					}
 					intTypes[ts.Name.Name] = &enumInfo{
+						docInfo:    parseDocInfo(doc, tags, ts.Name.Name),
 						Name:       ts.Name.Name,
 						Pos:        ts.Pos(),
 						IsExposed:  hasEnum || hasBitfield,
@@ -352,6 +424,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			continue
 		}
 		mi := &methodInfo{
+			docInfo:      parseDocInfo(fn.Doc, tags, fn.Name.Name),
 			GoName:       fn.Name.Name,
 			Pos:          fn.Pos(),
 			Decl:         fn,
@@ -408,6 +481,12 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			if !ok {
 				continue
 			}
+			// Per-value doc comment lives on the spec's Doc (when only one
+			// name in the spec) or as the trailing comment on the line.
+			// We capture vs.Doc — the only reliable source for multi-line
+			// docs — and parse @description / @deprecated / @experimental
+			// / @since / @see off it.
+			specTags := doctag.Parse(vs.Doc)
 			for _, name := range vs.Names {
 				val, evalErr := evalConstInt64(carriedExpr, int64(specIdx))
 				if evalErr != nil && ei.IsExposed {
@@ -415,9 +494,10 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 						posStr(fset, name.Pos()), ei.Name, name.Name, evalErr)
 				}
 				ei.Values = append(ei.Values, enumValue{
-					Name:  name.Name,
-					Pos:   name.Pos(),
-					Value: val,
+					docInfo: parseDocInfo(vs.Doc, specTags, name.Name),
+					Name:    name.Name,
+					Pos:     name.Pos(),
+					Value:   val,
 				})
 			}
 		}
@@ -511,7 +591,13 @@ func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) 
 						posStr(fset, name.Pos()), name.Name, name.Name, posStr(fset, existing), ci.Name)
 				}
 				signalNames[name.Name] = name.Pos()
+				// Doc comment lives on the interface method's Doc field
+				// (the `m.Doc` of the *ast.Field). Multi-name methods
+				// share the same comment group; that's the user's
+				// shared description for them too.
+				signalTags := doctag.Parse(m.Doc)
 				ci.Signals = append(ci.Signals, &signalInfo{
+					docInfo:         parseDocInfo(m.Doc, signalTags, name.Name),
 					Name:            name.Name,
 					GodotName:       naming.PascalToSnake(name.Name),
 					Pos:             name.Pos(),
@@ -697,6 +783,7 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 					posStr(fset, name.Pos()), name.Name, posStr(fset, existing.Pos))
 			}
 			byName[name.Name] = &propertyInfo{
+				docInfo:    parseDocInfo(f.Doc, tags, name.Name),
 				Name:       name.Name,
 				GoType:     f.Type,
 				Pos:        name.Pos(),
@@ -780,7 +867,11 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 		// is not wired as the property's setter.
 		setter, hasSetter := setters[propName]
 		setterIsTagged := hasSetter && doctag.Has(setter.Doc, "property")
+		// Method-form properties inherit the getter's docInfo — that's
+		// the canonical place the user described the property even
+		// though it physically lives on a method.
 		byName[propName] = &propertyInfo{
+			docInfo:  getter.docInfo,
 			Name:     propName,
 			GoType:   results[0].Type,
 			Pos:      getter.Pos,
@@ -969,37 +1060,6 @@ func docOf(gd *ast.GenDecl, ts *ast.TypeSpec) *ast.CommentGroup {
 	return gd.Doc
 }
 
-// synthDescription mirrors PLAN_EXECUTION.md item 8: drop the identifier
-// prefix from the leading sentence, uppercase the first surviving word,
-// unless an explicit @description tag overrides.
-func synthDescription(typeName string, cg *ast.CommentGroup, tags []doctag.Tag) string {
-	if v, ok := doctag.Find(tags, "description"); ok {
-		return v
-	}
-	if cg == nil {
-		return ""
-	}
-	// Take the first non-tag, non-empty line of prose.
-	for _, c := range cg.List {
-		text := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
-		text = strings.TrimSpace(strings.TrimPrefix(text, "*"))
-		if text == "" || strings.HasPrefix(text, "@") {
-			continue
-		}
-		// Drop "TypeName " prefix if present.
-		if strings.HasPrefix(text, typeName+" ") {
-			text = text[len(typeName)+1:]
-		}
-		// Uppercase first surviving rune.
-		if text == "" {
-			continue
-		}
-		runes := []rune(text)
-		runes[0] = unicode.ToUpper(runes[0])
-		return string(runes)
-	}
-	return ""
-}
 
 // evalConstInt64 evaluates a const-expression AST node to an int64,
 // substituting the supplied iota value where it appears. Supports the

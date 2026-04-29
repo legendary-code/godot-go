@@ -615,3 +615,9 @@ void godot_go_register_extension_class_integer_constant(GDExtensionInterfaceClas
     fn(p_library, p_class_name, p_enum_name, p_constant_name,
        (GDExtensionInt)p_constant_value, p_is_bitfield);
 }
+
+void godot_go_call_editor_help_load_xml(GDExtensionsInterfaceEditorHelpLoadXmlFromUtf8CharsAndLen fn,
+                                         const char *p_data,
+                                         int64_t p_size) {
+    fn(p_data, (GDExtensionInt)p_size);
+}

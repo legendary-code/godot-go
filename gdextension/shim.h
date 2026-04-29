@@ -276,4 +276,12 @@ void godot_go_register_extension_class_integer_constant(GDExtensionInterfaceClas
                                                          int64_t p_constant_value,
                                                          GDExtensionBool p_is_bitfield);
 
+/* Loads class documentation XML into the editor's help system. Wraps
+ * editor_help_load_xml_from_utf8_chars_and_len (4.3+, editor-only —
+ * NULL fn in game-mode runtimes is a no-op). The XML format is
+ * documented in Godot's doc/class.xsd. */
+void godot_go_call_editor_help_load_xml(GDExtensionsInterfaceEditorHelpLoadXmlFromUtf8CharsAndLen fn,
+                                         const char *p_data,
+                                         int64_t p_size);
+
 #endif /* GODOT_GO_SHIM_H */

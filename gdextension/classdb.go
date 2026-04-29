@@ -641,6 +641,27 @@ func RegisterClassIntegerConstant(def ClassIntegerConstantDef) {
 		boolToGD(def.IsBitfield))
 }
 
+// LoadEditorDocXML loads a Godot class-documentation XML string into
+// the editor's help system. The XML follows the schema in Godot's
+// doc/class.xsd; the codegen produces it per registered class and the
+// generated bindings call this at SCENE init.
+//
+// The underlying interface entry point is `editor_help_load_xml_from_utf8_chars_and_len`
+// (since 4.3, editor-only). In a deployed game-mode runtime the
+// resolver returns nil, and this call no-ops — extensions don't need
+// to gate on `runtime.IsEditorHint()` themselves.
+func LoadEditorDocXML(xml string) {
+	if iface.editorHelpLoadXmlFromUtf8CharsAndLen == nil || len(xml) == 0 {
+		return
+	}
+	cdata := C.CString(xml)
+	defer C.free(unsafe.Pointer(cdata))
+	C.godot_go_call_editor_help_load_xml(
+		iface.editorHelpLoadXmlFromUtf8CharsAndLen,
+		cdata,
+		C.int64_t(len(xml)))
+}
+
 // UnregisterClass tears down a previously-registered class. Call from the
 // matching deinit callback so the host's classdb stays consistent across
 // hot-reloads. Unregistering a parent before its inheritors is rejected

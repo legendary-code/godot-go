@@ -149,7 +149,33 @@ func registerLocaleLanguage() {
 			"",
 		},
 	})
+
+	gdextension.LoadEditorDocXML(localeLanguageDocXML)
 }
+
+// localeLanguageDocXML is the rendered <class> document for LocaleLanguage.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="LocaleLanguage" inherits="Node" version="4.4" deprecated="">
+    <brief_description>here overrides the</brief_description>
+    <description>here overrides the</description>
+    <methods>
+        <method name="parse" qualifiers="static">
+            <return type="int"></return>
+            <param index="0" name="value" type="String"></param>
+            <description>Is, by convention, a static function in Godot.  In general, if the receiver of a method has no&#xA;assigned name, we treat this like a static function in Godot, attached to our ` + "`" + `LocaleLanguage` + "`" + ` class in this instance</description>
+        </method>
+        <method name="do_something_alt_name">
+            <description>Demonstrates a regular member function of LocaleLanguage.  Because the receiver has an assigned name,&#xA;this is an instance function rather than a static function.  Exported methods will be bound to their snake case&#xA;equivalent, unless a @name doc comment is provided as shown below.</description>
+        </method>
+        <method name="_process">
+            <param index="0" name="" type="float"></param>
+            <description>Here demonstrates implementing virtual methods that exist on the parent class — in this case,&#xA;overriding Node._process. The ` + "`" + `@override` + "`" + ` doctag opts into virtual binding; codegen routes through&#xA;RegisterClassVirtual and prepends the leading underscore Godot expects on engine virtuals.</description>
+        </method>
+    </methods>
+</class>`
 
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerLocaleLanguage)

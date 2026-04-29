@@ -89,6 +89,12 @@ var iface struct {
 	classdbRegisterExtensionClassIntegerConstant C.GDExtensionInterfaceClassdbRegisterExtensionClassIntegerConstant
 	classdbUnregisterExtensionClass             C.GDExtensionInterfaceClassdbUnregisterExtensionClass
 	objectSetInstance                           C.GDExtensionInterfaceObjectSetInstance
+
+	// Editor-only entry points. Resolve to nil in deployed game-mode
+	// runtimes; the wrappers no-op when nil. The header's typedef
+	// names carry an "s" typo (`GDExtensions...`) the framework can't
+	// fix without touching the upstream header — use the exact spelling.
+	editorHelpLoadXmlFromUtf8CharsAndLen C.GDExtensionsInterfaceEditorHelpLoadXmlFromUtf8CharsAndLen
 }
 
 // Library returns the GDExtensionClassLibraryPtr the host handed us. Required
@@ -156,6 +162,7 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.classdbRegisterExtensionClassPropertySubgroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_subgroup")))
 	iface.classdbRegisterExtensionClassSignal = (C.GDExtensionInterfaceClassdbRegisterExtensionClassSignal)(unsafe.Pointer(resolveProc("classdb_register_extension_class_signal")))
 	iface.classdbRegisterExtensionClassIntegerConstant = (C.GDExtensionInterfaceClassdbRegisterExtensionClassIntegerConstant)(unsafe.Pointer(resolveProc("classdb_register_extension_class_integer_constant")))
+	iface.editorHelpLoadXmlFromUtf8CharsAndLen = (C.GDExtensionsInterfaceEditorHelpLoadXmlFromUtf8CharsAndLen)(unsafe.Pointer(resolveProc("editor_help_load_xml_from_utf8_chars_and_len")))
 	iface.classdbUnregisterExtensionClass = (C.GDExtensionInterfaceClassdbUnregisterExtensionClass)(unsafe.Pointer(resolveProc("classdb_unregister_extension_class")))
 	iface.objectSetInstance = (C.GDExtensionInterfaceObjectSetInstance)(unsafe.Pointer(resolveProc("object_set_instance")))
 }

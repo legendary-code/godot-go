@@ -1002,6 +1002,25 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
 		Class:      "MyNode",
 		Enum:       "AbilityFlags",
 		Name:       "FLY",
@@ -1023,25 +1042,158 @@ func registerMyNode() {
 		IsBitfield: true,
 	})
 
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "NEUTRAL",
-		Value: 0,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "OFFENSIVE",
-		Value: 1,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "DEFENSIVE",
-		Value: 2,
-	})
+	gdextension.LoadEditorDocXML(myNodeDocXML)
 }
+
+// myNodeDocXML is the rendered <class> document for MyNode.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="MyNode" inherits="Node" version="4.4">
+    <brief_description>Demo extension class wired up for the smoke tests.</brief_description>
+    <description>Is a minimal Go-defined extension class — embeds godot.Node so the&#xA;host treats instances as nodes, and exposes Hello/Add/Greet to GDScript.&#xA;&#xA;Properties exercise the four cells of the @property matrix:&#xA;  - Health     — field form, read-write. Codegen synthesizes Get/Set.&#xA;  - MaxHealth  — field form, read-only. @readonly drops the setter.&#xA;  - Score      — method form, read-only. User wrote GetScore only;&#xA;                 no SetScore means the property is read-only.&#xA;  - Tag        — method form, read-write. User wrote both GetTag&#xA;                 and SetTag; codegen wires both as a normal property.&#xA;&#xA;[i]Since: 0.1[/i]</description>
+    <tutorials>
+        <link title="godot-go README">https://github.com/legendary-code/godot-go</link>
+    </tutorials>
+    <methods>
+        <method name="hello">
+            <description>Greet GDScript callers via Godot&#39;s Output dock.&#xA;&#xA;See also: [method greet]</description>
+        </method>
+        <method name="add">
+            <return type="int"></return>
+            <param index="0" name="a" type="int"></param>
+            <param index="1" name="b" type="int"></param>
+            <description>Exercises Phase 5d primitive arg / return marshalling.</description>
+        </method>
+        <method name="greet">
+            <return type="String"></return>
+            <param index="0" name="name" type="String"></param>
+            <description>Exercises Phase 5d string marshalling in both directions.</description>
+        </method>
+        <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
+            <return type="int"></return>
+            <description>Exercises Phase 5e static dispatch — unnamed receiver makes this&#xA;` + "`" + `MyNode.origin()` + "`" + ` from GDScript, no instance lookup, no MethodFlagStatic&#xA;double-counting.</description>
+        </method>
+        <method name="get_score">
+            <return type="int"></return>
+            <description>Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</description>
+        </method>
+        <method name="get_tag">
+            <return type="String"></return>
+            <description>/ SetTag demonstrate the method form of @property, read-write&#xA;branch: both methods exist in source AND both carry @property. The&#xA;rule is symmetric — codegen requires the tag on each side so the&#xA;user&#39;s intent is explicit on both halves of the property.</description>
+        </method>
+        <method name="set_tag">
+            <param index="0" name="v" type="String"></param>
+            <description></description>
+        </method>
+        <method name="set_stance">
+            <param index="0" name="stance" type="int" enum="MyNode.Stance"></param>
+            <description>Exercises typed-enum args. Hover in the editor shows&#xA;` + "`" + `set_stance(stance: MyNode.Stance)` + "`" + ` rather than ` + "`" + `(stance: int)` + "`" + `.</description>
+        </method>
+        <method name="current_stance">
+            <return type="int" enum="MyNode.Stance"></return>
+            <description>Exercises typed-enum returns. The registration&#39;s&#xA;return_class_name surfaces as ` + "`" + `MyNode.Stance` + "`" + ` in autocomplete.</description>
+        </method>
+        <method name="_process">
+            <param index="0" name="delta" type="float"></param>
+            <description>Is a Phase 5e/6 virtual override — ` + "`" + `@override` + "`" + ` opts into&#xA;virtual binding so codegen routes through RegisterClassVirtual and&#xA;adds the leading underscore Godot expects on engine virtuals&#xA;(` + "`" + `Process` + "`" + ` → ` + "`" + `_process` + "`" + `). The engine calls this on every frame for&#xA;live nodes; the smoke test just invokes it directly from GDScript to&#xA;keep the run deterministic without spinning up a scene tree.</description>
+        </method>
+        <method name="get_health">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_health">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_max_health">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="get_damage_range">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_damage_range">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_mode">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_mode">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_skin">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_skin">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_display_name">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_display_name">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_save_dir">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_save_dir">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+        <method name="get_notes">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_notes">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
+    </methods>
+    <members>
+        <member name="health" type="int" setter="set_health" getter="get_health"></member>
+        <member name="max_health" type="int" getter="get_max_health"></member>
+        <member name="score" type="int" getter="get_score">Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</member>
+        <member name="tag" type="String" setter="set_tag" getter="get_tag">/ SetTag demonstrate the method form of @property, read-write&#xA;branch: both methods exist in source AND both carry @property. The&#xA;rule is symmetric — codegen requires the tag on each side so the&#xA;user&#39;s intent is explicit on both halves of the property.</member>
+        <member name="damage_range" type="int" setter="set_damage_range" getter="get_damage_range"></member>
+        <member name="mode" type="int" setter="set_mode" getter="get_mode"></member>
+        <member name="skin" type="String" setter="set_skin" getter="get_skin"></member>
+        <member name="display_name" type="String" setter="set_display_name" getter="get_display_name"></member>
+        <member name="save_dir" type="String" setter="set_save_dir" getter="get_save_dir"></member>
+        <member name="notes" type="String" setter="set_notes" getter="get_notes"></member>
+    </members>
+    <signals>
+        <signal name="damaged">
+            <param index="0" name="amount" type="int"></param>
+            <description>Is emitted when the node takes damage. The amount is the&#xA;hit-point loss the receiver should react to.</description>
+        </signal>
+        <signal name="leveled_up">
+            <description>Is a no-arg signal — convenient because GDScript&#xA;connect() supports both shapes uniformly.</description>
+        </signal>
+        <signal name="tagged">
+            <param index="0" name="label" type="String"></param>
+            <description>Carries a string payload, exercising the string-Variant&#xA;marshaling path through emit_signal&#39;s vararg dispatch.</description>
+        </signal>
+    </signals>
+    <constants>
+        <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
+        <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
+        <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
+        <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
+    </constants>
+</class>`
 
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerMyNode)

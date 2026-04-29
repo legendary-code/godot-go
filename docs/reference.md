@@ -21,6 +21,7 @@ lifecycle, and hot-reload, see the dedicated docs in this folder.
   - [On a method](#on-a-method)
   - [On an interface](#on-an-interface)
   - [On a typed-int declaration](#on-a-typed-int-declaration)
+  - [Documentation tags](#documentation-tags)
 - [Features](#features)
   - [Class registration](#class-registration)
   - [Inheritance](#inheritance)
@@ -54,7 +55,13 @@ below organize the tags by attachment site.
 | `@innerclass` | optional | none | Marks the struct as a nested type the user wants to record but NOT register with Godot. Useful for grouping related types in one file. Inner classes can't be instantiated from GDScript. |
 | `@abstract` | optional | none | Only valid on `@class` structs. Sets `is_abstract` on the registration so GDScript can't instantiate the class directly — only subclasses. Equivalent to GDScript's `class_name` + `abstract`. |
 | `@editor` | optional | none | Only valid on `@class` structs. Registers the class at `INIT_LEVEL_EDITOR` instead of `INIT_LEVEL_SCENE`, so it's invisible to deployed game builds. Use for `EditorPlugin` subclasses, custom inspectors, gizmos, etc. |
-| `@description` | optional | inline text | Only valid on `@class` structs. Overrides the auto-synthesized class description (which strips the type-name prefix from the leading doc-comment sentence). Used for the docs XML. |
+
+Documentation tags below land in the generated docs XML the editor
+reads via `editor_help_load_xml_from_utf8_chars`. Each is also valid
+on methods, properties, signals, enum types, and enum values where
+Godot's class.xsd schema supports the corresponding attribute or
+element — see [Documentation tags](#documentation-tags) for the full
+table and renderings.
 
 ```go
 // MyNode is a regular Godot Node subclass.
@@ -343,6 +350,59 @@ func (p *Player) SetStance(stance Stance) { /* ... */ }
 
 // CurrentStance's return surfaces as Player.Stance, not int.
 func (p *Player) CurrentStance() Stance { return StanceNeutral }
+```
+
+### Documentation tags
+
+These tags populate the class XML the editor's docs page reads. They
+apply to every declaration site Godot's `class.xsd` schema supports —
+classes, methods, properties, signals, enum types, and enum values.
+
+| Tag | Argument | Where valid | What it does |
+|---|---|---|---|
+| `@description` | inline text | class, method, property, signal, enum type, enum value | Overrides the auto-extracted description for the declaration. Without the tag, the description defaults to the doc-comment prose body (with `@`-prefixed lines stripped and the leading "TypeName " prefix removed). |
+| `@brief` | inline text | class only | Overrides the one-line summary that fills `<brief_description>`. Default: the first sentence of the class doc comment. |
+| `@tutorial("title", "url")` | two strings | class only | Adds one `<link>` under `<tutorials>`. Repeatable — every occurrence appends one entry. |
+| `@deprecated [reason]` | optional inline text | class, method, property, signal, enum type, enum value | Sets the `deprecated="reason"` attribute on the corresponding XML element. Without an argument, the attribute is set to an empty string (Godot still flags the entry as deprecated). |
+| `@experimental [note]` | optional inline text | class, method, property, signal, enum type, enum value | Sets the `experimental="note"` attribute. New in Godot 4.3+; entries flagged experimental render with a warning badge in the editor's docs panel. |
+| `@since "version"` | inline text | class, method, property, signal, enum type, enum value | Appends `[i]Since: version[/i]` to the description. Godot's schema has no native field, so this renders as a description suffix in BBCode. |
+| `@see "ref"` | inline text | class, method, property, signal, enum type, enum value | Appends a "See also: ref" line to the description. `ref` passes through verbatim — Godot's BBCode parser resolves cross-references like `[ClassName]`, `[method foo]`, `[member bar]`. |
+
+The class XML for a registered class is baked into the generated
+`<file>_bindings.go` as a `const` string and pushed to Godot at
+SCENE init via `editor_help_load_xml_from_utf8_chars_and_len` (4.3+,
+editor-only — game-mode runtimes resolve the symbol to nil and the
+load is a no-op). No separate XML files in the user's project tree.
+
+```go
+// Player is the smoke example's hero class.
+//
+// @class
+// @brief Smoke example class used for the test fixture.
+// @tutorial("godot-go README", "https://github.com/legendary-code/godot-go")
+// @since 0.1
+type Player struct {
+    // @extends
+    godot.Node
+
+    // @property
+    // @description Hit points; reaches 0 → emit `died` and free the node.
+    // @see [signal died]
+    Health int64
+}
+
+// TakeDamage subtracts damage from health and fires died if it falls to 0.
+//
+// @description Standard hit-points decrement. Negative `amount` heals.
+// @see [method heal]
+func (p *Player) TakeDamage(amount int64) { /* ... */ }
+
+// LegacyAttack is the pre-1.0 attack mode kept around for save-game
+// compatibility.
+//
+// @deprecated Use TakeDamage with a negative offset instead.
+// @experimental Behavior may change once damage types land.
+func (p *Player) LegacyAttack() { /* ... */ }
 ```
 
 ---

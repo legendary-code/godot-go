@@ -41,6 +41,9 @@ type Signals interface {
 //                  and SetTag; codegen wires both as a normal property.
 //
 // @class
+// @brief Demo extension class wired up for the smoke tests.
+// @tutorial("godot-go README", "https://github.com/legendary-code/godot-go")
+// @since 0.1
 type MyNode struct {
 	// @extends
 	godot.Node
@@ -109,8 +112,13 @@ type MyNode struct {
 type Stance int
 
 const (
+	// StanceNeutral is the default — neither attacking nor defending.
 	StanceNeutral Stance = iota
+	// StanceOffensive prioritizes damage output over survivability.
 	StanceOffensive
+	// StanceDefensive prioritizes survivability — extra armor, less damage.
+	//
+	// @deprecated Use StanceNeutral with a defensive item instead.
 	StanceDefensive
 )
 
@@ -128,6 +136,9 @@ const (
 )
 
 // Hello is the method GDScript reaches via `n.hello()`.
+//
+// @description Greet GDScript callers via Godot's Output dock.
+// @see [method greet]
 func (n *MyNode) Hello() {
 	runtime.Print("godot-go: MyNode.Hello() reached from GDScript")
 }
@@ -145,6 +156,8 @@ func (n *MyNode) Greet(name string) string {
 // Origin exercises Phase 5e static dispatch — unnamed receiver makes this
 // `MyNode.origin()` from GDScript, no instance lookup, no MethodFlagStatic
 // double-counting.
+//
+// @experimental Behavior may shift once the static-method ABI moves out of beta.
 func (MyNode) Origin() int64 {
 	return 42
 }

@@ -92,6 +92,17 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		BindingsAlias:  bindingsAlias,
 	}
 
+	// Render the class XML now that emitData is fully populated. If
+	// the class carries no documentation surface at all, leave DocXML
+	// empty and the bindings template skips the load call.
+	if classHasDocSurface(d.MainClass, data) {
+		docXML, xerr := buildClassXML(data, d.MainClass.docInfo, d.MainClass.Brief, d.MainClass.Tutorials)
+		if xerr != nil {
+			return fmt.Errorf("build doc XML: %w", xerr)
+		}
+		data.DocXML = docXML
+	}
+
 	var buf bytes.Buffer
 	if err := bindingTemplate.Execute(&buf, data); err != nil {
 		return fmt.Errorf("template: %w", err)
@@ -127,6 +138,13 @@ type emitData struct {
 	// the alias.
 	BindingsImport string
 	BindingsAlias  string
+
+	// DocXML is the rendered <class>…</class> document for this class,
+	// baked into the bindings as a const string. Empty when the class
+	// has no doc-able content (no description, no docs on any
+	// declaration). The bindings registers the doc with Godot via
+	// gdextension.LoadEditorDocXML at the end of register<Class>().
+	DocXML string
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -134,8 +152,14 @@ type emitData struct {
 // per-arg Variants and dispatches Object::emit_signal, plus a
 // RegisterClassSignal call at SCENE init.
 type emitSignal struct {
+	docInfo
+
 	GoName    string // method identifier on the @signals interface ("Damaged")
 	GodotName string // snake_case for ClassDB ("damaged")
+
+	// ArgGodotTypes carries Godot-XML type names per arg, parallel to
+	// ArgTypes. Used by the XML emitter on the signal's `<param>` rows.
+	ArgGodotTypes []string
 	// PerArg holds the rendered fragments needed to construct one Variant
 	// per signal arg before dispatch. Each entry contributes a `var
 	// argN variant.Variant = ...` statement and a Destroy via defer.
@@ -178,12 +202,16 @@ type emitAccessor struct {
 // the method/property/signal registrations reference via their
 // ArgClassNames / ReturnClassName / ClassName fields.
 type emitEnum struct {
+	docInfo
+
 	GoName     string // bare Go type identifier (e.g. "Mode")
 	IsBitfield bool   // @bitfield instead of @enum — registers with is_bitfield=true
 	Values     []emitEnumValue
 }
 
 type emitEnumValue struct {
+	docInfo
+
 	GoName    string // Go const identifier (e.g. "ModeIdle")
 	GodotName string // SCREAMING_SNAKE form Godot expects (e.g. "IDLE", prefix stripped)
 	Value     int64  // the int value the Go const evaluates to (resolved by go/types)
@@ -192,8 +220,11 @@ type emitEnumValue struct {
 // emitProperty is one RegisterClassProperty literal. Setter is empty for
 // read-only properties.
 type emitProperty struct {
+	docInfo
+
 	GodotName string // snake_case property name as Godot sees it
 	Type      string // bare const name, e.g. "VariantTypeInt"
+	GodotType string // Godot-XML type name ("int", "String", "bool", …) for <member type="...">
 	ClassName string // typed-enum identity ("<MainClass>.<EnumName>") or empty
 	Setter    string // snake_case setter method name (empty for read-only)
 	Getter    string // snake_case getter method name (always set)
@@ -215,8 +246,24 @@ type emitProperty struct {
 }
 
 type emitMethod struct {
+	docInfo
+
 	GoName    string
 	GodotName string
+
+	// IsConst is reserved for future use — Godot's XML schema has a
+	// `qualifiers="const"` attribute on methods that can be invoked on
+	// const objects. Go has no const-method concept, so the codegen
+	// always leaves this false today.
+	IsConst bool
+
+	// ArgGodotTypes / ReturnGodotType carry the Godot-XML type name
+	// for each arg / the return ("int", "float", "bool", "String",
+	// etc.) — used by the XML emitter to fill in `type="..."` on
+	// `<param>` and `<return>`. Parallel to ArgTypes (the variant-type
+	// const name); the XML side wants the human-readable form.
+	ArgGodotTypes   []string
+	ReturnGodotType string
 
 	// Pre-rendered Go fragments. Each line in *ArgReads is a complete
 	// statement (e.g. "arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))").
@@ -305,6 +352,7 @@ func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[strin
 // rejecting non-instance method kinds before calling.
 func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainClass string) (emitMethod, error) {
 	em := emitMethod{
+		docInfo:   m.docInfo,
 		GoName:    m.GoName,
 		GodotName: m.GodotName,
 		IsStatic:  m.Kind == methodStatic,
@@ -329,6 +377,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 			em.CallArgReads = append(em.CallArgReads, info.CallReadArg(bindings, idx))
 			em.ArgTypes = append(em.ArgTypes, info.VariantType)
 			em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
+			em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLType(info.VariantType))
 			// Arg names: take the source identifier when available so
 			// the editor renders `take_damage(amount: int)` instead of
 			// `take_damage(arg0: int)`. Unnamed params (`func F(int)`)
@@ -374,6 +423,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		em.HasReturn = true
 		em.ReturnType = info.VariantType
 		em.ReturnMeta = info.ArgMeta
+		em.ReturnGodotType = godotXMLType(info.VariantType)
 		em.ReturnClassName = qualifyEnum(mainClass, info.EnumName)
 		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
 		em.CallReturn = info.CallWriteReturn(bindings, "result")
@@ -395,6 +445,55 @@ func qualifyEnum(mainClass, enumName string) string {
 		return ""
 	}
 	return mainClass + "." + enumName
+}
+
+// classHasDocSurface reports whether the class has anything worth
+// emitting an XML doc for. Classes without a description and no
+// declarations carrying docs skip the XML entirely so the bindings
+// don't carry a dead `const xml = "..."` string the editor would just
+// load empty. Conservative: we emit XML when the class has a brief,
+// description, deprecated/experimental marker, tutorials, or any
+// method/property/signal/enum at all (since those produce their own
+// rows in Godot's docs page even with no description text).
+func classHasDocSurface(ci *classInfo, data emitData) bool {
+	if ci.Description != "" || ci.Brief != "" || ci.Deprecated != nil || ci.Experimental != nil ||
+		ci.Since != "" || len(ci.See) > 0 || len(ci.Tutorials) > 0 {
+		return true
+	}
+	return len(data.Methods) > 0 || len(data.Properties) > 0 ||
+		len(data.Signals) > 0 || len(data.Enums) > 0
+}
+
+// godotXMLType maps a bare gdextension.VariantType const name (the
+// `info.VariantType` the typeTable carries) to the Godot type name
+// used in class-XML `<param type="...">`, `<return type="...">`,
+// and `<member type="...">` attributes. Empty for the void return.
+//
+// The framework's user-method boundary supports a small primitive
+// set; anything outside it (typed-enum returns, future Vector2 args,
+// etc.) is handled by the caller — Variant types not in the map
+// fall back to "int" for typed enums (which carry the variant type
+// of the underlying int) or empty for unsupported.
+func godotXMLType(variantType string) string {
+	switch variantType {
+	case "VariantTypeBool":
+		return "bool"
+	case "VariantTypeInt":
+		return "int"
+	case "VariantTypeFloat":
+		return "float"
+	case "VariantTypeString":
+		return "String"
+	case "":
+		return ""
+	}
+	// Fallback: take the const-name suffix as the Godot type name (so
+	// future supported types Just Work without table updates).
+	const prefix = "VariantType"
+	if strings.HasPrefix(variantType, prefix) {
+		return variantType[len(prefix):]
+	}
+	return variantType
 }
 
 // godotEnumValueName converts a Go enum-constant identifier to the
@@ -428,11 +527,13 @@ func buildEmitEnums(enums []*enumInfo) []emitEnum {
 			continue
 		}
 		ee := emitEnum{
+			docInfo:    e.docInfo,
 			GoName:     e.Name,
 			IsBitfield: e.IsBitfield,
 		}
 		for _, v := range e.Values {
 			ee.Values = append(ee.Values, emitEnumValue{
+				docInfo:   v.docInfo,
 				GoName:    v.Name,
 				GodotName: godotEnumValueName(e.Name, v.Name),
 				Value:     v.Value,
@@ -493,8 +594,10 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 		propGodotName := naming.PascalToSnake(p.Name)
 
 		entry := emitProperty{
+			docInfo:    p.docInfo,
 			GodotName:  propGodotName,
 			Type:       info.VariantType,
+			GodotType:  godotXMLType(info.VariantType),
 			ClassName:  qualifyEnum(mainClass, info.EnumName),
 			Getter:     getterGodotName,
 			Hint:       p.Hint,
@@ -569,6 +672,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 	out := make([]emitSignal, 0, len(signals))
 	for _, s := range signals {
 		es := emitSignal{
+			docInfo:   s.docInfo,
 			GoName:    s.Name,
 			GodotName: s.GodotName,
 		}
@@ -599,6 +703,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
 				es.ArgNames = append(es.ArgNames, registeredName)
 				es.ArgClassNames = append(es.ArgClassNames, qualifyEnum(mainClass, info.EnumName))
+				es.ArgGodotTypes = append(es.ArgGodotTypes, godotXMLType(info.VariantType))
 				idx++
 			}
 		}
@@ -670,7 +775,30 @@ func lowerFirst(s string) string {
 // when the method takes args or returns a value; for no-arg / no-return
 // methods the bodies stay tight (no `args` / `ret` accesses, fewer
 // allocations).
-var bindingTemplate = template.Must(template.New("binding").Parse(`// Code generated by godot-go; DO NOT EDIT.
+// goRawString renders s as a Go raw-string-literal expression. The
+// common case (no backticks) is just `s` wrapped in backticks; if s
+// itself contains backticks they get spliced out using a quoted-
+// backtick concatenation so the generated source still parses.
+// Used by the bindings template to embed the rendered class XML
+// without escaping every special character via strconv.Quote.
+func goRawString(s string) string {
+	if !strings.Contains(s, "`") {
+		return "`" + s + "`"
+	}
+	// Splice each backtick out of the raw form by closing the raw
+	// string, concatenating a quoted backtick, then reopening — yields
+	// a Go expression like ``"…"+ "`" + "…"``.
+	parts := strings.Split(s, "`")
+	var pieces []string
+	for _, p := range parts {
+		pieces = append(pieces, "`"+p+"`")
+	}
+	return strings.Join(pieces, "+\"`\"+")
+}
+
+var bindingTemplate = template.Must(template.New("binding").Funcs(template.FuncMap{
+	"godotGoBacktick": goRawString,
+}).Parse(`// Code generated by godot-go; DO NOT EDIT.
 // Source: {{.SourceFile}}
 
 package {{.PackageName}}
@@ -985,8 +1113,18 @@ func register{{.Class}}() {
 		{{- end}}
 	})
 	{{- end}}
-{{end}}}
-
+{{end}}
+{{- if .DocXML}}
+	gdextension.LoadEditorDocXML({{.Lower}}DocXML)
+{{- end}}
+}
+{{if .DocXML}}
+// {{.Lower}}DocXML is the rendered <class> document for {{.Class}}.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const {{.Lower}}DocXML = {{.DocXML | godotGoBacktick}}
+{{end}}
 func init() {
 	gdextension.RegisterInitCallback(gdextension.{{.InitLevel}}, register{{.Class}})
 	gdextension.RegisterDeinitCallback(gdextension.{{.InitLevel}}, func() {
