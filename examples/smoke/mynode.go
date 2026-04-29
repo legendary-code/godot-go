@@ -99,6 +99,34 @@ type MyNode struct {
 	tag   string
 }
 
+// Stance is a typed enum exposed to Godot via @enum. Values register
+// as class-scoped integer constants (Stance.NEUTRAL / OFFENSIVE /
+// DEFENSIVE), and any method/property that takes or returns Stance
+// surfaces it in the editor's autocomplete with the typed-enum identity
+// instead of plain int.
+//
+// @enum
+type Stance int
+
+const (
+	StanceNeutral Stance = iota
+	StanceOffensive
+	StanceDefensive
+)
+
+// AbilityFlags is a typed bitfield exposed via @bitfield. Values
+// compose with bitwise OR; the editor renders them as a flag-grid
+// rather than an exclusive dropdown.
+//
+// @bitfield
+type AbilityFlags int
+
+const (
+	AbilityFlagsFly  AbilityFlags = 1 << iota // 1
+	AbilityFlagsSwim                          // 2
+	AbilityFlagsClimb                         // 4
+)
+
 // Hello is the method GDScript reaches via `n.hello()`.
 func (n *MyNode) Hello() {
 	runtime.Print("godot-go: MyNode.Hello() reached from GDScript")
@@ -146,6 +174,18 @@ func (n *MyNode) GetTag() string { return n.tag }
 
 // @property
 func (n *MyNode) SetTag(v string) { n.tag = v }
+
+// SetStance exercises typed-enum args. Hover in the editor shows
+// `set_stance(stance: MyNode.Stance)` rather than `(stance: int)`.
+func (n *MyNode) SetStance(stance Stance) {
+	_ = stance
+}
+
+// CurrentStance exercises typed-enum returns. The registration's
+// return_class_name surfaces as `MyNode.Stance` in autocomplete.
+func (n *MyNode) CurrentStance() Stance {
+	return StanceNeutral
+}
 
 // Process is a Phase 5e/6 virtual override — `@override` opts into
 // virtual binding so codegen routes through RegisterClassVirtual and

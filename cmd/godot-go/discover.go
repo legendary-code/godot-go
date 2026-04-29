@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -166,11 +167,26 @@ type enumInfo struct {
 	Name   string
 	Pos    token.Pos
 	Values []enumValue
+
+	// IsExposed marks the enum as @enum-tagged or @bitfield-tagged —
+	// the type is registered with Godot's ClassDB (one integer constant
+	// per value), and references from method/property/signal signatures
+	// populate the `class_name` field on PropertyInfo so the editor's
+	// autocomplete and docs show the typed enum name. Untagged user int
+	// types stay Go-internal: their values aren't registered, signatures
+	// using them register as plain int.
+	IsExposed bool
+	// IsBitfield is set when the type carried @bitfield instead of @enum.
+	// Constants register with is_bitfield=true; the editor combines
+	// values via bitwise OR rather than treating them as exclusive.
+	// Mutually exclusive with the plain @enum form.
+	IsBitfield bool
 }
 
 type enumValue struct {
-	Name string
-	Pos  token.Pos
+	Name  string
+	Pos   token.Pos
+	Value int64 // resolved from the const expression; populated by evalEnumValues
 }
 
 func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered, error) {
@@ -251,7 +267,18 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				structs[ts.Name.Name] = ci
 			case *ast.Ident:
 				if t.Name == "int" || t.Name == "int32" || t.Name == "int64" {
-					intTypes[ts.Name.Name] = &enumInfo{Name: ts.Name.Name, Pos: ts.Pos()}
+					hasEnum := doctag.Has(tags, "enum")
+					hasBitfield := doctag.Has(tags, "bitfield")
+					if hasEnum && hasBitfield {
+						return nil, fmt.Errorf("%s: %s carries both @enum and @bitfield — pick one (bitfields are exposed via is_bitfield=true on the same registration path)",
+							posStr(fset, ts.Pos()), ts.Name.Name)
+					}
+					intTypes[ts.Name.Name] = &enumInfo{
+						Name:       ts.Name.Name,
+						Pos:        ts.Pos(),
+						IsExposed:  hasEnum || hasBitfield,
+						IsBitfield: hasBitfield,
+					}
 				}
 			case *ast.InterfaceType:
 				if doctag.Has(tags, "signals") {
@@ -353,6 +380,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	// Enums: a const block whose entries are typed as one of the discovered
 	// int types becomes that enum's value list. The same const block can
 	// hold values for multiple types; they get bucketed by declared type.
+	// For @enum / @bitfield-tagged types we also resolve each value's
+	// integer (handling `iota`, `1 << iota`, explicit literals) so the
+	// codegen can pass the literal values to RegisterClassIntegerConstant.
 	for _, decl := range file.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.CONST {
@@ -362,17 +392,33 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		// forward the previous spec's type — that's how `iota` continuation
 		// entries work (only the first line names the type).
 		carriedType := ""
-		for _, spec := range gd.Specs {
+		var carriedExpr ast.Expr
+		for specIdx, spec := range gd.Specs {
 			vs := spec.(*ast.ValueSpec)
 			if id, ok := vs.Type.(*ast.Ident); ok {
 				carriedType = id.Name
 			}
 			ei, ok := intTypes[carriedType]
+			// Track the explicit expression for iota continuation even when
+			// we don't care about this spec's type. Otherwise a non-enum
+			// const between two enum specs would clobber the carried form.
+			if len(vs.Values) > 0 {
+				carriedExpr = vs.Values[0]
+			}
 			if !ok {
 				continue
 			}
 			for _, name := range vs.Names {
-				ei.Values = append(ei.Values, enumValue{Name: name.Name, Pos: name.Pos()})
+				val, evalErr := evalConstInt64(carriedExpr, int64(specIdx))
+				if evalErr != nil && ei.IsExposed {
+					return nil, fmt.Errorf("%s: enum %s value %s: %w (only iota, integer literals, and basic arithmetic on them are supported in @enum / @bitfield types)",
+						posStr(fset, name.Pos()), ei.Name, name.Name, evalErr)
+				}
+				ei.Values = append(ei.Values, enumValue{
+					Name:  name.Name,
+					Pos:   name.Pos(),
+					Value: val,
+				})
 			}
 		}
 	}
@@ -953,6 +999,105 @@ func synthDescription(typeName string, cg *ast.CommentGroup, tags []doctag.Tag) 
 		return string(runes)
 	}
 	return ""
+}
+
+// evalConstInt64 evaluates a const-expression AST node to an int64,
+// substituting the supplied iota value where it appears. Supports the
+// shapes Go enum patterns commonly use:
+//
+//   - integer literals (10, 0x100, 0b011)
+//   - the `iota` identifier
+//   - unary operators (- on an int)
+//   - binary operators: + - * / % << >> & | ^ &^
+//   - parenthesized sub-expressions
+//
+// Anything else (function calls, conversions, references to other
+// constants) returns an error — the caller surfaces it with file:line
+// only when the enum is @enum / @bitfield-tagged, so untagged
+// Go-internal int aliases with exotic expressions stay silent.
+//
+// expr may be nil — pure-iota continuation specs in a const block
+// don't carry a literal expression — in which case the iota value is
+// returned directly.
+func evalConstInt64(expr ast.Expr, iota int64) (int64, error) {
+	if expr == nil {
+		return iota, nil
+	}
+	switch e := expr.(type) {
+	case *ast.Ident:
+		if e.Name == "iota" {
+			return iota, nil
+		}
+		return 0, fmt.Errorf("unsupported identifier %q in enum value expression", e.Name)
+	case *ast.BasicLit:
+		if e.Kind != token.INT {
+			return 0, fmt.Errorf("non-integer literal %q in enum value", e.Value)
+		}
+		// strconv handles 0x.., 0b.., 0o.., decimal — the same syntax
+		// Go's parser accepts.
+		v, err := strconv.ParseInt(e.Value, 0, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse integer literal %q: %w", e.Value, err)
+		}
+		return v, nil
+	case *ast.ParenExpr:
+		return evalConstInt64(e.X, iota)
+	case *ast.UnaryExpr:
+		v, err := evalConstInt64(e.X, iota)
+		if err != nil {
+			return 0, err
+		}
+		switch e.Op {
+		case token.SUB:
+			return -v, nil
+		case token.ADD:
+			return v, nil
+		case token.XOR:
+			return ^v, nil
+		}
+		return 0, fmt.Errorf("unsupported unary operator %s", e.Op)
+	case *ast.BinaryExpr:
+		l, err := evalConstInt64(e.X, iota)
+		if err != nil {
+			return 0, err
+		}
+		r, err := evalConstInt64(e.Y, iota)
+		if err != nil {
+			return 0, err
+		}
+		switch e.Op {
+		case token.ADD:
+			return l + r, nil
+		case token.SUB:
+			return l - r, nil
+		case token.MUL:
+			return l * r, nil
+		case token.QUO:
+			if r == 0 {
+				return 0, fmt.Errorf("division by zero in enum value")
+			}
+			return l / r, nil
+		case token.REM:
+			if r == 0 {
+				return 0, fmt.Errorf("division by zero in enum value")
+			}
+			return l % r, nil
+		case token.SHL:
+			return l << r, nil
+		case token.SHR:
+			return l >> r, nil
+		case token.AND:
+			return l & r, nil
+		case token.OR:
+			return l | r, nil
+		case token.XOR:
+			return l ^ r, nil
+		case token.AND_NOT:
+			return l &^ r, nil
+		}
+		return 0, fmt.Errorf("unsupported binary operator %s", e.Op)
+	}
+	return 0, fmt.Errorf("unsupported expression %T", expr)
 }
 
 func isLowerFirst(name string) bool {

@@ -20,6 +20,7 @@ lifecycle, and hot-reload, see the dedicated docs in this folder.
   - [On an exported field](#on-an-exported-field)
   - [On a method](#on-a-method)
   - [On an interface](#on-an-interface)
+  - [On a typed-int declaration](#on-a-typed-int-declaration)
 - [Features](#features)
   - [Class registration](#class-registration)
   - [Inheritance](#inheritance)
@@ -288,6 +289,61 @@ Variants and dispatch through `Object::emit_signal`. GDScript can't
 call them as methods (signals aren't callable from outside the
 class anyway); GDScript uses the standard `n.damaged.emit(75)` /
 `n.emit_signal("damaged", 75)` syntax.
+
+### On a typed-int declaration
+
+| Tag | Argument | What it does |
+|---|---|---|
+| `@enum` | none | Marks a `type X int / int32 / int64` as a class-scoped enum exposed to Godot. Each value of the const block declaring its members registers as an integer constant under the enum, and any method / property / signal that takes or returns the type populates the registration's `class_name` field with `<MainClass>.<EnumName>` so the editor renders typed-enum autocomplete. Mutually exclusive with `@bitfield`. |
+| `@bitfield` | none | Same registration path as `@enum`, but with `is_bitfield = true`. Values compose with bitwise OR; the editor renders the constants as a flag grid rather than a mutually-exclusive dropdown. |
+
+Without `@enum` / `@bitfield`, the type is Go-only — values aren't
+registered, and signatures using the type collapse to plain `int` at
+the Godot boundary.
+
+The constant names registered with Godot are the SCREAMING_SNAKE form
+of the Go identifier with the type prefix stripped:
+`StanceOffensive` under `type Stance int` registers as `OFFENSIVE`
+(GDScript callers write `Stance.OFFENSIVE`, not the redundant
+`Stance.STANCE_OFFENSIVE`). Constants without the prefix
+(`Idle` under `type Mode int`) become `IDLE`.
+
+Supported value expressions: integer literals, `iota`, and basic
+arithmetic on them (`+`, `-`, `*`, `/`, `%`, `<<`, `>>`, `&`, `|`,
+`^`, `&^`, unary `-`/`+`/`^`). References to other constants or
+function calls aren't supported and surface as a file:line error.
+
+```go
+// @enum
+type Stance int
+
+const (
+    StanceNeutral   Stance = iota // → Stance.NEUTRAL = 0
+    StanceOffensive               // → Stance.OFFENSIVE = 1
+    StanceDefensive               // → Stance.DEFENSIVE = 2
+)
+
+// @bitfield
+type AbilityFlags int
+
+const (
+    AbilityFlagsFly  AbilityFlags = 1 << iota // → AbilityFlags.FLY = 1
+    AbilityFlagsSwim                          // → AbilityFlags.SWIM = 2
+    AbilityFlagsClimb                         // → AbilityFlags.CLIMB = 4
+)
+
+// @class
+type Player struct {
+    // @extends
+    godot.Node
+}
+
+// SetStance shows up in the editor as `set_stance(stance: Player.Stance)`.
+func (p *Player) SetStance(stance Stance) { /* ... */ }
+
+// CurrentStance's return surfaces as Player.Stance, not int.
+func (p *Player) CurrentStance() Stance { return StanceNeutral }
+```
 
 ---
 

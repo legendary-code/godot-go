@@ -433,6 +433,7 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
 static void godot_go_fill_property_info(GDExtensionPropertyInfo *p_info,
                                         uint32_t p_type,
                                         GDExtensionConstStringNamePtr p_arg_name,
+                                        GDExtensionConstStringNamePtr p_class_name,
                                         GDExtensionConstStringNamePtr p_empty_string_name,
                                         GDExtensionConstStringPtr p_empty_string) {
     /* PROPERTY_USAGE_DEFAULT == 6 (PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_EDITOR).
@@ -443,7 +444,11 @@ static void godot_go_fill_property_info(GDExtensionPropertyInfo *p_info,
      * properties whose name is set elsewhere); fall back to empty so the
      * editor renders an unnamed slot rather than dereferencing nil. */
     p_info->name        = (GDExtensionStringNamePtr)(p_arg_name != NULL ? p_arg_name : p_empty_string_name);
-    p_info->class_name  = (GDExtensionStringNamePtr)p_empty_string_name;
+    /* p_class_name carries the typed-enum identity ("MyClass.Mode") when
+     * the slot's int type is actually a registered class-scoped enum;
+     * NULL for ordinary primitives. The editor uses class_name for
+     * autocomplete and docs. */
+    p_info->class_name  = (GDExtensionStringNamePtr)(p_class_name != NULL ? p_class_name : p_empty_string_name);
     p_info->hint        = 0;
     p_info->hint_string = (GDExtensionStringPtr)p_empty_string;
     p_info->usage       = 6;
@@ -463,7 +468,9 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata,
-                                              const GDExtensionConstStringNamePtr *arg_names) {
+                                              const GDExtensionConstStringNamePtr *arg_names,
+                                              const GDExtensionConstStringNamePtr *arg_class_names,
+                                              GDExtensionConstStringNamePtr return_class_name) {
     GDExtensionPropertyInfo return_info;
     GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
     GDExtensionClassMethodArgumentMetadata arg_meta[GODOT_GO_MAX_METHOD_ARGS];
@@ -475,19 +482,23 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
     }
 
     for (uint32_t i = 0; i < arg_count; i++) {
-        /* arg_names is NULL when the caller doesn't supply per-arg names
-         * (legacy callers or empty slice); each entry may individually be
-         * NULL too, falling back to the empty StringName inside fill. */
+        /* arg_names / arg_class_names are NULL when the caller doesn't
+         * supply per-arg names or class names (untagged enums, primitives,
+         * legacy callers); each entry may individually be NULL too,
+         * falling back to the empty StringName inside fill. */
         GDExtensionConstStringNamePtr name_i = (arg_names != NULL ? arg_names[i] : NULL);
+        GDExtensionConstStringNamePtr class_i = (arg_class_names != NULL ? arg_class_names[i] : NULL);
         godot_go_fill_property_info(&arg_infos[i], arg_types[i],
-                                    name_i, empty_string_name, empty_string);
+                                    name_i, class_i, empty_string_name, empty_string);
         arg_meta[i] = (GDExtensionClassMethodArgumentMetadata)arg_metadata[i];
     }
 
     if (has_return) {
-        /* Return value has no source-level name — it's a positional slot. */
+        /* Return value has no source-level name — it's a positional slot.
+         * return_class_name carries the typed-enum identity when the
+         * return type is a @enum / @bitfield user type. */
         godot_go_fill_property_info(&return_info, return_type,
-                                    NULL, empty_string_name, empty_string);
+                                    NULL, return_class_name, empty_string_name, empty_string);
     }
 
     GDExtensionClassMethodInfo info;
@@ -514,6 +525,8 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionClassLibraryPtr p_library,
                                                 GDExtensionConstStringNamePtr p_class_name,
                                                 GDExtensionStringNamePtr p_property_name,
+                                                GDExtensionConstStringNamePtr p_value_class_name,
+                                                GDExtensionConstStringNamePtr p_empty_string_name,
                                                 GDExtensionConstStringNamePtr p_setter,
                                                 GDExtensionConstStringNamePtr p_getter,
                                                 GDExtensionConstStringPtr hint_string,
@@ -522,11 +535,18 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
     /* PropertyInfo lives on the C stack so the Go caller doesn't pass a Go-
      * allocated struct containing pointers. The interned StringName/String
      * pointers come in directly as args (cgo permits one Go pointer per arg
-     * slot). */
+     * slot).
+     *
+     * `class_name` carries the property's *value-type* identity:
+     *   - "<MainClass>.<EnumName>" for typed-enum int properties so the
+     *     editor renders an enum dropdown / autocomplete.
+     *   - The wrapped Object class for object-typed properties (future).
+     *   - Empty StringName for plain primitive properties.
+     * Godot ignores it for primitive ints/floats/bools when empty. */
     GDExtensionPropertyInfo info;
     info.type        = (GDExtensionVariantType)property_type;
     info.name        = p_property_name;
-    info.class_name  = (GDExtensionStringNamePtr)p_class_name;
+    info.class_name  = (GDExtensionStringNamePtr)(p_value_class_name != NULL ? p_value_class_name : p_empty_string_name);
     info.hint        = property_hint;
     info.hint_string = (GDExtensionStringPtr)hint_string;
     /* PROPERTY_USAGE_DEFAULT: STORAGE | EDITOR. */
@@ -559,7 +579,8 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata,
-                                              const GDExtensionConstStringNamePtr *arg_names) {
+                                              const GDExtensionConstStringNamePtr *arg_names,
+                                              const GDExtensionConstStringNamePtr *arg_class_names) {
     GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
 
     if (arg_count > GODOT_GO_MAX_METHOD_ARGS) {
@@ -568,8 +589,9 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
 
     for (uint32_t i = 0; i < arg_count; i++) {
         GDExtensionConstStringNamePtr name_i = (arg_names != NULL ? arg_names[i] : NULL);
+        GDExtensionConstStringNamePtr class_i = (arg_class_names != NULL ? arg_class_names[i] : NULL);
         godot_go_fill_property_info(&arg_infos[i], arg_types[i],
-                                    name_i, empty_string_name, empty_string);
+                                    name_i, class_i, empty_string_name, empty_string);
         /* arg_metadata is currently unused by the engine for signal
          * argument descriptors — the metadata field on PropertyInfo is
          * about hint encoding, not int32-vs-int64 width. We carry the
@@ -581,4 +603,15 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
     fn(p_library, p_class_name, p_signal_name,
        arg_count > 0 ? arg_infos : NULL,
        (GDExtensionInt)arg_count);
+}
+
+void godot_go_register_extension_class_integer_constant(GDExtensionInterfaceClassdbRegisterExtensionClassIntegerConstant fn,
+                                                         GDExtensionClassLibraryPtr p_library,
+                                                         GDExtensionConstStringNamePtr p_class_name,
+                                                         GDExtensionConstStringNamePtr p_enum_name,
+                                                         GDExtensionConstStringNamePtr p_constant_name,
+                                                         int64_t p_constant_value,
+                                                         GDExtensionBool p_is_bitfield) {
+    fn(p_library, p_class_name, p_enum_name, p_constant_name,
+       (GDExtensionInt)p_constant_value, p_is_bitfield);
 }

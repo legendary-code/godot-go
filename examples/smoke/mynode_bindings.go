@@ -179,6 +179,10 @@ func registerMyNode() {
 			"a",
 			"b",
 		},
+		ArgClassNames: []string{
+			"",
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -214,6 +218,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"name",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -318,6 +325,69 @@ func registerMyNode() {
 		ArgNames: []string{
 			"v",
 		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_stance",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := Stance(godot.VariantAsInt64(args[0]))
+			self.SetStance(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := Stance(*(*int64)(gdextension.PtrCallArg(args, 0)))
+			self.SetStance(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"stance",
+		},
+		ArgClassNames: []string{
+			"MyNode.Stance",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "current_stance",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.CurrentStance()
+			godot.VariantSetInt64(ret, int64(result))
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.CurrentStance()
+			*(*int64)(ret) = int64(result)
+		},
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeInt,
+		ReturnMetadata:  gdextension.ArgMetaIntIsInt64,
+		ReturnClassName: "MyNode.Stance",
 	})
 
 	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
@@ -348,6 +418,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"delta",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -404,6 +477,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"value",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -486,6 +562,9 @@ func registerMyNode() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -541,6 +620,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"value",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -598,6 +680,9 @@ func registerMyNode() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -653,6 +738,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"value",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -710,6 +798,9 @@ func registerMyNode() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -765,6 +856,9 @@ func registerMyNode() {
 		},
 		ArgNames: []string{
 			"value",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 
@@ -880,6 +974,9 @@ func registerMyNode() {
 		ArgNames: []string{
 			"amount",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
@@ -899,6 +996,50 @@ func registerMyNode() {
 		ArgNames: []string{
 			"label",
 		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class:      "MyNode",
+		Enum:       "AbilityFlags",
+		Name:       "FLY",
+		Value:      1,
+		IsBitfield: true,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class:      "MyNode",
+		Enum:       "AbilityFlags",
+		Name:       "SWIM",
+		Value:      2,
+		IsBitfield: true,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class:      "MyNode",
+		Enum:       "AbilityFlags",
+		Name:       "CLIMB",
+		Value:      4,
+		IsBitfield: true,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
 	})
 }
 

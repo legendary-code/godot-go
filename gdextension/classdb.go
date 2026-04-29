@@ -112,6 +112,20 @@ type ClassMethodDef struct {
 	// care about names working unchanged. If non-nil, must be the same
 	// length as ArgTypes; the registration call panics otherwise.
 	ArgNames []string
+
+	// ArgClassNames optionally qualifies each argument with a typed-enum
+	// or class identity (parallel to ArgTypes). The slot's wire type
+	// stays whatever ArgTypes says (typically VariantTypeInt for enums);
+	// ArgClassNames carries strings like "MyClass.Mode" so the editor
+	// renders typed-enum dropdowns/autocomplete instead of plain int.
+	// Empty entries register as untyped. If non-nil, must be the same
+	// length as ArgTypes.
+	ArgClassNames []string
+
+	// ReturnClassName qualifies the return type the same way ArgClassNames
+	// does for arguments. Empty (default) registers as untyped — fine for
+	// primitives. Set to "<Class>.<EnumName>" for typed-enum returns.
+	ReturnClassName string
 }
 
 type registeredClass struct {
@@ -170,6 +184,12 @@ type ClassVirtualDef struct {
 	// ArgNames optionally carries the source-level identifier for each
 	// arg. See ClassMethodDef.ArgNames for semantics.
 	ArgNames []string
+	// ArgClassNames / ReturnClassName carry typed-enum identities the
+	// same way ClassMethodDef does. Engine virtuals rarely take typed
+	// enums, but the codegen passes whatever the source signature uses
+	// so the editor's docs page reflects it.
+	ArgClassNames   []string
+	ReturnClassName string
 }
 
 type registeredVirtual struct {
@@ -256,6 +276,10 @@ func RegisterClassMethod(def ClassMethodDef) {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgNames (len %d) must match ArgTypes (len %d) when supplied",
 			len(def.ArgNames), len(def.ArgTypes)))
 	}
+	if def.ArgClassNames != nil && len(def.ArgClassNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgClassNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgClassNames), len(def.ArgTypes)))
+	}
 	if len(def.ArgTypes) > maxMethodArgs {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: too many args (%d > %d)",
 			len(def.ArgTypes), maxMethodArgs))
@@ -283,13 +307,14 @@ func RegisterClassMethod(def ClassMethodDef) {
 	// rule allows us to take their address as a direct call argument.
 	argCount := len(def.ArgTypes)
 	var argTypesPtr, argMetaPtr *C.uint32_t
-	var argNamesPtr *C.GDExtensionConstStringNamePtr
+	var argNamesPtr, argClassNamesPtr *C.GDExtensionConstStringNamePtr
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	if argCount > 0 {
 		argTypes := make([]C.uint32_t, argCount)
 		argMeta := make([]C.uint32_t, argCount)
 		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
+		argClassNames := make([]C.GDExtensionConstStringNamePtr, argCount)
 		for i := range def.ArgTypes {
 			argTypes[i] = C.uint32_t(def.ArgTypes[i])
 			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
@@ -306,10 +331,23 @@ func RegisterClassMethod(def ClassMethodDef) {
 				pinner.Pin(name)
 				argNames[i] = C.GDExtensionConstStringNamePtr(name)
 			}
+			if i < len(def.ArgClassNames) && def.ArgClassNames[i] != "" {
+				cls := InternStringName(def.ArgClassNames[i])
+				pinner.Pin(cls)
+				argClassNames[i] = C.GDExtensionConstStringNamePtr(cls)
+			}
 		}
 		argTypesPtr = &argTypes[0]
 		argMetaPtr = &argMeta[0]
 		argNamesPtr = &argNames[0]
+		argClassNamesPtr = &argClassNames[0]
+	}
+
+	var returnClassName C.GDExtensionConstStringNamePtr
+	if def.HasReturn && def.ReturnClassName != "" {
+		rc := InternStringName(def.ReturnClassName)
+		pinner.Pin(rc)
+		returnClassName = C.GDExtensionConstStringNamePtr(rc)
 	}
 
 	C.godot_go_register_extension_class_method(iface.classdbRegisterExtensionClassMethod,
@@ -326,7 +364,9 @@ func RegisterClassMethod(def ClassMethodDef) {
 		C.uint32_t(argCount),
 		argTypesPtr,
 		argMetaPtr,
-		argNamesPtr)
+		argNamesPtr,
+		argClassNamesPtr,
+		returnClassName)
 }
 
 // ClassPropertyDef registers a property on a previously-registered class.
@@ -359,6 +399,11 @@ type ClassPropertyDef struct {
 	// annotations produce.
 	Hint       PropertyHint
 	HintString string
+	// ClassName qualifies the property's value-type identity for the
+	// editor. "<MainClass>.<EnumName>" for typed-enum int properties so
+	// the inspector renders the typed enum. Empty for plain primitive
+	// properties (Godot ignores it then).
+	ClassName string
 }
 
 // RegisterClassProperty wires a property on an extension class to its
@@ -385,10 +430,21 @@ func RegisterClassProperty(def ClassPropertyDef) {
 
 	hintStr := InternString(def.HintString)
 
+	var valueClassName C.GDExtensionConstStringNamePtr
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	if def.ClassName != "" {
+		cn := InternStringName(def.ClassName)
+		pinner.Pin(cn)
+		valueClassName = C.GDExtensionConstStringNamePtr(cn)
+	}
+
 	C.godot_go_register_extension_class_property(iface.classdbRegisterExtensionClassProperty,
 		C.GDExtensionClassLibraryPtr(iface.library),
 		C.GDExtensionConstStringNamePtr(className),
 		C.GDExtensionStringNamePtr(propertyName),
+		valueClassName,
+		C.GDExtensionConstStringNamePtr(emptyName),
 		C.GDExtensionConstStringNamePtr(setterName),
 		C.GDExtensionConstStringNamePtr(getterName),
 		C.GDExtensionConstStringPtr(hintStr),
@@ -461,6 +517,9 @@ type ClassSignalDef struct {
 	// names show up in the editor's signal-receiver autocomplete and
 	// docs; nil/short slices fall back to anonymous slots.
 	ArgNames []string
+	// ArgClassNames qualifies each arg with a typed-enum identity
+	// ("MyClass.Mode"). Same shape and rules as ClassMethodDef.ArgClassNames.
+	ArgClassNames []string
 }
 
 // RegisterClassSignal adds a signal on an extension class. After this
@@ -479,6 +538,10 @@ func RegisterClassSignal(def ClassSignalDef) {
 		panic(fmt.Sprintf("gdextension.RegisterClassSignal: ArgNames (len %d) must match ArgTypes (len %d) when supplied",
 			len(def.ArgNames), len(def.ArgTypes)))
 	}
+	if def.ArgClassNames != nil && len(def.ArgClassNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassSignal: ArgClassNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgClassNames), len(def.ArgTypes)))
+	}
 	if len(def.ArgTypes) > maxMethodArgs {
 		panic(fmt.Sprintf("gdextension.RegisterClassSignal: too many args (%d > %d)",
 			len(def.ArgTypes), maxMethodArgs))
@@ -491,13 +554,14 @@ func RegisterClassSignal(def ClassSignalDef) {
 
 	argCount := len(def.ArgTypes)
 	var argTypesPtr, argMetaPtr *C.uint32_t
-	var argNamesPtr *C.GDExtensionConstStringNamePtr
+	var argNamesPtr, argClassNamesPtr *C.GDExtensionConstStringNamePtr
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	if argCount > 0 {
 		argTypes := make([]C.uint32_t, argCount)
 		argMeta := make([]C.uint32_t, argCount)
 		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
+		argClassNames := make([]C.GDExtensionConstStringNamePtr, argCount)
 		for i := range def.ArgTypes {
 			argTypes[i] = C.uint32_t(def.ArgTypes[i])
 			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
@@ -509,10 +573,16 @@ func RegisterClassSignal(def ClassSignalDef) {
 				pinner.Pin(name)
 				argNames[i] = C.GDExtensionConstStringNamePtr(name)
 			}
+			if i < len(def.ArgClassNames) && def.ArgClassNames[i] != "" {
+				cls := InternStringName(def.ArgClassNames[i])
+				pinner.Pin(cls)
+				argClassNames[i] = C.GDExtensionConstStringNamePtr(cls)
+			}
 		}
 		argTypesPtr = &argTypes[0]
 		argMetaPtr = &argMeta[0]
 		argNamesPtr = &argNames[0]
+		argClassNamesPtr = &argClassNames[0]
 	}
 
 	C.godot_go_register_extension_class_signal(iface.classdbRegisterExtensionClassSignal,
@@ -524,7 +594,51 @@ func RegisterClassSignal(def ClassSignalDef) {
 		C.uint32_t(argCount),
 		argTypesPtr,
 		argMetaPtr,
-		argNamesPtr)
+		argNamesPtr,
+		argClassNamesPtr)
+}
+
+// ClassIntegerConstantDef registers a single class-scoped integer
+// constant — typically one value of a `@enum` or `@bitfield` Go enum
+// type. The combination of (Class, Enum, Name) is what the editor
+// shows in autocomplete; values registered with the same (Class, Enum)
+// share an enum dropdown, and IsBitfield switches between the
+// dropdown-of-mutually-exclusive form and the bitwise-OR form.
+type ClassIntegerConstantDef struct {
+	Class      string
+	Enum       string
+	Name       string
+	Value      int64
+	IsBitfield bool
+}
+
+// RegisterClassIntegerConstant registers one integer constant on a
+// previously-registered class. Call once per value of a typed enum.
+// Empty Enum is allowed and registers the constant as a bare class
+// constant (no enum grouping); Godot still namespaces it under the
+// class.
+func RegisterClassIntegerConstant(def ClassIntegerConstantDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassIntegerConstant: Class and Name are required")
+	}
+	if iface.classdbRegisterExtensionClassIntegerConstant == nil {
+		// Symbol existed since 4.1 — no realistic version where it's
+		// missing, but guard anyway since loadInterface treats every
+		// resolution as best-effort.
+		return
+	}
+	className := InternStringName(def.Class)
+	enumName := InternStringName(def.Enum)
+	constName := InternStringName(def.Name)
+
+	C.godot_go_register_extension_class_integer_constant(
+		iface.classdbRegisterExtensionClassIntegerConstant,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionConstStringNamePtr(enumName),
+		C.GDExtensionConstStringNamePtr(constName),
+		C.int64_t(def.Value),
+		boolToGD(def.IsBitfield))
 }
 
 // UnregisterClass tears down a previously-registered class. Call from the
@@ -585,17 +699,19 @@ func RegisterClassVirtual(def ClassVirtualDef) {
 	// method as a virtual override (engine treats it as one for caching
 	// and editor display).
 	RegisterClassMethod(ClassMethodDef{
-		Class:          def.Class,
-		Name:           def.Name,
-		Call:           def.Call,
-		PtrCall:        def.PtrCall,
-		Flags:          MethodFlagsDefault | MethodFlagVirtual,
-		HasReturn:      def.HasReturn,
-		ReturnType:     def.ReturnType,
-		ReturnMetadata: def.ReturnMetadata,
-		ArgTypes:       def.ArgTypes,
-		ArgMetadata:    def.ArgMetadata,
-		ArgNames:       def.ArgNames,
+		Class:           def.Class,
+		Name:            def.Name,
+		Call:            def.Call,
+		PtrCall:         def.PtrCall,
+		Flags:           MethodFlagsDefault | MethodFlagVirtual,
+		HasReturn:       def.HasReturn,
+		ReturnType:      def.ReturnType,
+		ReturnMetadata:  def.ReturnMetadata,
+		ArgTypes:        def.ArgTypes,
+		ArgMetadata:     def.ArgMetadata,
+		ArgNames:        def.ArgNames,
+		ArgClassNames:   def.ArgClassNames,
+		ReturnClassName: def.ReturnClassName,
 	})
 }
 

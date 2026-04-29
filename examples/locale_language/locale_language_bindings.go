@@ -91,6 +91,9 @@ func registerLocaleLanguage() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -140,6 +143,9 @@ func registerLocaleLanguage() {
 			gdextension.ArgMetaRealIsFloat,
 		},
 		ArgNames: []string{
+			"",
+		},
+		ArgClassNames: []string{
 			"",
 		},
 	})

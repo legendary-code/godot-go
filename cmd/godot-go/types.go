@@ -25,6 +25,14 @@ type typeInfo struct {
 	VariantType string // bare gdextension.VariantType const name
 	ArgMeta     string // bare gdextension.MethodArgumentMetadata const name
 
+	// EnumName is the bare Go type name (e.g. "Mode") for a user-defined
+	// `type X int` declaration tagged with @enum or @bitfield. Empty for
+	// primitives and untagged user int aliases. Caller qualifies it as
+	// "<MainClass>.<EnumName>" when populating the registration's
+	// class_name field — the editor uses that to render typed-enum
+	// autocomplete instead of plain int.
+	EnumName string
+
 	PtrCallReadArg     func(bindings string, idx int) string
 	PtrCallWriteReturn func(bindings, expr string) string
 	CallReadArg        func(bindings string, idx int) string
@@ -184,9 +192,12 @@ var typeTable = map[string]*typeInfo{
 //
 // User-defined int-backed enums are accepted as if they were int64 over
 // the wire: read with a typed cast on the way in, stored as int64 on the
-// way out. The Godot ABI doesn't carry the typed enum identity so the
-// editor still sees an int and GDScript callers pass plain numbers.
-func resolveType(expr ast.Expr, enums map[string]bool) (*typeInfo, error) {
+// way out. The Godot ABI carries the typed-enum identity through the
+// registration's `class_name` field; resolveType sets EnumName on the
+// returned typeInfo when the enum was declared with @enum or @bitfield
+// so the caller knows to qualify it. Untagged user int aliases come
+// back with EnumName = "" and register as plain int.
+func resolveType(expr ast.Expr, enums map[string]*enumInfo) (*typeInfo, error) {
 	id, ok := expr.(*ast.Ident)
 	if !ok {
 		return nil, fmt.Errorf("unsupported type %T (only primitive and user-enum types are supported)", expr)
@@ -194,8 +205,12 @@ func resolveType(expr ast.Expr, enums map[string]bool) (*typeInfo, error) {
 	if info, ok := typeTable[id.Name]; ok {
 		return info, nil
 	}
-	if enums[id.Name] {
-		return enumTypeInfo(id.Name), nil
+	if e, ok := enums[id.Name]; ok {
+		exposedName := ""
+		if e.IsExposed {
+			exposedName = e.Name
+		}
+		return enumTypeInfo(id.Name, exposedName), nil
 	}
 	return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", id.Name)
 }
@@ -203,10 +218,14 @@ func resolveType(expr ast.Expr, enums map[string]bool) (*typeInfo, error) {
 // enumTypeInfo builds the marshalling helpers for a user int enum. The
 // Godot wire type is int64 (just like `int`), but the user-facing arg /
 // return uses the enum's named type so the generated binding compiles
-// cleanly against the user's source.
-func enumTypeInfo(name string) *typeInfo {
+// cleanly against the user's source. exposedName is the bare enum
+// identifier when the enum carries @enum / @bitfield (so the caller
+// surfaces it as the registration's class_name); empty for untagged
+// user int aliases.
+func enumTypeInfo(name, exposedName string) *typeInfo {
 	return &typeInfo{
 		GoType:      name,
+		EnumName:    exposedName,
 		VariantType: "VariantTypeInt",
 		ArgMeta:     "ArgMetaIntIsInt64",
 		PtrCallReadArg: func(b string, idx int) string {

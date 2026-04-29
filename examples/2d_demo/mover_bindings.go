@@ -108,6 +108,9 @@ func registerMover() {
 		ArgNames: []string{
 			"delta",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -184,6 +187,9 @@ func registerMover() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -240,6 +246,9 @@ func registerMover() {
 		ArgNames: []string{
 			"value",
 		},
+		ArgClassNames: []string{
+			"",
+		},
 	})
 
 	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
@@ -277,6 +286,9 @@ func registerMover() {
 		},
 		ArgNames: []string{
 			"direction",
+		},
+		ArgClassNames: []string{
+			"",
 		},
 	})
 }

@@ -29,9 +29,9 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		return fmt.Errorf("no main class to emit")
 	}
 
-	enumSet := map[string]bool{}
+	enumSet := map[string]*enumInfo{}
 	for _, e := range d.Enums {
-		enumSet[e.Name] = true
+		enumSet[e.Name] = e
 	}
 
 	// Bindings alias: the local name the user's source uses for the
@@ -45,12 +45,12 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		return fmt.Errorf("internal: bindings import %q not in file imports — discover should have rejected this", bindingsImport)
 	}
 
-	supported, needsVariant, err := classifyForEmit(fset, d.MainClass.Methods, enumSet, bindingsAlias)
+	supported, needsVariant, err := classifyForEmit(fset, d.MainClass.Methods, enumSet, bindingsAlias, d.MainClass.Name)
 	if err != nil {
 		return err
 	}
 
-	accessors, propMethods, properties, err := buildEmitProperties(d.MainClass.Properties, enumSet, bindingsAlias)
+	accessors, propMethods, properties, err := buildEmitProperties(d.MainClass.Properties, enumSet, bindingsAlias, d.MainClass.Name)
 	if err != nil {
 		return err
 	}
@@ -59,13 +59,15 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		needsVariant = true
 	}
 
-	signals, err := buildEmitSignals(d.MainClass.Signals, enumSet, bindingsAlias)
+	signals, err := buildEmitSignals(d.MainClass.Signals, enumSet, bindingsAlias, d.MainClass.Name)
 	if err != nil {
 		return err
 	}
 	if len(signals) > 0 {
 		needsVariant = true
 	}
+
+	enums := buildEmitEnums(d.Enums)
 
 	initLevel := "InitLevelScene"
 	if d.MainClass.IsEditor {
@@ -84,6 +86,7 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		Accessors:      accessors,
 		Properties:     properties,
 		Signals:        signals,
+		Enums:          enums,
 		NeedsVariant:   needsVariant,
 		BindingsImport: bindingsImport,
 		BindingsAlias:  bindingsAlias,
@@ -113,6 +116,7 @@ type emitData struct {
 	Accessors    []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
 	Properties   []emitProperty // RegisterClassProperty calls (one per @property, both forms)
 	Signals      []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
+	Enums        []emitEnum     // @enum / @bitfield-tagged user enums to register as class-scoped integer constants
 	NeedsVariant bool           // any method touches a primitive (gates the bindings-package import)
 
 	// BindingsImport / BindingsAlias identify the user's bindings
@@ -139,10 +143,12 @@ type emitSignal struct {
 	// Registration metadata — parallel to ArgTypes / ArgMetadata on
 	// emitMethod so RegisterClassSignal sees the same shape. ArgNames
 	// carries the source-level identifier per arg; quoted as a Go string
-	// literal in the template.
-	ArgTypes []string
-	ArgMetas []string
-	ArgNames []string
+	// literal in the template. ArgClassNames carries typed-enum identities
+	// the same way (empty for primitives / untagged ints).
+	ArgTypes      []string
+	ArgMetas      []string
+	ArgNames      []string
+	ArgClassNames []string
 }
 
 type emitSignalArg struct {
@@ -166,11 +172,29 @@ type emitAccessor struct {
 	IsSetter bool
 }
 
+// emitEnum carries one user-defined int enum tagged @enum or
+// @bitfield. Each value gets a RegisterClassIntegerConstant call at
+// SCENE init so the editor recognizes the typed-enum identity that
+// the method/property/signal registrations reference via their
+// ArgClassNames / ReturnClassName / ClassName fields.
+type emitEnum struct {
+	GoName     string // bare Go type identifier (e.g. "Mode")
+	IsBitfield bool   // @bitfield instead of @enum — registers with is_bitfield=true
+	Values     []emitEnumValue
+}
+
+type emitEnumValue struct {
+	GoName    string // Go const identifier (e.g. "ModeIdle")
+	GodotName string // SCREAMING_SNAKE form Godot expects (e.g. "IDLE", prefix stripped)
+	Value     int64  // the int value the Go const evaluates to (resolved by go/types)
+}
+
 // emitProperty is one RegisterClassProperty literal. Setter is empty for
 // read-only properties.
 type emitProperty struct {
 	GodotName string // snake_case property name as Godot sees it
 	Type      string // bare const name, e.g. "VariantTypeInt"
+	ClassName string // typed-enum identity ("<MainClass>.<EnumName>") or empty
 	Setter    string // snake_case setter method name (empty for read-only)
 	Getter    string // snake_case getter method name (always set)
 
@@ -220,6 +244,12 @@ type emitMethod struct {
 	// RegisterClassMethod ArgNames field; safeIdent runs on them upstream
 	// so reserved Go keywords don't collide with locals.
 	ArgNames []string
+	// ArgClassNames carries the typed-enum identity for each arg
+	// (parallel to ArgTypes). "<MainClass>.<EnumName>" for @enum/@bitfield
+	// types; empty otherwise. ReturnClassName is the same for the return
+	// type. Empty entries register as untyped — fine for primitives.
+	ArgClassNames   []string
+	ReturnClassName string
 
 	// HasArgs is true when len(ArgTypes) > 0 — the template uses this to
 	// decide whether to render the ArgTypes / ArgMetadata slice fields
@@ -254,11 +284,11 @@ type emitMethod struct {
 // types declared in the same file. `bindings` is the local alias the
 // user's source uses for the bindings package; it qualifies every
 // VariantAs* / VariantSet* call in the rendered fragments.
-func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]bool, bindings string) ([]emitMethod, bool, error) {
+func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]*enumInfo, bindings, mainClass string) ([]emitMethod, bool, error) {
 	var out []emitMethod
 	needsVariant := false
 	for _, m := range methods {
-		em, err := buildEmitMethod(m, enums, bindings)
+		em, err := buildEmitMethod(m, enums, bindings, mainClass)
 		if err != nil {
 			return nil, false, fmt.Errorf("%s: %s: %w", posStr(fset, m.Pos), m.GoName, err)
 		}
@@ -273,7 +303,7 @@ func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[strin
 // buildEmitMethod resolves arg / return types via the type table and
 // pre-renders the marshalling fragments. The caller is responsible for
 // rejecting non-instance method kinds before calling.
-func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emitMethod, error) {
+func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainClass string) (emitMethod, error) {
 	em := emitMethod{
 		GoName:    m.GoName,
 		GodotName: m.GodotName,
@@ -311,6 +341,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emi
 				}
 			}
 			em.ArgNames = append(em.ArgNames, argName)
+			em.ArgClassNames = append(em.ArgClassNames, qualifyEnum(mainClass, info.EnumName))
 			idx++
 		}
 	}
@@ -343,6 +374,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emi
 		em.HasReturn = true
 		em.ReturnType = info.VariantType
 		em.ReturnMeta = info.ArgMeta
+		em.ReturnClassName = qualifyEnum(mainClass, info.EnumName)
 		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
 		em.CallReturn = info.CallWriteReturn(bindings, "result")
 	default:
@@ -350,6 +382,65 @@ func buildEmitMethod(m *methodInfo, enums map[string]bool, bindings string) (emi
 	}
 
 	return em, nil
+}
+
+// qualifyEnum joins the main class and an exposed enum name so the
+// resulting "<Class>.<Enum>" matches what RegisterClassIntegerConstant
+// uses for its (Class, Enum) registrations — that's the identity the
+// editor's autocomplete resolves against. Empty enum names (the common
+// primitive case) come back as empty so the registration's class_name
+// field stays empty and the editor treats the slot as untyped.
+func qualifyEnum(mainClass, enumName string) string {
+	if enumName == "" {
+		return ""
+	}
+	return mainClass + "." + enumName
+}
+
+// godotEnumValueName converts a Go enum-constant identifier to the
+// SCREAMING_SNAKE form Godot expects on registered class-scoped enum
+// values. When the Go constant carries the enum's type as a prefix
+// (e.g. `LanguageEnglish` under `type Language int`), the prefix is
+// stripped so GDScript callers write `Language.ENGLISH`, not
+// `Language.LANGUAGE_ENGLISH`. Constants without the prefix
+// (`Idle` under `type Mode int`) pass through with just the
+// SCREAMING_SNAKE conversion (`IDLE`).
+func godotEnumValueName(enumType, valueName string) string {
+	v := valueName
+	if strings.HasPrefix(v, enumType) && len(v) > len(enumType) {
+		v = v[len(enumType):]
+	}
+	return strings.ToUpper(naming.PascalToSnake(v))
+}
+
+// buildEmitEnums filters discovered user-int types down to those tagged
+// @enum or @bitfield, converts each value's Go identifier to the
+// SCREAMING_SNAKE form Godot expects (with type-prefix stripping), and
+// returns the slice the template uses to emit one
+// RegisterClassIntegerConstant call per value.
+func buildEmitEnums(enums []*enumInfo) []emitEnum {
+	if len(enums) == 0 {
+		return nil
+	}
+	out := make([]emitEnum, 0, len(enums))
+	for _, e := range enums {
+		if !e.IsExposed {
+			continue
+		}
+		ee := emitEnum{
+			GoName:     e.Name,
+			IsBitfield: e.IsBitfield,
+		}
+		for _, v := range e.Values {
+			ee.Values = append(ee.Values, emitEnumValue{
+				GoName:    v.Name,
+				GodotName: godotEnumValueName(e.Name, v.Name),
+				Value:     v.Value,
+			})
+		}
+		out = append(out, ee)
+	}
+	return out
 }
 
 // localNameFor returns the local alias for an import path in the user's
@@ -376,7 +467,7 @@ func localNameFor(imports map[string]string, path string) string {
 // Method-form properties contribute a property entry only — the user's
 // Get/Set methods already live in the source file and were classified by
 // classifyForEmit upstream.
-func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings string) (
+func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bindings, mainClass string) (
 	accessors []emitAccessor,
 	methods []emitMethod,
 	out []emitProperty,
@@ -404,6 +495,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings 
 		entry := emitProperty{
 			GodotName:  propGodotName,
 			Type:       info.VariantType,
+			ClassName:  qualifyEnum(mainClass, info.EnumName),
 			Getter:     getterGodotName,
 			Hint:       p.Hint,
 			HintString: p.HintString,
@@ -440,7 +532,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings 
 			Field:  p.Name,
 			GoType: info.GoType,
 		})
-		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info, bindings))
+		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info, bindings, mainClass))
 
 		if p.ReadOnly {
 			continue
@@ -451,7 +543,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings 
 			GoType:   info.GoType,
 			IsSetter: true,
 		})
-		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info, bindings))
+		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info, bindings, mainClass))
 	}
 	return accessors, methods, out, nil
 }
@@ -470,7 +562,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]bool, bindings 
 // methods. We do NOT register it with ClassDB; GDScript callers use the
 // standard `emit_signal("name", args...)` to trigger emission from
 // outside the class, matching Godot's idiomatic model.
-func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings string) ([]emitSignal, error) {
+func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, bindings, mainClass string) ([]emitSignal, error) {
 	if len(signals) == 0 {
 		return nil, nil
 	}
@@ -506,6 +598,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings str
 				es.ArgTypes = append(es.ArgTypes, info.VariantType)
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
 				es.ArgNames = append(es.ArgNames, registeredName)
+				es.ArgClassNames = append(es.ArgClassNames, qualifyEnum(mainClass, info.EnumName))
 				idx++
 			}
 		}
@@ -519,21 +612,22 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]bool, bindings str
 // Dispatch uses the same `result := self.<GoName>()` shape the template
 // already emits — the synthesized Go method we render alongside is what
 // closes the loop.
-func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings string) emitMethod {
+func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string) emitMethod {
 	return emitMethod{
-		GoName:        goName,
-		GodotName:     godotName,
-		HasReturn:     true,
-		ReturnType:    info.VariantType,
-		ReturnMeta:    info.ArgMeta,
-		PtrCallReturn: info.PtrCallWriteReturn(bindings, "result"),
-		CallReturn:    info.CallWriteReturn(bindings, "result"),
+		GoName:          goName,
+		GodotName:       godotName,
+		HasReturn:       true,
+		ReturnType:      info.VariantType,
+		ReturnMeta:      info.ArgMeta,
+		ReturnClassName: qualifyEnum(mainClass, info.EnumName),
+		PtrCallReturn:   info.PtrCallWriteReturn(bindings, "result"),
+		CallReturn:      info.CallWriteReturn(bindings, "result"),
 	}
 }
 
 // syntheticSetterMethod hand-builds an emitMethod equivalent to
 // `func (n *T) Set<Name>(v <Type>)` — one arg, no return.
-func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings string) emitMethod {
+func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string) emitMethod {
 	return emitMethod{
 		GoName:          goName,
 		GodotName:       godotName,
@@ -546,7 +640,8 @@ func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings st
 		// Synthesized field-form setters take a single argument; "value"
 		// is the conventional name and matches how Godot's own
 		// PropertyInfo entries label property setter parameters in docs.
-		ArgNames: []string{"value"},
+		ArgNames:      []string{"value"},
+		ArgClassNames: []string{qualifyEnum(mainClass, info.EnumName)},
 	}
 }
 
@@ -705,6 +800,9 @@ func register{{.Class}}() {
 		HasReturn:      true,
 		ReturnType:     gdextension.{{.ReturnType}},
 		ReturnMetadata: gdextension.{{.ReturnMeta}},
+		{{- if .ReturnClassName}}
+		ReturnClassName: {{printf "%q" .ReturnClassName}},
+		{{- end}}
 		{{- end}}
 		{{- if .HasArgs}}
 		ArgTypes: []gdextension.VariantType{
@@ -719,6 +817,11 @@ func register{{.Class}}() {
 		},
 		ArgNames: []string{
 			{{- range .ArgNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
+		ArgClassNames: []string{
+			{{- range .ArgClassNames}}
 			{{printf "%q" .}},
 			{{- end}}
 		},
@@ -776,6 +879,9 @@ func register{{.Class}}() {
 		HasReturn:      true,
 		ReturnType:     gdextension.{{.ReturnType}},
 		ReturnMetadata: gdextension.{{.ReturnMeta}},
+		{{- if .ReturnClassName}}
+		ReturnClassName: {{printf "%q" .ReturnClassName}},
+		{{- end}}
 		{{- end}}
 		{{- if .HasArgs}}
 		ArgTypes: []gdextension.VariantType{
@@ -790,6 +896,11 @@ func register{{.Class}}() {
 		},
 		ArgNames: []string{
 			{{- range .ArgNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
+		ArgClassNames: []string{
+			{{- range .ArgClassNames}}
 			{{printf "%q" .}},
 			{{- end}}
 		},
@@ -817,6 +928,9 @@ func register{{.Class}}() {
 		Class:  "{{$.Class}}",
 		Name:   "{{.GodotName}}",
 		Type:   gdextension.{{.Type}},
+		{{- if .ClassName}}
+		ClassName: {{printf "%q" .ClassName}},
+		{{- end}}
 		{{- if .Setter}}
 		Setter: "{{.Setter}}",
 		{{- end}}
@@ -849,8 +963,28 @@ func register{{.Class}}() {
 			{{printf "%q" .}},
 			{{- end}}
 		},
+		ArgClassNames: []string{
+			{{- range .ArgClassNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
 		{{- end}}
 	})
+{{end}}
+{{- range .Enums}}
+	{{- $enumName := .GoName}}
+	{{- $isBitfield := .IsBitfield}}
+	{{- range .Values}}
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "{{$.Class}}",
+		Enum:  "{{$enumName}}",
+		Name:  "{{.GodotName}}",
+		Value: {{.Value}},
+		{{- if $isBitfield}}
+		IsBitfield: true,
+		{{- end}}
+	})
+	{{- end}}
 {{end}}}
 
 func init() {

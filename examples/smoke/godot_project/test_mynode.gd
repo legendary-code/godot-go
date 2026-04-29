@@ -160,6 +160,28 @@ func _initialize() -> void:
 	_check("damaged(amount) arg[0].name == 'amount'", signal_args["damaged"][0]["name"], "amount")
 	_check("tagged(label) arg[0].name == 'label'", signal_args["tagged"][0]["name"], "label")
 
+	# PLAN3 Phase B: typed enums (@enum / @bitfield). The Stance and
+	# AbilityFlags Go types register as class-scoped enums; each value
+	# becomes a class integer constant; method args / returns of the
+	# typed type carry "MyNode.Stance" as their class_name so the editor
+	# treats them as the typed enum. ClassDB.class_get_integer_constant
+	# resolves the registered values; class_get_method_list args carry
+	# class_name on each PropertyInfo entry.
+	_check("Stance.NEUTRAL == 0",   ClassDB.class_get_integer_constant("MyNode", "NEUTRAL"),   0)
+	_check("Stance.OFFENSIVE == 1", ClassDB.class_get_integer_constant("MyNode", "OFFENSIVE"), 1)
+	_check("Stance.DEFENSIVE == 2", ClassDB.class_get_integer_constant("MyNode", "DEFENSIVE"), 2)
+	_check("AbilityFlags.FLY == 1",   ClassDB.class_get_integer_constant("MyNode", "FLY"),   1)
+	_check("AbilityFlags.SWIM == 2",  ClassDB.class_get_integer_constant("MyNode", "SWIM"),  2)
+	_check("AbilityFlags.CLIMB == 4", ClassDB.class_get_integer_constant("MyNode", "CLIMB"), 4)
+
+	# Typed-enum class_name surfacing on method args / returns.
+	_check("set_stance(stance: MyNode.Stance) arg[0].class_name",
+		method_args["set_stance"][0]["class_name"], &"MyNode.Stance")
+	_check("current_stance() return.class_name",
+		ClassDB.class_get_method_list("MyNode")
+			.filter(func(m: Dictionary) -> bool: return m["name"] == "current_stance")[0]["return"]["class_name"],
+		&"MyNode.Stance")
+
 	n.free()
 
 	if _failed == 0:

@@ -203,7 +203,9 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata,
-                                              const GDExtensionConstStringNamePtr *arg_names);
+                                              const GDExtensionConstStringNamePtr *arg_names,
+                                              const GDExtensionConstStringNamePtr *arg_class_names,
+                                              GDExtensionConstStringNamePtr return_class_name);
 
 /* Property registration. Mirrors classdb_register_extension_class_property —
  * the engine wires (class, property_name) → (setter_method, getter_method)
@@ -222,6 +224,8 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionClassLibraryPtr p_library,
                                                 GDExtensionConstStringNamePtr p_class_name,
                                                 GDExtensionStringNamePtr p_property_name,
+                                                GDExtensionConstStringNamePtr p_value_class_name,
+                                                GDExtensionConstStringNamePtr p_empty_string_name,
                                                 GDExtensionConstStringNamePtr p_setter,
                                                 GDExtensionConstStringNamePtr p_getter,
                                                 GDExtensionConstStringPtr hint_string,
@@ -258,6 +262,18 @@ void godot_go_register_extension_class_signal(GDExtensionInterfaceClassdbRegiste
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata,
-                                              const GDExtensionConstStringNamePtr *arg_names);
+                                              const GDExtensionConstStringNamePtr *arg_names,
+                                              const GDExtensionConstStringNamePtr *arg_class_names);
+
+/* Class-scoped integer-constant registration. Called once per value of
+ * an @enum / @bitfield-tagged user int type so the editor recognizes
+ * the typed enum. p_is_bitfield distinguishes the bitwise-OR variant. */
+void godot_go_register_extension_class_integer_constant(GDExtensionInterfaceClassdbRegisterExtensionClassIntegerConstant fn,
+                                                         GDExtensionClassLibraryPtr p_library,
+                                                         GDExtensionConstStringNamePtr p_class_name,
+                                                         GDExtensionConstStringNamePtr p_enum_name,
+                                                         GDExtensionConstStringNamePtr p_constant_name,
+                                                         int64_t p_constant_value,
+                                                         GDExtensionBool p_is_bitfield);
 
 #endif /* GODOT_GO_SHIM_H */
