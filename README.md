@@ -2,9 +2,43 @@
 
 [![CI](https://github.com/legendary-code/godot-go/actions/workflows/ci.yml/badge.svg)](https://github.com/legendary-code/godot-go/actions/workflows/ci.yml)
 
-A Go framework for writing [Godot 4](https://godotengine.org/)
-GDExtensions. Define your engine classes as plain Go structs; a code
-generator turns doc-tagged declarations into the C ABI Godot expects.
+Write [Godot 4](https://godotengine.org/) extensions in idiomatic Go.
+Define your engine classes as plain structs, mark behaviour with
+doc-comment tags, and a code generator turns them into the C ABI
+Godot expects.
+
+---
+
+## Overview
+
+godot-go is a framework for authoring [GDExtensions](https://docs.godotengine.org/en/stable/tutorials/scripting/gdextension/index.html)
+in Go. Your project ships as a c-shared library that Godot loads
+alongside your `.gdextension` config — the same deployment model
+GDScript or godot-cpp users are used to.
+
+The framework has two halves:
+
+- **`gdextension/`** — the cgo bridge to Godot's GDExtension ABI.
+  Hand-written, version-aware, the part most users never look at.
+- **`cmd/godot-go-bindgen/` and `cmd/godot-go/`** — two code
+  generators. The first produces the Godot bindings package
+  (engine classes, builtins, enums, utility functions) from
+  `extension_api.json`. The second turns your doc-tagged Go classes
+  into the registration glue Godot's ClassDB needs.
+
+The bindings aren't pre-generated. Each project picks its target
+Godot version (4.4, 4.5, or 4.6), drops the matching
+`extension_api.json` into a `godot/` directory, and runs
+`go generate`. The framework's tests run against all three versions
+on Linux, macOS, and Windows.
+
+If your team's workflow centers on the Godot editor and you want to
+deploy as a normal `.gdextension`, godot-go is the closer match to
+GDScript. If you want a Go binary that owns the process and uses
+Godot as a library, look at [graphics.gd](#comparison-with-graphicsgd)
+instead.
+
+## A taste
 
 ```go
 package main
@@ -12,8 +46,8 @@ package main
 //go:generate godot-go
 
 import (
-    "github.com/legendary-code/godot-go/godot"
-    "github.com/legendary-code/godot-go/godot/runtime"
+    "github.com/yourname/yourproject/godot"
+    "github.com/yourname/yourproject/godot/runtime"
 )
 
 // Player is exposed to Godot as a `Player` Node.
@@ -46,208 +80,241 @@ func (p *Player) TakeDamage(amount int64) {
 }
 ```
 
-`go generate` produces a sibling `<file>_bindings.go` that registers
-the class, its property (with the slider hint Godot's inspector
-shows), the signal, the virtual override, and the regular method.
-The user's source above is the entire ergonomic surface.
+Running `go generate` produces a sibling `<file>_bindings.go` that
+registers the class, the property (with the slider hint Godot's
+inspector shows), the signal, the `_process` virtual override, and
+`take_damage` as a regular method. The source above is the entire
+ergonomic surface — no boilerplate.
 
-## What's supported
-
-- Class registration with `@abstract`, `@editor`, and inner-class
-  declarations.
-- Method binding for primitive types (`bool`, `int`/`int32`/`int64`,
-  `float32`/`float64`, `string`) and user-defined int enums.
-- Static methods (unnamed receiver), virtual overrides (`@override`),
-  and regular instance methods.
-- Properties via `@property`/`@readonly`, both field-form (codegen
-  synthesizes getter/setter) and method-form (user owns getter and
-  optional setter).
-- Property inspector polish — `@group`/`@subgroup`,
-  `@export_range`/`@export_enum`/`@export_file`/`@export_dir`/
-  `@export_multiline`/`@export_placeholder`.
-- Signals via a `@signals`-tagged interface — codegen synthesizes
-  typed Go-side emit methods; emission from outside the class uses
-  Godot's standard Signal API.
-- Goroutine ↔ main-thread bridge: `runtime.IsMainThread()`,
-  `runtime.RunOnMain(f)`, `runtime.DrainMain()`.
-- Editor-mode detection: `runtime.IsEditorHint()`.
-- Automatic refcount management for `RefCounted`-derived classes
-  (`Resource`, `Image`, `RegEx`, ...) via Go finalizers — drop the
-  Go reference and the engine cleanup happens automatically. See
-  [`docs/lifecycle.md`](./docs/lifecycle.md).
-
-## Known limitations
-
-- **Hot-reload** of extensions doesn't work because Go's runtime
-  can't be cleanly unloaded; restart Godot to apply code changes.
-  See [`docs/hot-reload.md`](./docs/hot-reload.md) for the full
-  explanation and recommended dev loop.
-- **Property hint coverage** — the seven most-used `PropertyHint`
-  values are wired (RANGE, ENUM, FILE, DIR, MULTILINE_TEXT,
-  PLACEHOLDER_TEXT, plus default NONE). LAYERS_*, RESOURCE_TYPE,
-  COLOR_NO_ALPHA, FLAGS, etc. aren't reachable from doctags yet.
-- **Method-form `@property`** doesn't accept export hints (those
-  are field-form only in the current release).
-
-## Quickstart
+## Install
 
 ### Prerequisites
 
-- **Go 1.26+** (the project's `go.mod` pins 1.26.1).
-- **Godot 4.6** to load the resulting extension.
-- A **C toolchain reachable by cgo**: MinGW-w64 on Windows, the
+- **Go 1.26+** (the module's `go.mod` pins 1.26.1).
+- **Godot 4.4, 4.5, or 4.6.** The framework's CI matrix exercises
+  all three on Linux, macOS, and Windows.
+- **A C toolchain reachable by cgo.** MinGW-w64 on Windows; the
   standard clang/gcc on macOS / Linux.
-- [`go-task`](https://taskfile.dev) v3 for the build orchestration
-  (optional — `go build` works directly too).
+- **[`go-task`](https://taskfile.dev) v3** for the build orchestration
+  (optional — `go build` works directly).
 
-### Build the smoke example
+### Add the framework to your project
 
-The repo ships with a smoke test that exercises every feature:
-
-```sh
-task build:example
-```
-
-This produces `examples/smoke/godot_project/bin/godot_go_smoke.dll`
-(or `.so` / `.dylib`).
-
-### Run it headless
-
-The first time, import the project so Godot recognizes the
-`.gdextension`:
+In a fresh project:
 
 ```sh
-godot --headless --editor --path examples/smoke/godot_project --quit-after 5
+go mod init github.com/yourname/yourproject
+go get github.com/legendary-code/godot-go
+go install github.com/legendary-code/godot-go/cmd/godot-go
 ```
 
-(One-shot. Creates `examples/smoke/godot_project/.godot/`. Skip on
-subsequent runs.)
+`go get` adds the framework to your `go.mod`. `go install`
+installs the `godot-go` binary on `$PATH` so the
+`//go:generate godot-go` directive in your extension source can
+find it (the bindgen, by contrast, is invoked via `go run` from
+the `godot/generate_bindings.go` trigger — no separate install).
 
-Then the verification script:
+## Generate the bindings
+
+The framework ships no pre-generated bindings — your project pins
+the Godot version it targets and the bindgen stamps out the
+matching package.
+
+Inside your project, create a `godot/` directory with two files:
+
+```
+godot/
+├── extension_api.json     # the API dump for your target Godot version
+└── generate_bindings.go   # //go:generate trigger for the bindgen
+```
+
+`generate_bindings.go`:
+
+```go
+package godot
+
+//go:generate go run github.com/legendary-code/godot-go/cmd/godot-go-bindgen -api ./extension_api.json
+```
+
+For `extension_api.json`, either dump it from your local Godot
+binary:
 
 ```sh
-godot --headless --path examples/smoke/godot_project --script test_mynode.gd
+godot --headless --dump-extension-api
 ```
 
-Expect `test_mynode: ALL CHECKS PASSED` near the end.
+…or grab it from [godot-cpp's version branches](https://github.com/godotengine/godot-cpp/branches)
+— they keep one JSON per Godot release at `gdextension/extension_api.json`
+on the `4.4`, `4.5`, `4.6` branches.
 
-### Run the Go test suite
+Then generate:
 
 ```sh
-task test
-# or:
-go test ./...
+go generate ./godot/...
 ```
 
-## Authoring a new extension
+This produces ~1100 `*.gen.go` files in `godot/` plus a tiny
+`godot/runtime/` sub-package with user-facing helpers
+(`IsEditorHint`, `Print`, `RunOnMain`, …). Don't commit the
+generated files — they're reproducible from the JSON. Add to
+`.gitignore`:
 
-The framework's bindings are generated against the version of Godot
-*you* target — not pinned by the framework. The full setup is in
-[`docs/setup.md`](./docs/setup.md); the short version:
+```
+godot/**/*.gen.go
+godot/runtime/
+```
 
-1. Create the bindings package once. Drop a `godot/` directory into
-   your project, copy in your Godot's `extension_api.json` (produced
-   by `godot --headless --dump-extension-api`), and add a setup
-   file that triggers the bindgen:
+[`docs/setup.md`](./docs/setup.md) covers the full setup — multi-
+version targeting, version-drift detection, build orchestration via
+Taskfile.
 
-   ```go
-   // godot/generate_bindings.go
-   package godot
+## Start a project
 
-   //go:generate go run github.com/legendary-code/godot-go/cmd/godot-go-bindgen -api ./extension_api.json
-   ```
+Once the bindings are in place, your extension is plain Go. A
+minimal example:
 
-   `go generate ./godot/...` then stamps out the bindings into the
-   same package — engine classes, builtins, enums, utility
-   functions, plus a `godot/runtime` sub-package with
-   `IsEditorHint`, `Print`, `RunOnMain`, etc.
+```go
+// hello.go
+package main
 
-2. Author your extension class in any other directory. Embed
-   `godot.Node` (or any other engine class), add
-   `//go:generate godot-go` for the user-class codegen, run
-   `go generate ./...` to produce `<file>_bindings.go`.
+//go:generate godot-go
 
-3. Build with `go build -buildmode=c-shared -o yourext.dll ./yourpkg`
-   and drop the resulting library + a `.gdextension` config file
-   into your Godot project.
+import (
+    "github.com/yourname/yourproject/godot"
+    "github.com/yourname/yourproject/godot/runtime"
+)
 
-The `examples/smoke/` and `examples/locale_language/` directories
-are working references — copy from there.
+// @class
+type Hello struct {
+    // @extends
+    godot.Node
+}
+
+func (h *Hello) Greet() {
+    runtime.Print("hello from Go")
+}
+```
+
+Build:
+
+```sh
+go generate ./...
+# Pick the extension your platform loads:
+#   Linux   → hello.so
+#   macOS   → hello.dylib
+#   Windows → hello.dll
+go build -buildmode=c-shared -o hello.so ./yourpkg
+```
+
+Drop the resulting library plus a small `.gdextension` config into
+your Godot project, and from GDScript:
+
+```gdscript
+var h = Hello.new()
+h.greet()  # prints "hello from Go" to the Output dock
+```
+
+[`examples/smoke/`](./examples/smoke/) and
+[`examples/locale_language/`](./examples/locale_language/) are the
+working references — `examples/2d_demo/` adds a Node2D subclass
+with property + signal + virtual override that actually moves a
+sprite around. Copy from any of them.
+
+## Reference
+
+[**`docs/reference.md`**](./docs/reference.md) is the comprehensive
+reference for everything the framework exposes:
+
+- [Doc tag reference](./docs/reference.md#doc-tags) — every
+  recognized tag, organized by what kind of declaration it applies
+  to (struct / field / method / interface) with a one-line
+  semantics summary and a minimal example.
+- [Feature reference](./docs/reference.md#features) — class
+  registration, methods, properties, signals, virtuals, runtime
+  helpers, refcounted lifecycle.
+- [Type support](./docs/reference.md#supported-types) — what Go
+  types are valid for method args / returns / properties / signal
+  parameters.
+- [Multi-version targeting](./docs/reference.md#multi-version-targeting)
+  — which symbols differ between 4.4 / 4.5 / 4.6 and how the
+  framework handles fallback.
 
 ## Documentation
 
-- [`docs/setup.md`](./docs/setup.md) — full walkthrough of setting
-  up a new project: `godot/` directory layout, `extension_api.json`
-  pinning, version drift behavior, multi-version targeting.
+- [`docs/setup.md`](./docs/setup.md) — full project setup: `godot/`
+  layout, `extension_api.json` pinning, version drift, multi-
+  version targeting, build orchestration patterns.
 - [`docs/threading.md`](./docs/threading.md) — goroutines and
-  Godot's main thread; `RunOnMain` / `DrainMain`.
-- [`docs/lifecycle.md`](./docs/lifecycle.md) — how the framework
-  handles refcounted resources (`Resource`, `Image`, `RegEx`, ...)
-  via Go finalizers, and when you'd reach for explicit
-  `Unreference`.
+  Godot's main thread; `RunOnMain` / `DrainMain` semantics.
+- [`docs/lifecycle.md`](./docs/lifecycle.md) — refcounted resources
+  (`Resource`, `Image`, `RegEx`, …) and the Go-finalizer cleanup
+  path; when explicit `Unreference` is needed.
 - [`docs/hot-reload.md`](./docs/hot-reload.md) — why hot-reload of
-  Go extensions doesn't work, and what dev workflow does.
+  Go extensions doesn't work, and what a productive edit-build-run
+  loop looks like.
 
-## How it works
-
-Two code generators live under `cmd/`:
-
-- **`cmd/godot-go-bindgen`** — run from your project's `godot/`
-  setup file via `go generate`. Reads `extension_api.json` and
-  emits the bindings package: engine classes, builtins, global
-  enums, utility functions, native structures, plus a sibling
-  `godot/runtime/` sub-package with `IsEditorHint` / `Print` /
-  `RunOnMain` / etc.
-
-- **`cmd/godot-go`** — the user-class codegen invoked by
-  `//go:generate godot-go`. Reads doc-tagged Go source, validates
-  it, and emits a `<file>_bindings.go` containing the cgo
-  trampolines, `RegisterClass*` calls, and any synthesized
-  accessor / emit methods.
-
-The runtime layer `gdextension/` wraps the GDExtension C ABI; the
-generated `godot/runtime/` provides user-level conveniences
-(`Print` / `Printf`, `IsEditorHint`, `RunOnMain`, etc.).
-
-## Build configuration
-
-godot-go targets the **single-precision** Godot build by default
-(`extension_api.json`'s `float_32` configuration). To target a
-double-precision Godot build, add `-tags godot_double_precision` to
-your `go build` invocation. Mixed-precision binaries are not
-supported — the host Godot must match the build tag.
-
-## Common commands
-
-```sh
-task                          # list all targets
-task generate:bindings        # regenerate godot/ from extension_api.json
-task build:example            # build the smoke c-shared library
-task build:locale_language    # build the locale_language showcase
-task test                     # run the Go test suite (regenerates bindings first)
-```
-
-## Comparison with other Go-Godot projects
+## Comparison with graphics.gd
 
 [graphics.gd](https://github.com/quaadgras/graphics.gd) is the
 sibling project. The architectural difference is who owns the
 process:
 
-- **godot-go**: Godot loads the extension as a c-shared DLL.
+- **godot-go**: Godot loads the extension as a c-shared library.
   Production ships a `.gdextension` package alongside your Godot
   project. Familiar deployment model; easy editor integration.
-  Cost: no hot-reload (Go runtime can't be unloaded).
+  Cost: no hot-reload (Go runtime can't be cleanly unloaded).
 - **graphics.gd**: a Go binary loads `libgodot` itself. Production
   ships a Go executable that bundles the engine. Different
   deployment story; supports more flexible reload patterns.
 
-If you're writing a tool or game where deploying as a `.gdextension`
-fits naturally — particularly if your team's workflow centers on the
-Godot editor — godot-go is the closer match. If you want Go to
-own the process and use Godot as a renderer/scene library, look at
-graphics.gd.
+Pick godot-go if you want the GDScript-style workflow — author in
+Godot's editor, drop a c-shared library next to your project,
+deploy through Godot's export pipeline. Pick graphics.gd if Go
+should drive the process and Godot is more of a renderer/scene
+library.
+
+## Known limitations
+
+- **Hot-reload doesn't work.** Go's runtime can't be cleanly
+  unloaded, so editing the extension requires restarting Godot.
+  See [`docs/hot-reload.md`](./docs/hot-reload.md) for the full
+  explanation and the recommended dev loop.
+- **PropertyHint coverage is partial.** The seven most-used hint
+  values are wired (`RANGE`, `ENUM`, `FILE`, `DIR`,
+  `MULTILINE_TEXT`, `PLACEHOLDER_TEXT`, plus default `NONE`).
+  `LAYERS_*`, `RESOURCE_TYPE`, `COLOR_NO_ALPHA`, `FLAGS`, etc.
+  aren't reachable from doctags yet.
+- **Method-form `@property` doesn't accept export hints.** Hints
+  are field-form only in the current release.
+- **Method args/returns are restricted to primitives + user int
+  enums.** `Vector2`, `Array`, engine-class pointers, etc. work
+  fine when calling INTO Godot from your extension code, but you
+  can't yet declare them as parameter types on a `@class` method
+  that GDScript calls. See the
+  [type-support reference](./docs/reference.md#supported-types).
 
 ## Contributing
 
-Open an issue or PR. Changes are easiest to review when scoped to
-one feature or fix at a time.
+Issues and pull requests welcome. Changes are easiest to review
+when scoped to one feature or fix per PR.
+
+A few conventions that keep the tree predictable:
+
+- **Generated files (`*.gen.go`) are not committed.** The bindgen
+  reproduces them from `extension_api.json` on every CI run.
+- **CI runs the full matrix on every push** — three OS × three
+  Godot versions = nine cells. A red cell blocks the merge; the
+  workflow file is at
+  [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+- **Examples are integration tests too.** Each `examples/*/` ships
+  a `test_*.gd` script that exercises the extension end-to-end;
+  CI runs them headlessly. New features should add an assertion
+  in whichever example surfaces them.
+- **Doctag changes need to land in the reference.** If you add or
+  rename a tag, update [`docs/reference.md`](./docs/reference.md)
+  in the same PR — that's the user-facing source of truth.
+
+`task --list` shows the available development tasks. The most
+common are `task generate:bindings`, `task build:example`, and
+`task test`. `task clean` wipes generated artifacts when you want
+a fresh state.
