@@ -143,14 +143,18 @@ func runSmokeChecks() {
 	check("godot.SideRight == 2", int64(godot.SideRight) == 2, int64(godot.SideRight), int64(2))
 	check("godot.Ok == 0", int64(godot.Ok) == 0, int64(godot.Ok), int64(0))
 
-	// runtime.IsEditorHint() — wraps Engine.is_editor_hint(). In a
-	// headless game-mode run (no --editor), the engine reports false.
-	// Just confirms the helper resolves the singleton and ptrcalls
-	// through cleanly; the real `true` branch only fires when running
-	// inside the editor.
-	check("runtime.IsEditorHint() == false (headless)",
-		runtime.IsEditorHint() == false,
-		runtime.IsEditorHint(), false)
+	// runtime.IsEditorHint() — wraps Engine.is_editor_hint(). The
+	// returned bool depends on run mode (true under --editor, false in
+	// a deployed game build), and the smoke fires from SCENE init in
+	// both, so the assertion can't pin a value. Confirm the helper
+	// resolves the Engine singleton and ptrcalls through cleanly by
+	// reaching it twice and matching against Engine.is_editor_hint()
+	// straight from the bindings — same code path either way, so
+	// agreement is the test.
+	hint := runtime.IsEditorHint()
+	hintViaEngine := godot.EngineSingleton().IsEditorHint()
+	check("runtime.IsEditorHint() agrees with Engine.is_editor_hint()",
+		hint == hintViaEngine, hint, hintViaEngine)
 
 	// IsMainThread / RunOnMain / DrainMain — the goroutine ↔ main-
 	// thread bridge. We're inside SCENE init, which Godot calls on the
