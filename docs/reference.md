@@ -28,6 +28,7 @@ lifecycle, and hot-reload, see the dedicated docs in this folder.
   - [Signals](#signals)
   - [Runtime helpers](#runtime-helpers)
   - [Refcounted lifecycle](#refcounted-lifecycle)
+- [GDExtension manifest](#gdextension-manifest)
 - [Supported types](#supported-types)
 - [Multi-version targeting](#multi-version-targeting)
 
@@ -420,6 +421,48 @@ harmless once the refcount hits zero.
 model and the cases where explicit `Unreference` matters.
 
 ---
+
+## GDExtension manifest
+
+Godot loads your built library through a `.gdextension` config
+file dropped into the project's filesystem. The framework's
+`gdextension/` package exports the entry symbol Godot looks for
+(`gdextension_library_init`), so importing the package — directly
+or transitively, via your bindings package — is all that's needed
+on the Go side. No C glue, no manually-defined `init` function.
+
+A minimal `.gdextension` looks like:
+
+```ini
+[configuration]
+entry_symbol = "gdextension_library_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+linux.x86_64   = "res://bin/myextension.so"
+macos          = "res://bin/myextension.dylib"
+windows.x86_64 = "res://bin/myextension.dll"
+```
+
+The fields:
+
+| Key | Purpose |
+|---|---|
+| `entry_symbol` | The C function Godot calls to initialize the extension. Always `gdextension_library_init` for godot-go projects — the framework provides it. |
+| `compatibility_minimum` | Lowest Godot version your build supports. Godot refuses to load the extension on older runtimes. The framework's floor is `"4.4"`; set this to whatever your `extension_api.json` and tested versions actually support. |
+| `compatibility_maximum` | Optional upper bound. Useful when you've validated only specific versions and want Godot to refuse newer ones until you bump it. The framework's own examples leave this off (no upper bound). |
+| `[libraries]` | Per-platform paths to the built c-shared library. Keys are `<os>.<arch>` (e.g., `linux.x86_64`, `windows.x86_64`); macOS uses just `macos` for universal binaries. Paths use Godot's `res://` URI scheme — relative to the project root. |
+
+The `.gdextension` file must live somewhere under your Godot
+project's filesystem (not under `.godot/`); the editor scans for
+them on import. Naming convention is `<extension_name>.gdextension`,
+matching the binary's basename.
+
+For working examples that load and verify end-to-end in CI, see
+[`examples/smoke/godot_project/godot_go_smoke.gdextension`](../examples/smoke/godot_project/godot_go_smoke.gdextension)
+and the matching files in
+[`examples/locale_language/`](../examples/locale_language/) and
+[`examples/2d_demo/`](../examples/2d_demo/).
 
 ## Supported types
 

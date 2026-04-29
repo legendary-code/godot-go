@@ -201,8 +201,33 @@ go generate ./...
 go build -buildmode=c-shared -o hello.so ./yourpkg
 ```
 
-Drop the resulting library plus a small `.gdextension` config into
-your Godot project, and from GDScript:
+The framework's `gdextension/` package provides the
+`gdextension_library_init` entry symbol Godot looks for —
+importing it (directly or transitively, via your bindings package)
+is enough. You never write C glue or a separate entrypoint.
+
+Drop the resulting library into your Godot project alongside a
+`.gdextension` manifest that points at it:
+
+```ini
+; godot_project/hello.gdextension
+[configuration]
+entry_symbol = "gdextension_library_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+linux.x86_64   = "res://bin/hello.so"
+macos          = "res://bin/hello.dylib"
+windows.x86_64 = "res://bin/hello.dll"
+```
+
+`compatibility_minimum` is the floor your project enforces —
+Godot refuses to load the extension on older versions. The
+framework supports `4.4` as the lowest. `entry_symbol` is the C
+function the framework exports; the value is always
+`gdextension_library_init`.
+
+After both files are in place, from GDScript:
 
 ```gdscript
 var h = Hello.new()
