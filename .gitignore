@@ -8,7 +8,10 @@
 # but explicitly track the planning docs we want preserved across clones.
 .claude/*
 !.claude/PLAN.md
+!.claude/PLAN2.md
+!.claude/PLAN3.md
 !.claude/PLAN_EXECUTION.md
+!.claude/FOLLOWUPS.md
 
 # OS
 .DS_Store
