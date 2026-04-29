@@ -90,18 +90,24 @@ go generate ./godot/...
 ```
 
 This produces ~1100 `*.gen.go` files in `godot/` and a few in
-`godot/runtime/`. Don't commit them — they're reproducible from
-the JSON. Add to `.gitignore`:
+`godot/runtime/`. They're fully reproducible from
+`extension_api.json`, so it's up to you whether to commit them or
+gitignore them — neither breaks anything. The trade-off is the
+usual one for generated code: committing keeps fresh clones
+buildable without a `go generate` step (and makes the diff visible
+in code review), while gitignoring keeps the repo small. If you
+gitignore, the patterns are:
 
 ```
 godot/**/*.gen.go
 godot/runtime/
 ```
 
-Commit `extension_api.json` (the version pin), the
-`generate_bindings.go` trigger, and the `.gitignore` line. That
-gives every contributor a reproducible build from a checkout +
-`go generate ./godot/...`.
+Either way, commit the inputs: `extension_api.json` (the version
+pin) and `generate_bindings.go` (the trigger). The framework's own
+repo gitignores the generated files; the example projects in
+`examples/*/` commit their `_bindings.go` (different generator,
+different convention).
 
 ### Version drift
 

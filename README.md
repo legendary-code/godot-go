@@ -155,14 +155,9 @@ go generate ./godot/...
 
 This produces ~1100 `*.gen.go` files in `godot/` plus a tiny
 `godot/runtime/` sub-package with user-facing helpers
-(`IsEditorHint`, `Print`, `RunOnMain`, …). Don't commit the
-generated files — they're reproducible from the JSON. Add to
-`.gitignore`:
-
-```
-godot/**/*.gen.go
-godot/runtime/
-```
+(`IsEditorHint`, `Print`, `RunOnMain`, …). They're fully
+reproducible from `extension_api.json`, so committing them or
+gitignoring them is your call — neither breaks anything.
 
 [`docs/setup.md`](./docs/setup.md) covers the full setup — multi-
 version targeting, version-drift detection, build orchestration via
