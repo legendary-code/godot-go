@@ -60,6 +60,12 @@ That writes `extension_api.json` (and `gdextension_interface.h`,
 which the framework ignores — it ships a pinned 4.6 header
 internally). Copy the JSON into your project's `godot/` dir.
 
+If you don't have older Godot binaries handy, the
+[godot-cpp](https://github.com/godotengine/godot-cpp) repo keeps a
+`gdextension/extension_api.json` on each version branch — `4.4`,
+`4.5`, `4.6`, etc. The framework's own `godot/extension_api_*.json`
+files came from those branches.
+
 For multi-version targeting, name the files and pick at generate
 time:
 
@@ -71,7 +77,11 @@ godot/
 └── generate_bindings.go   #   -api ./extension_api_4_6.json
 ```
 
-The bindgen accepts any path via the `-api` flag.
+The bindgen accepts any path via the `-api` flag, so swapping
+between versions is a single argument change. The framework's CI
+runs the full matrix — three OS × three Godot versions — by
+invoking the bindgen directly per cell rather than going through
+`go generate`.
 
 ### Generating
 

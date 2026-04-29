@@ -62,6 +62,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Pre-4.5 JSONs predate the `precision` header field — treat
+	// missing as "single" since that was the only option at the time.
+	// Patch back into the parsed header so downstream emitters see the
+	// resolved value (e.g. version.gen.go's APIPrecision constant).
+	if api.Header.Precision == "" {
+		api.Header.Precision = "single"
+	}
 	if api.Header.Precision != precisionForBuildConfig(*buildConfig) {
 		fmt.Fprintf(os.Stderr,
 			"godot-go-bindgen: build-config %q expects %q precision but extension_api.json reports %q\n",

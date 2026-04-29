@@ -29,22 +29,28 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Pin to a specific Godot release so a future stable bump doesn't
-  # silently shift CI semantics. Update this value plus
-  # `compatibility_minimum` in each example's .gdextension when the
-  # framework moves to a newer Godot version.
-  GODOT_VERSION: 4.6.2-stable
   # Match go.mod's toolchain. setup-go resolves arbitrary versions.
   GO_VERSION: '1.26.1'
 
 jobs:
   build-and-verify:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }} / godot ${{ matrix.godot.label }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        # Pinned Godot releases × the matching extension_api JSON file.
+        # Each matrix cell builds bindings against `api`, runs that
+        # version's Godot binary, and verifies the example scripts
+        # pass — proves the framework loads cleanly across every
+        # supported Godot version. Bump `compatibility_minimum` in
+        # each example's .gdextension if you need to drop an old
+        # version, or add a new entry here when a Godot release lands.
+        godot:
+          - { label: '4.4', release: '4.4.1-stable', api: '4_4' }
+          - { label: '4.5', release: '4.5-stable',   api: '4_5' }
+          - { label: '4.6', release: '4.6.2-stable', api: '4_6' }
 
     defaults:
       run:
@@ -71,22 +77,29 @@ jobs:
           # Cache by OS + version so each runner pulls its own image
           # but skips re-downloading on subsequent runs at the same
           # version. The install script idempotently writes here.
-          path: ${{ runner.tool_cache }}/godot/${{ env.GODOT_VERSION }}
-          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}
+          path: ${{ runner.tool_cache }}/godot/${{ matrix.godot.release }}
+          key: godot-${{ runner.os }}-${{ matrix.godot.release }}
 
       - name: Install Godot
         # Invoked via `bash` explicitly so the script's executable bit
         # isn't a hard requirement — Windows runners can't preserve
         # +x on commit, and `git update-index --chmod=+x` only papers
         # over the case where the script was committed from POSIX.
-        run: bash .github/scripts/install-godot.sh "$GODOT_VERSION"
+        run: bash .github/scripts/install-godot.sh "${{ matrix.godot.release }}"
 
       - name: Generate framework bindings
-        # godot/ ships only extension_api.json + the //go:generate
-        # trigger; the *.gen.go files are produced fresh from the JSON
-        # so the bindings always match the pinned Godot version. Must
-        # run before `go test` / `go build` so the package isn't empty.
-        run: go generate ./godot/...
+        # godot/ ships only the versioned extension_api_*.json files
+        # plus the //go:generate trigger; the *.gen.go files are
+        # produced fresh from the JSON matching this matrix cell.
+        # Must run before `go test` / `go build` so the package isn't
+        # empty. We invoke the bindgen directly (rather than via go
+        # generate) so the matrix dimension picks the JSON.
+        run: |
+          go run ./cmd/godot-go-bindgen \
+            -api ./godot/extension_api_${{ matrix.godot.api }}.json \
+            -out ./godot \
+            -package godot \
+            -import-path github.com/legendary-code/godot-go/godot
 
       - name: Go test
         run: go test ./...
