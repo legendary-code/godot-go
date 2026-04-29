@@ -1,0 +1,2 @@
+- make static explicit via `@static` doc tag, remove implicit behavior, update the docs to reflect this
+- 
