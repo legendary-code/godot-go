@@ -44,6 +44,9 @@ typedef void (*godot_go_anyfn)(void);
 void godot_go_call_get_godot_version2(GDExtensionInterfaceGetGodotVersion2 fn,
                                       GDExtensionGodotVersion2 *r_version);
 
+void godot_go_call_get_godot_version(GDExtensionInterfaceGetGodotVersion fn,
+                                     GDExtensionGodotVersion *r_version);
+
 void godot_go_call_print_error(GDExtensionInterfacePrintError fn,
                                const char *p_description, const char *p_function,
                                const char *p_file, int32_t p_line, GDExtensionBool p_editor_notify);
@@ -139,6 +142,8 @@ const char *godot_go_version2_build (const GDExtensionGodotVersion2 *v);
 const char *godot_go_version2_hash  (const GDExtensionGodotVersion2 *v);
 const char *godot_go_version2_string(const GDExtensionGodotVersion2 *v);
 
+const char *godot_go_version1_string(const GDExtensionGodotVersion *v);
+
 /* ---------- Class registration ABI (Phase 5: user-class registration). -- */
 
 void godot_go_call_classdb_unregister_extension_class(
@@ -159,7 +164,8 @@ void godot_go_call_object_set_instance(
  * Go memory" check at call time. Function-pointer trampoline fields are
  * filled in by the C helper from internal symbols, so they never cross the
  * cgo boundary. */
-void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn,
+void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn5,
+                                       GDExtensionInterfaceClassdbRegisterExtensionClass4 fn4,
                                        GDExtensionClassLibraryPtr p_library,
                                        GDExtensionConstStringNamePtr p_class_name,
                                        GDExtensionConstStringNamePtr p_parent_class_name,

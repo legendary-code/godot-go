@@ -32,11 +32,19 @@ func (v GodotVersion) Short() string {
 
 // iface caches the host's function-pointer table. Populated once by
 // loadInterface during gdextension_library_init; read-only thereafter.
+//
+// Some symbols carry a `2`/`5` suffix — newer variants of older
+// functions added in 4.5 / 4.6. We resolve the newer name first and
+// fall back to the older form when the host is too old to expose it.
+// The framework's published runtime floor is Godot 4.4; that's why
+// `getGodotVersion` (4.1) and `classdbRegisterExtensionClass4` (4.4)
+// are kept as fallback slots.
 var iface struct {
 	getProcAddress C.GDExtensionInterfaceGetProcAddress
 	library        C.GDExtensionClassLibraryPtr
 
-	getGodotVersion2 C.GDExtensionInterfaceGetGodotVersion2
+	getGodotVersion2 C.GDExtensionInterfaceGetGodotVersion2  // 4.5+
+	getGodotVersion  C.GDExtensionInterfaceGetGodotVersion   // 4.1 fallback
 	printError       C.GDExtensionInterfacePrintError
 	printWarning     C.GDExtensionInterfacePrintWarning
 	printScriptError C.GDExtensionInterfacePrintScriptError
@@ -71,7 +79,8 @@ var iface struct {
 	objectDestroy            C.GDExtensionInterfaceObjectDestroy
 	globalGetSingleton       C.GDExtensionInterfaceGlobalGetSingleton
 
-	classdbRegisterExtensionClass5              C.GDExtensionInterfaceClassdbRegisterExtensionClass5
+	classdbRegisterExtensionClass5              C.GDExtensionInterfaceClassdbRegisterExtensionClass5  // 4.5+
+	classdbRegisterExtensionClass4              C.GDExtensionInterfaceClassdbRegisterExtensionClass4  // 4.4 fallback (struct = info4 = info5)
 	classdbRegisterExtensionClassMethod         C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
 	classdbRegisterExtensionClassProperty       C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty
 	classdbRegisterExtensionClassPropertyGroup  C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup
@@ -92,6 +101,12 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.library = lib
 
 	iface.getGodotVersion2 = (C.GDExtensionInterfaceGetGodotVersion2)(unsafe.Pointer(resolveProc("get_godot_version2")))
+	if iface.getGodotVersion2 == nil {
+		// 4.4 host — fall back to the v1 single-buffer call. Loses the
+		// build label / hash / timestamp; Major/Minor/Patch/String are
+		// still available, which is what the drift check needs.
+		iface.getGodotVersion = (C.GDExtensionInterfaceGetGodotVersion)(unsafe.Pointer(resolveProc("get_godot_version")))
+	}
 	iface.printError = (C.GDExtensionInterfacePrintError)(unsafe.Pointer(resolveProc("print_error")))
 	iface.printWarning = (C.GDExtensionInterfacePrintWarning)(unsafe.Pointer(resolveProc("print_warning")))
 	iface.printScriptError = (C.GDExtensionInterfacePrintScriptError)(unsafe.Pointer(resolveProc("print_script_error")))
@@ -127,6 +142,13 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 	iface.globalGetSingleton = (C.GDExtensionInterfaceGlobalGetSingleton)(unsafe.Pointer(resolveProc("global_get_singleton")))
 
 	iface.classdbRegisterExtensionClass5 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass5)(unsafe.Pointer(resolveProc("classdb_register_extension_class5")))
+	if iface.classdbRegisterExtensionClass5 == nil {
+		// 4.4 host — `5` is missing but `4` carries the same struct
+		// (in 4.6's header `GDExtensionClassCreationInfo5` is a
+		// typedef of `GDExtensionClassCreationInfo4`), so the existing
+		// info4 payload dispatches through either entry point.
+		iface.classdbRegisterExtensionClass4 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass4)(unsafe.Pointer(resolveProc("classdb_register_extension_class4")))
+	}
 	iface.classdbRegisterExtensionClassMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_method")))
 	iface.classdbRegisterExtensionClassProperty = (C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property")))
 	iface.classdbRegisterExtensionClassPropertyGroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_group")))
@@ -143,19 +165,35 @@ func resolveProc(name string) C.GDExtensionInterfaceFunctionPtr {
 }
 
 // GetGodotVersion returns the version of the Godot host that loaded this extension.
+//
+// Prefers the `get_godot_version2` interface (4.5+) which returns the
+// hex/status/build/hash/timestamp metadata; falls back to the
+// `get_godot_version` v1 call on 4.4 hosts. The fallback path leaves
+// Hex/Status/Build/Hash/Timestamp as zero values; Major/Minor/Patch
+// and the human-readable String are present in both shapes.
 func GetGodotVersion() GodotVersion {
-	var v C.GDExtensionGodotVersion2
-	C.godot_go_call_get_godot_version2(iface.getGodotVersion2, &v)
+	if iface.getGodotVersion2 != nil {
+		var v C.GDExtensionGodotVersion2
+		C.godot_go_call_get_godot_version2(iface.getGodotVersion2, &v)
+		return GodotVersion{
+			Major:     uint32(v.major),
+			Minor:     uint32(v.minor),
+			Patch:     uint32(v.patch),
+			Hex:       uint32(v.hex),
+			Status:    C.GoString(C.godot_go_version2_status(&v)),
+			Build:     C.GoString(C.godot_go_version2_build(&v)),
+			Hash:      C.GoString(C.godot_go_version2_hash(&v)),
+			Timestamp: uint64(v.timestamp),
+			String:    C.GoString(C.godot_go_version2_string(&v)),
+		}
+	}
+	var v C.GDExtensionGodotVersion
+	C.godot_go_call_get_godot_version(iface.getGodotVersion, &v)
 	return GodotVersion{
-		Major:     uint32(v.major),
-		Minor:     uint32(v.minor),
-		Patch:     uint32(v.patch),
-		Hex:       uint32(v.hex),
-		Status:    C.GoString(C.godot_go_version2_status(&v)),
-		Build:     C.GoString(C.godot_go_version2_build(&v)),
-		Hash:      C.GoString(C.godot_go_version2_hash(&v)),
-		Timestamp: uint64(v.timestamp),
-		String:    C.GoString(C.godot_go_version2_string(&v)),
+		Major:  uint32(v.major),
+		Minor:  uint32(v.minor),
+		Patch:  uint32(v.patch),
+		String: C.GoString(C.godot_go_version1_string(&v)),
 	}
 }
 

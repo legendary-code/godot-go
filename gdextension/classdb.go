@@ -214,6 +214,7 @@ func RegisterClass(def ClassDef) {
 	parentName := InternStringName(def.Parent)
 
 	C.godot_go_register_extension_class(iface.classdbRegisterExtensionClass5,
+		iface.classdbRegisterExtensionClass4,
 		C.GDExtensionClassLibraryPtr(iface.library),
 		C.GDExtensionConstStringNamePtr(className),
 		C.GDExtensionConstStringNamePtr(parentName),

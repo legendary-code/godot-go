@@ -48,6 +48,11 @@ void godot_go_call_get_godot_version2(GDExtensionInterfaceGetGodotVersion2 fn,
     fn(r_version);
 }
 
+void godot_go_call_get_godot_version(GDExtensionInterfaceGetGodotVersion fn,
+                                     GDExtensionGodotVersion *r_version) {
+    fn(r_version);
+}
+
 void godot_go_call_print_error(GDExtensionInterfacePrintError fn,
                                const char *p_description, const char *p_function,
                                const char *p_file, int32_t p_line, GDExtensionBool p_editor_notify) {
@@ -288,6 +293,8 @@ const char *godot_go_version2_build (const GDExtensionGodotVersion2 *v) { return
 const char *godot_go_version2_hash  (const GDExtensionGodotVersion2 *v) { return v->hash;   }
 const char *godot_go_version2_string(const GDExtensionGodotVersion2 *v) { return v->string; }
 
+const char *godot_go_version1_string(const GDExtensionGodotVersion *v) { return v->string; }
+
 /* ---------- Class registration ABI. ---------- */
 
 void godot_go_call_classdb_unregister_extension_class(
@@ -377,7 +384,14 @@ static void godot_go_method_ptrcall_trampoline(
                          (GDExtensionConstTypePtr *)p_args, r_ret);
 }
 
-void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn,
+/* Builds the (info4-shaped) class-creation payload and dispatches it
+ * through whichever of `classdb_register_extension_class5` (4.5+,
+ * preferred) or `classdb_register_extension_class4` (4.4 fallback) the
+ * host exposed. `info5` is a typedef of `info4` in 4.6's header, so the
+ * same struct payload is valid at both entry points. The Go caller
+ * passes whichever function pointer it resolved; the other is NULL. */
+void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtensionClass5 fn5,
+                                       GDExtensionInterfaceClassdbRegisterExtensionClass4 fn4,
                                        GDExtensionClassLibraryPtr p_library,
                                        GDExtensionConstStringNamePtr p_class_name,
                                        GDExtensionConstStringNamePtr p_parent_class_name,
@@ -391,7 +405,7 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
      * cgo's runtime checker rejects.
      *
      * memset zeroes every optional field; set/get/property/notification/
-     * to_string/reference/unreference are all NULL in Phase 5a. */
+     * to_string/reference/unreference are all NULL. */
     GDExtensionClassCreationInfo4 info;
     memset(&info, 0, sizeof(info));
     info.is_virtual            = is_virtual;
@@ -403,7 +417,11 @@ void godot_go_register_extension_class(GDExtensionInterfaceClassdbRegisterExtens
     info.get_virtual_call_data_func  = godot_go_get_virtual_call_data_trampoline;
     info.call_virtual_with_data_func = godot_go_call_virtual_with_data_trampoline;
     info.class_userdata              = class_userdata;
-    fn(p_library, p_class_name, p_parent_class_name, &info);
+    if (fn5 != NULL) {
+        fn5(p_library, p_class_name, p_parent_class_name, &info);
+    } else {
+        fn4(p_library, p_class_name, p_parent_class_name, &info);
+    }
 }
 
 /* Maximum supported argument count for a registered extension class
