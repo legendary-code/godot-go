@@ -793,10 +793,13 @@ func (n *MyNode) GetHealth() int64 { return 0 }
 	mustFailDiscover(t, src, "field-form only")
 }
 
-func TestDiscoverPropertyGroupNonContiguousRejected(t *testing.T) {
-	// Going back to group "A" after switching to group "B" would
-	// require re-registering A's header — produces a duplicate
-	// inspector entry. Reject.
+func TestDiscoverPropertyGroupNonContiguousReorders(t *testing.T) {
+	// Each @property carries its @group("X") explicitly — there's no
+	// inheritance from a previous declaration — so a user can write
+	// groups in any order. The codegen reorders so each group's
+	// properties register contiguously without producing duplicate
+	// inspector headers. Source-order matching within a group is
+	// preserved; groups themselves are ordered by first-appearance.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -814,7 +817,18 @@ type MyNode struct {
 	Three int64
 }
 `
-	mustFailDiscover(t, src, "reuses a group already left")
+	d := mustDiscover(t, src)
+	props := d.MainClass.Properties
+	if len(props) != 3 {
+		t.Fatalf("expected 3 properties, got %d", len(props))
+	}
+	got := []string{props[0].Name, props[1].Name, props[2].Name}
+	want := []string{"One", "Three", "Two"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("property %d: got %q, want %q (full order %v, want %v)", i, got[i], want[i], got, want)
+		}
+	}
 }
 
 func TestDiscoverPropertyUngroupedFirstAcrossForms(t *testing.T) {

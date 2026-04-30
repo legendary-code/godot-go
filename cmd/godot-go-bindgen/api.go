@@ -211,6 +211,13 @@ func loadAPI(path string) (*API, error) {
 	if err := dec.Decode(api); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
+	// Pre-4.5 JSONs predate the `precision` header field — treat
+	// missing as "single" since that was the only option at the time.
+	// Patch back into the parsed header so downstream emitters and
+	// the build-config check both see the resolved value.
+	if api.Header.Precision == "" {
+		api.Header.Precision = "single"
+	}
 	return api, nil
 }
 

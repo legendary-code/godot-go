@@ -883,32 +883,42 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 	if len(byName) == 0 {
 		return nil
 	}
-	// Source-order iteration with a tier split: ungrouped properties
-	// are emitted before grouped ones. Within each tier, source order
-	// is preserved. The split lets users freely intermix
-	// (method-form properties, which can't be grouped in v1, fall in
-	// the ungrouped tier without forcing a particular struct layout)
-	// while still meeting Godot's positional requirement that ungrouped
-	// properties not visually fall under a previously-registered group.
+	// Order with a two-tier split: ungrouped properties emit first
+	// (so they don't visually fall under whatever group was last
+	// registered), then grouped ones, regrouped so each group's
+	// properties are contiguous regardless of source order.
+	//
+	// Each property carries its `@group("X")` / `@subgroup("Y")`
+	// explicitly — there's no inheritance-from-previous-declaration —
+	// so the codegen is free to reorder by group at emit time. Within
+	// a single group, source order is preserved (which keeps subgroup
+	// transitions readable). Groups themselves are ordered by
+	// first-appearance source position so the user's intent shows up
+	// as it would in the inspector without forcing them to keep all
+	// of one group together in the struct body.
 	props := make([]*propertyInfo, 0, len(byName))
 	for _, p := range byName {
 		props = append(props, p)
 	}
 	sortByPos(props)
 
-	var ungrouped, grouped []*propertyInfo
+	var ungrouped []*propertyInfo
+	groupOrder := []string{}
+	groupedBy := map[string][]*propertyInfo{}
 	for _, p := range props {
 		if p.Group == "" {
 			ungrouped = append(ungrouped, p)
-		} else {
-			grouped = append(grouped, p)
+			continue
 		}
-	}
-	if err := validateGroupOrdering(fset, grouped); err != nil {
-		return err
+		if _, seen := groupedBy[p.Group]; !seen {
+			groupOrder = append(groupOrder, p.Group)
+		}
+		groupedBy[p.Group] = append(groupedBy[p.Group], p)
 	}
 	ci.Properties = append(ci.Properties, ungrouped...)
-	ci.Properties = append(ci.Properties, grouped...)
+	for _, g := range groupOrder {
+		ci.Properties = append(ci.Properties, groupedBy[g]...)
+	}
 	return nil
 }
 
@@ -923,54 +933,6 @@ func sortByPos(props []*propertyInfo) {
 	}
 }
 
-// validateGroupOrdering enforces contiguity for grouped properties:
-//   - Properties of the same group must be contiguous (no coming back
-//     to a group after switching away).
-//   - Subgroups cycle the same way within their parent group.
-//
-// Receives only grouped properties (ungrouped tier is split out
-// upstream). Rationale: Godot's inspector treats group registration
-// positionally — RegisterClassPropertyGroup("X") makes every
-// subsequent property belong to X until another group call. Allowing
-// non-contiguous grouping would force codegen to either re-register
-// groups (creating duplicate inspector headers) or reorder properties
-// (losing source-order intent within a group). The strict rule keeps
-// the user's source visually matching what they get in the inspector.
-func validateGroupOrdering(fset *token.FileSet, props []*propertyInfo) error {
-	var (
-		seenGroup    = map[string]token.Pos{}
-		seenSubgroup = map[string]token.Pos{}
-		curGroup     string
-		curSubgroup  string
-	)
-	for _, p := range props {
-		if p.Group != curGroup {
-			// Switching to a new group. If we've seen this group name
-			// before, the user is going back — reject so the inspector
-			// doesn't get duplicate headers.
-			if existing, ok := seenGroup[p.Group]; ok && existing != p.Pos {
-				return fmt.Errorf("%s: @group(%q) on %q reuses a group already left at %s — properties of the same group must be contiguous in source",
-					posStr(fset, p.Pos), p.Group, p.Name, posStr(fset, existing))
-			}
-			seenGroup[p.Group] = p.Pos
-			curGroup = p.Group
-			// New group resets subgroup tracking.
-			curSubgroup = ""
-			seenSubgroup = map[string]token.Pos{}
-		}
-		if p.Subgroup != curSubgroup {
-			if existing, ok := seenSubgroup[p.Subgroup]; ok && p.Subgroup != "" && existing != p.Pos {
-				return fmt.Errorf("%s: @subgroup(%q) on %q reuses a subgroup already left at %s — properties of the same subgroup must be contiguous",
-					posStr(fset, p.Pos), p.Subgroup, p.Name, posStr(fset, existing))
-			}
-			if p.Subgroup != "" {
-				seenSubgroup[p.Subgroup] = p.Pos
-			}
-			curSubgroup = p.Subgroup
-		}
-	}
-	return nil
-}
 
 // findExtendsParent locates the parent class for a `@class` struct by
 // walking its fields for the one tagged with `@extends`. The tag must
