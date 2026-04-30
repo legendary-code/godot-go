@@ -106,7 +106,7 @@ type Helper struct {
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@extends` | exactly one per `@class` / `@innerclass` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type must be a class from your bindings package (e.g., `godot.Node`, `godot.Node2D`, `godot.RefCounted`). |
+| `@extends` | exactly one per `@class` / `@innerclass` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type can be (a) a class from any imported package — your bindings package (`godot.Node`, `godot.RefCounted`), the user-class package of another GDExtension, or any third-party module that re-exports a registered class — or (b) a same-file sibling `@class` / `@innerclass` referenced by bare identifier (useful for inner classes specializing their containing class). For cross-package parents the runtime registration succeeds when the parent class is in Godot's ClassDB by the time this class loads, so cross-extension inheritance requires the providing extension to register first. |
 
 ```go
 // @class
@@ -114,11 +114,29 @@ type MyNode struct {
     // @extends — required, exactly one, must sit on an embedded field.
     godot.Node
 }
+
+// Inner classes can extend the file's main class via the bare-
+// identifier form. Source order doesn't matter — discovery does a
+// deferred parent-resolution pass so forward references resolve.
+//
+// @innerclass
+type MyNodeVariant struct {
+    // @extends
+    MyNode
+}
 ```
 
 `@extends` on a *named* (non-embedded) field is rejected — Go's
 embedding is what gives the wrapper its inherited methods, so the
 parent must come through embedding.
+
+Cross-extension inheritance (extending a class from another
+GDExtension) is supported via the standard package-qualified form.
+The user just imports the providing extension's user-class package
+and embeds the parent type. Load order matters at runtime: Godot
+registers extensions in dependency-free order, so an extension that
+relies on another extension's classes needs to ensure that one
+loads first.
 
 ### On an exported field
 
@@ -453,14 +471,21 @@ embedded type provides the parent's methods through Go's struct
 embedding; the cgo bridge separately registers the parent name
 with Godot's ClassDB at registration time.
 
-Valid parents are any class from the generated bindings package —
-about 1023 engine classes when generated against Godot 4.6's
-`extension_api.json`. Common ones: `godot.Node`, `godot.Node2D`,
-`godot.Node3D`, `godot.RefCounted`, `godot.Resource`,
-`godot.EditorPlugin`.
+Valid parents are:
 
-Cross-module class inheritance (extending a class from another
-extension) isn't supported.
+- Any class from the generated bindings package — about 1023
+  engine classes when generated against Godot 4.6's
+  `extension_api.json`. Common ones: `godot.Node`, `godot.Node2D`,
+  `godot.Node3D`, `godot.RefCounted`, `godot.Resource`,
+  `godot.EditorPlugin`.
+- Any class from a third-party Go module — another GDExtension's
+  user-class package, a shared library, etc. Imported the same way
+  any other Go package is. Runtime registration succeeds when the
+  parent class is in Godot's ClassDB by the time this class
+  registers.
+- A same-file sibling `@class` / `@innerclass` declared with a
+  bare-identifier @extends. Source order doesn't matter — the
+  codegen does a deferred parent-resolution pass.
 
 ### Methods
 

@@ -238,6 +238,67 @@ const innerExampleDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <description>Demonstrates how to declare an additional class in the&#xA;same file. ` + "`" + `@innerclass` + "`" + ` registers it with Godot&#39;s ClassDB alongside&#xA;the main ` + "`" + `@class` + "`" + ` — Godot&#39;s ClassDB is a flat namespace, so the&#xA;&#34;inner&#34; terminology is a source-organization convention rather than&#xA;a nesting relationship. GDScript callers reach ` + "`" + `InnerExample.new()` + "`" + `&#xA;the same way they reach the main class.</description>
 </class>`
 
+// Per-instance side table. The void* value the host hands back to us as
+// p_instance is the small integer id we returned from Construct, not a
+// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+var (
+	localeLanguageVariantInstancesMu sync.Mutex
+	localeLanguageVariantInstances   = map[uintptr]*LocaleLanguageVariant{}
+	localeLanguageVariantNextID      uintptr
+)
+
+func registerLocaleLanguageVariantInstance(n *LocaleLanguageVariant) unsafe.Pointer {
+	localeLanguageVariantInstancesMu.Lock()
+	localeLanguageVariantNextID++
+	id := localeLanguageVariantNextID
+	localeLanguageVariantInstances[id] = n
+	localeLanguageVariantInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupLocaleLanguageVariantInstance(handle unsafe.Pointer) *LocaleLanguageVariant {
+	localeLanguageVariantInstancesMu.Lock()
+	defer localeLanguageVariantInstancesMu.Unlock()
+	return localeLanguageVariantInstances[uintptr(handle)]
+}
+
+func releaseLocaleLanguageVariantInstance(handle unsafe.Pointer) {
+	localeLanguageVariantInstancesMu.Lock()
+	defer localeLanguageVariantInstancesMu.Unlock()
+	delete(localeLanguageVariantInstances, uintptr(handle))
+}
+
+func registerLocaleLanguageVariant() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:      "LocaleLanguageVariant",
+		Parent:    "LocaleLanguage",
+		IsExposed: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &LocaleLanguageVariant{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("LocaleLanguage"))
+			n.BindPtr(parent)
+			return parent, registerLocaleLanguageVariantInstance(n)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseLocaleLanguageVariantInstance(instance)
+		},
+	})
+
+	gdextension.LoadEditorDocXML(localeLanguageVariantDocXML)
+}
+
+// localeLanguageVariantDocXML is the rendered <class> document for LocaleLanguageVariant.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const localeLanguageVariantDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="LocaleLanguageVariant" inherits="LocaleLanguage" version="4.4">
+    <brief_description>Extends the file&#39;s main ` + "`" + `@class` + "`" + ` directly via the bare-identifier ` + "`" + `@extends LocaleLanguage` + "`" + ` form — useful when an inner class is conceptually a specialization of its outer.</brief_description>
+    <description>Extends the file&#39;s main ` + "`" + `@class` + "`" + ` directly via&#xA;the bare-identifier ` + "`" + `@extends LocaleLanguage` + "`" + ` form — useful when an&#xA;inner class is conceptually a specialization of its outer. The&#xA;codegen does a deferred parent-resolution pass so this works&#xA;regardless of declaration order in the file.</description>
+</class>`
+
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerLocaleLanguage)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
@@ -246,5 +307,9 @@ func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerInnerExample)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
 		gdextension.UnregisterClass("InnerExample")
+	})
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerLocaleLanguageVariant)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("LocaleLanguageVariant")
 	})
 }

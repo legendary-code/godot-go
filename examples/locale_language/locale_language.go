@@ -46,6 +46,18 @@ type InnerExample struct {
 	godot.Object
 }
 
+// LocaleLanguageVariant extends the file's main `@class` directly via
+// the bare-identifier `@extends LocaleLanguage` form — useful when an
+// inner class is conceptually a specialization of its outer. The
+// codegen does a deferred parent-resolution pass so this works
+// regardless of declaration order in the file.
+//
+// @innerclass
+type LocaleLanguageVariant struct {
+	// @extends
+	LocaleLanguage
+}
+
 // Language defines an enum type, which will automatically be part of LocaleLanguage, since that's our main type being
 // exported here.  In order to be detected as an enum type, you must use a typedef to an int.  In Godot, the name will
 // be transformed to SCREAMING_SNAKE_CASE without the "Language" prefix, so, "UNKNOWN", "ENGLISH" and "GERMAN" in this

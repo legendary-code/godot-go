@@ -283,6 +283,100 @@ type Helper struct {
 	}
 }
 
+func TestDiscoverExtendsCrossPackage(t *testing.T) {
+	// @extends accepts any imported package — not just the framework
+	// bindings. The runtime registration succeeds as long as the
+	// parent class is in Godot's ClassDB by the time this class
+	// loads (i.e. the providing extension registered first). The
+	// discovery side records the parent's import path verbatim.
+	src := `package x
+import "example.com/coolext/godot"
+import "example.com/coolext"
+// @class
+type MyHero struct {
+	// @extends
+	coolext.Player
+}
+`
+	d := mustDiscover(t, src)
+	if d.MainClass.Parent != "Player" {
+		t.Errorf("Parent = %q, want Player", d.MainClass.Parent)
+	}
+	if d.MainClass.ParentImport != "example.com/coolext" {
+		t.Errorf("ParentImport = %q, want example.com/coolext", d.MainClass.ParentImport)
+	}
+}
+
+func TestDiscoverExtendsSameFileSibling(t *testing.T) {
+	// Bare-Ident parent on @extends names a sibling class in the
+	// same file. Useful for inner classes that compose with their
+	// containing class. parentImport stays empty since no import
+	// is involved.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Outer struct {
+	// @extends
+	core.Node
+}
+
+// @innerclass
+type Inner struct {
+	// @extends
+	Outer
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.InnerClasses) != 1 {
+		t.Fatalf("inner classes = %+v", d.InnerClasses)
+	}
+	inner := d.InnerClasses[0]
+	if inner.Parent != "Outer" {
+		t.Errorf("inner Parent = %q, want Outer", inner.Parent)
+	}
+	if inner.ParentImport != "" {
+		t.Errorf("inner ParentImport = %q, want empty (same-file sibling)", inner.ParentImport)
+	}
+}
+
+func TestDiscoverExtendsForwardSibling(t *testing.T) {
+	// Same as above, but the sibling parent is declared AFTER the
+	// extending class — verifies the deferred resolution catches
+	// forward references.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @innerclass
+type Inner struct {
+	// @extends
+	Outer
+}
+
+// @class
+type Outer struct {
+	// @extends
+	core.Node
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.InnerClasses) != 1 || d.InnerClasses[0].Parent != "Outer" {
+		t.Fatalf("inner = %+v", d.InnerClasses)
+	}
+}
+
+func TestDiscoverExtendsBareIdentNotASibling(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Lonely struct {
+	// @extends
+	NotASiblingClass
+}
+
+type NotASiblingClass = core.Node
+`
+	mustFailDiscover(t, src, "bare-identifier parents must name a same-file")
+}
+
 func TestDiscoverEnum(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"

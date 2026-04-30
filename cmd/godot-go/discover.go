@@ -321,18 +321,10 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 					IsClass:    isClass,
 					IsEditor:   doctag.Has(tags, "editor"),
 				}
-				// Parent resolution: both @class and @innerclass register
-				// with Godot's ClassDB, so both need a parent. Exactly
-				// one embedded field must carry @extends. Plain (non-
-				// tagged) structs are Go-only and don't need one.
-				if isClass || isInner {
-					parent, parentImport, perr := findExtendsParent(fset, t, ts.Pos(), d.Imports)
-					if perr != nil {
-						return nil, perr
-					}
-					ci.Parent = parent
-					ci.ParentImport = parentImport
-				}
+				// Parent resolution is deferred until after the whole
+				// TypeSpec sweep so @extends can reference a sibling
+				// class declared later in the same file. Stash the
+				// struct AST on the classInfo for the second pass.
 				structs[ts.Name.Name] = ci
 			case *ast.Ident:
 				if t.Name == "int" || t.Name == "int32" || t.Name == "int64" {
@@ -356,6 +348,32 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				}
 			}
 		}
+	}
+
+	// Deferred @extends resolution. Done after the type sweep so
+	// `@extends` on one class can reference a sibling declared later
+	// in the same file — it would have failed inline. Builds a set
+	// of same-file class names (every struct seen in this file) so
+	// findExtendsParent can recognize bare-Ident parents alongside
+	// the package-qualified form.
+	siblings := map[string]bool{}
+	for name := range structs {
+		siblings[name] = true
+	}
+	for _, ci := range structs {
+		if !ci.IsClass && !ci.IsInner {
+			continue
+		}
+		st, ok := ci.Decl.Type.(*ast.StructType)
+		if !ok {
+			continue
+		}
+		parent, parentImport, perr := findExtendsParent(fset, st, ci.Pos, d.Imports, siblings)
+		if perr != nil {
+			return nil, perr
+		}
+		ci.Parent = parent
+		ci.ParentImport = parentImport
 	}
 
 	// Identify the main class — the struct explicitly tagged @class.
@@ -953,11 +971,20 @@ func sortByPos(props []*propertyInfo) {
 }
 
 
-// findExtendsParent locates the parent class for a `@class` struct by
-// walking its fields for the one tagged with `@extends`. The tag must
-// sit on an *embedded* (anonymous) field whose type resolves to a
-// framework package — that's the GDScript-equivalent `extends Node`
-// declaration.
+// findExtendsParent locates the parent class for a `@class` /
+// `@innerclass` struct by walking its fields for the one tagged
+// with `@extends`. The tag must sit on an *embedded* (anonymous)
+// field whose type resolves to one of:
+//
+//   - A package-qualified type like `godot.Node` — works for any
+//     imported package, including the framework's bindings, another
+//     GDExtension's user-class package, or any user library that
+//     re-exports a registered class. The runtime registration
+//     succeeds as long as that class is in Godot's ClassDB by the
+//     time this class registers.
+//   - A bare Ident like `Outer` — refers to a sibling `@class` /
+//     `@innerclass` declared in the same file. Useful for inner
+//     classes that extend their containing class.
 //
 // Validation surfaces:
 //   - no field carries @extends → error (the class needs a parent).
@@ -965,14 +992,13 @@ func sortByPos(props []*propertyInfo) {
 //   - @extends on a named (non-embedded) field → error (parent
 //     inheritance must come from an embed; named fields are
 //     composition).
-//   - @extends on an embed whose type isn't a framework package →
-//     error (cross-module class inheritance isn't supported yet).
+//   - bare Ident that doesn't match a sibling class → error.
 //
-// Returns the bare class name (e.g. "Node") + the framework import
-// path it came from.
-func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.Pos, imports map[string]string) (parent, parentImport string, err error) {
+// Returns the bare class name (e.g. "Node") + the import path it
+// came from. parentImport is empty for same-file siblings.
+func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.Pos, imports map[string]string, siblings map[string]bool) (parent, parentImport string, err error) {
 	if st.Fields == nil {
-		return "", "", fmt.Errorf("%s: @class struct has no fields — it needs an embedded framework type tagged @extends",
+		return "", "", fmt.Errorf("%s: @class struct has no fields — it needs an embedded type tagged @extends",
 			posStr(fset, structPos))
 	}
 	hits := 0
@@ -985,27 +1011,35 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.
 			return "", "", fmt.Errorf("%s: @extends on named field %q — @extends marks the *embedded* parent type (anonymous field), not a regular composition field",
 				posStr(fset, f.Pos()), f.Names[0].Name)
 		}
-		sel, ok := f.Type.(*ast.SelectorExpr)
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded framework type like core.Node",
+		switch ft := f.Type.(type) {
+		case *ast.SelectorExpr:
+			pkgIdent, ok := ft.X.(*ast.Ident)
+			if !ok {
+				return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded type like godot.Node or a same-file sibling",
+					posStr(fset, f.Pos()))
+			}
+			path, ok := imports[pkgIdent.Name]
+			if !ok {
+				return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
+					posStr(fset, f.Pos()), pkgIdent.Name, ft.Sel.Name, pkgIdent.Name)
+			}
+			parent = ft.Sel.Name
+			parentImport = path
+		case *ast.Ident:
+			if !siblings[ft.Name] {
+				return "", "", fmt.Errorf("%s: @extends %s — bare-identifier parents must name a same-file @class / @innerclass struct (cross-package parents take the qualified `pkg.Type` form)",
+					posStr(fset, f.Pos()), ft.Name)
+			}
+			parent = ft.Name
+			parentImport = ""
+		default:
+			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded type like godot.Node or a same-file sibling",
 				posStr(fset, f.Pos()), f.Type)
 		}
-		pkgIdent, ok := sel.X.(*ast.Ident)
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded framework type like core.Node",
-				posStr(fset, f.Pos()))
-		}
-		path, ok := imports[pkgIdent.Name]
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
-				posStr(fset, f.Pos()), pkgIdent.Name, sel.Sel.Name, pkgIdent.Name)
-		}
-		parent = sel.Sel.Name
-		parentImport = path
 	}
 	switch hits {
 	case 0:
-		return "", "", fmt.Errorf("%s: @class struct has no @extends — tag the embedded framework type that this class extends (Godot's single-inheritance equivalent of `extends Node` in GDScript)",
+		return "", "", fmt.Errorf("%s: @class struct has no @extends — tag the embedded parent type that this class extends (Godot's single-inheritance equivalent of `extends Node` in GDScript)",
 			posStr(fset, structPos))
 	case 1:
 		return parent, parentImport, nil

@@ -48,6 +48,15 @@ func _initialize() -> void:
 	ok = _check("ClassDB.get_parent_class('InnerExample') == 'Object'",
 			ClassDB.get_parent_class("InnerExample"), &"Object") and ok
 
+	# LocaleLanguageVariant uses the bare-identifier form of @extends
+	# to inherit from the file's main @class — proves the deferred
+	# parent-resolution pass and the registered parent links through
+	# to a same-file sibling.
+	ok = _check("ClassDB.class_exists('LocaleLanguageVariant')",
+			ClassDB.class_exists("LocaleLanguageVariant"), true) and ok
+	ok = _check("ClassDB.get_parent_class('LocaleLanguageVariant') == 'LocaleLanguage'",
+			ClassDB.get_parent_class("LocaleLanguageVariant"), &"LocaleLanguage") and ok
+
 	# Static dispatch through ClassDB — bypasses the parser identifier
 	# resolution that would block `LocaleLanguage.parse(...)` syntax on an
 	# abstract class.
