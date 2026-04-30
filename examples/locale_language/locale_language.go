@@ -33,9 +33,16 @@ type LocaleLanguage struct {
 	godot.Node
 }
 
-// InnerExample demonstrates how to declare inner classes
+// InnerExample demonstrates how to declare an additional class in the
+// same file. `@innerclass` registers it with Godot's ClassDB alongside
+// the main `@class` — Godot's ClassDB is a flat namespace, so the
+// "inner" terminology is a source-organization convention rather than
+// a nesting relationship. GDScript callers reach `InnerExample.new()`
+// the same way they reach the main class.
+//
 // @innerclass
 type InnerExample struct {
+	// @extends
 	godot.Object
 }
 

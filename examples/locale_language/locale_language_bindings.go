@@ -177,9 +177,74 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     </methods>
 </class>`
 
+// Per-instance side table. The void* value the host hands back to us as
+// p_instance is the small integer id we returned from Construct, not a
+// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+var (
+	innerExampleInstancesMu sync.Mutex
+	innerExampleInstances   = map[uintptr]*InnerExample{}
+	innerExampleNextID      uintptr
+)
+
+func registerInnerExampleInstance(n *InnerExample) unsafe.Pointer {
+	innerExampleInstancesMu.Lock()
+	innerExampleNextID++
+	id := innerExampleNextID
+	innerExampleInstances[id] = n
+	innerExampleInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupInnerExampleInstance(handle unsafe.Pointer) *InnerExample {
+	innerExampleInstancesMu.Lock()
+	defer innerExampleInstancesMu.Unlock()
+	return innerExampleInstances[uintptr(handle)]
+}
+
+func releaseInnerExampleInstance(handle unsafe.Pointer) {
+	innerExampleInstancesMu.Lock()
+	defer innerExampleInstancesMu.Unlock()
+	delete(innerExampleInstances, uintptr(handle))
+}
+
+func registerInnerExample() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:      "InnerExample",
+		Parent:    "Object",
+		IsExposed: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &InnerExample{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("Object"))
+			n.BindPtr(parent)
+			return parent, registerInnerExampleInstance(n)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseInnerExampleInstance(instance)
+		},
+	})
+
+	gdextension.LoadEditorDocXML(innerExampleDocXML)
+}
+
+// innerExampleDocXML is the rendered <class> document for InnerExample.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const innerExampleDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="InnerExample" inherits="Object" version="4.4">
+    <brief_description>Demonstrates how to declare an additional class in the same file.</brief_description>
+    <description>Demonstrates how to declare an additional class in the&#xA;same file. ` + "`" + `@innerclass` + "`" + ` registers it with Godot&#39;s ClassDB alongside&#xA;the main ` + "`" + `@class` + "`" + ` — Godot&#39;s ClassDB is a flat namespace, so the&#xA;&#34;inner&#34; terminology is a source-organization convention rather than&#xA;a nesting relationship. GDScript callers reach ` + "`" + `InnerExample.new()` + "`" + `&#xA;the same way they reach the main class.</description>
+</class>`
+
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerLocaleLanguage)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
 		gdextension.UnregisterClass("LocaleLanguage")
+	})
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerInnerExample)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("InnerExample")
 	})
 }

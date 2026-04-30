@@ -150,16 +150,14 @@ func composeDescription(info docInfo) string {
 // extension class and returns the marshaled UTF-8 string the bindings
 // pass to editor_help_load_xml_from_utf8_chars at register time.
 //
-// data is the same emitData the bindings template consumes — the XML
-// emitter pulls description / deprecated / experimental / since / see
-// metadata from the docInfo embedded in each emit type, plus the
-// already-resolved Godot type names (ArgGodotTypes / ReturnGodotType /
-// GodotType) and class-name qualifiers (ArgClassNames /
-// ReturnClassName / ClassName) that Phase A and B set up.
-func buildClassXML(data emitData, classDocs docInfo, classBrief string, tutorials []tutorialInfo) (string, error) {
+// ec is the per-class emit data — methods, properties, signals,
+// enums — already resolved with their docInfo and Godot type names.
+// classDocs / classBrief / tutorials carry the class-level
+// metadata captured during discovery.
+func buildClassXML(ec emitClass, classDocs docInfo, classBrief string, tutorials []tutorialInfo) (string, error) {
 	root := xmlClass{
-		Name:         data.Class,
-		Inherits:     data.Parent,
+		Name:         ec.Class,
+		Inherits:     ec.Parent,
 		Version:      classDocXMLVersion,
 		Deprecated:   classDocs.Deprecated,
 		Experimental: classDocs.Experimental,
@@ -175,31 +173,31 @@ func buildClassXML(data emitData, classDocs docInfo, classBrief string, tutorial
 		root.Tutorials = t
 	}
 
-	if len(data.Methods) > 0 {
+	if len(ec.Methods) > 0 {
 		m := &xmlMethods{}
-		for _, em := range data.Methods {
+		for _, em := range ec.Methods {
 			m.Methods = append(m.Methods, methodToXML(em))
 		}
 		root.Methods = m
 	}
 
-	if len(data.Properties) > 0 {
+	if len(ec.Properties) > 0 {
 		mem := &xmlMembers{}
-		for _, ep := range data.Properties {
+		for _, ep := range ec.Properties {
 			mem.Members = append(mem.Members, propertyToXML(ep))
 		}
 		root.Members = mem
 	}
 
-	if len(data.Signals) > 0 {
+	if len(ec.Signals) > 0 {
 		sig := &xmlSignals{}
-		for _, es := range data.Signals {
+		for _, es := range ec.Signals {
 			sig.Signals = append(sig.Signals, signalToXML(es))
 		}
 		root.Signals = sig
 	}
 
-	if c := constantsFromEnums(data.Enums); c != nil {
+	if c := constantsFromEnums(ec.Enums); c != nil {
 		root.Constants = c
 	}
 

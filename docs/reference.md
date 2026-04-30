@@ -52,7 +52,7 @@ below organize the tags by attachment site.
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
 | `@class` | one per file | none | Marks this struct as the file's main extension class. The codegen registers it with Godot's ClassDB. Mutually exclusive with `@innerclass`. |
-| `@innerclass` | optional | none | Marks the struct as a nested type the user wants to record but NOT register with Godot. Useful for grouping related types in one file. Inner classes can't be instantiated from GDScript. |
+| `@innerclass` | optional | none | Marks an additional struct in the file as a registered class. Godot's ClassDB is a flat namespace — the "inner" terminology is a source-organization convention rather than a nesting relationship. Inner classes need their own `@extends` parent and may carry methods + properties. Today they don't carry signals or enums (those stay scoped to the file's `@class`); declare a separate file if an inner needs its own. |
 | `@abstract` | optional | none | Only valid on `@class` structs. Sets `is_abstract` on the registration so GDScript can't instantiate the class directly — only subclasses. Equivalent to GDScript's `class_name` + `abstract`. |
 | `@editor` | optional | none | Only valid on `@class` structs. Registers the class at `INIT_LEVEL_EDITOR` instead of `INIT_LEVEL_SCENE`, so it's invisible to deployed game builds. Use for `EditorPlugin` subclasses, custom inspectors, gizmos, etc. |
 
@@ -91,17 +91,22 @@ type MyEditorTool struct {
     godot.EditorPlugin
 }
 
-// Helper is recorded but not registered with Godot.
+// Helper is registered alongside MyNode as a sibling class in
+// Godot's flat ClassDB. GDScript callers reach Helper.new()
+// directly.
 //
 // @innerclass
-type Helper struct{}
+type Helper struct {
+    // @extends
+    godot.Object
+}
 ```
 
 ### On an embedded field of a `@class` struct
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@extends` | exactly one per `@class` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type must be a class from your bindings package (e.g., `godot.Node`, `godot.Node2D`, `godot.RefCounted`). |
+| `@extends` | exactly one per `@class` / `@innerclass` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type must be a class from your bindings package (e.g., `godot.Node`, `godot.Node2D`, `godot.RefCounted`). |
 
 ```go
 // @class
@@ -424,9 +429,9 @@ func (p *Player) LegacyAttack() { /* ... */ }
 Every file with extension code declares one main class via
 `@class`. The codegen emits a `register<Class>()` function plus an
 `init()` that hooks it into `INIT_LEVEL_SCENE` (or
-`INIT_LEVEL_EDITOR` if `@editor` is set). Inner classes
-(`@innerclass`) are recorded but not registered with Godot's
-ClassDB.
+`INIT_LEVEL_EDITOR` if `@editor` is set). `@innerclass` siblings
+register alongside the main class as flat entries in Godot's
+ClassDB at the same init level.
 
 The synthesized `<file>_bindings.go` contains:
 

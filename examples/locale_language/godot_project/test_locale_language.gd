@@ -39,9 +39,14 @@ func _initialize() -> void:
 	ok = _check("ClassDB.class_has_method('LocaleLanguage', '_process', true)",
 			ClassDB.class_has_method("LocaleLanguage", "_process", true), true) and ok
 
-	# Inner classes are discovered but not registered — assert that.
-	ok = _check("ClassDB.class_exists('InnerExample') (inner — not registered)",
-			ClassDB.class_exists("InnerExample"), false) and ok
+	# Inner classes register with Godot's ClassDB alongside the file's
+	# main @class — Godot's ClassDB is a flat namespace, so the
+	# "inner" terminology is a source-organization convention. Assert
+	# the inner class made it in and links to its declared parent.
+	ok = _check("ClassDB.class_exists('InnerExample')",
+			ClassDB.class_exists("InnerExample"), true) and ok
+	ok = _check("ClassDB.get_parent_class('InnerExample') == 'Object'",
+			ClassDB.get_parent_class("InnerExample"), &"Object") and ok
 
 	# Static dispatch through ClassDB — bypasses the parser identifier
 	# resolution that would block `LocaleLanguage.parse(...)` syntax on an

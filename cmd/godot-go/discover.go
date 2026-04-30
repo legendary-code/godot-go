@@ -321,13 +321,11 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 					IsClass:    isClass,
 					IsEditor:   doctag.Has(tags, "editor"),
 				}
-				// Parent resolution: only @class structs need (and get)
-				// a parent. Inner classes embed framework types
-				// without that meaning "extends" — they're just nested
-				// declarations the codegen records but doesn't
-				// register. For @class structs, exactly one embedded
-				// field must carry @extends; that's the parent.
-				if isClass {
+				// Parent resolution: both @class and @innerclass register
+				// with Godot's ClassDB, so both need a parent. Exactly
+				// one embedded field must carry @extends. Plain (non-
+				// tagged) structs are Go-only and don't need one.
+				if isClass || isInner {
 					parent, parentImport, perr := findExtendsParent(fset, t, ts.Pos(), d.Imports)
 					if perr != nil {
 						return nil, perr
@@ -526,23 +524,26 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
-	// Properties: walk the main class's struct fields and methods for
-	// @property declarations. Two surface forms (see propertyInfo):
-	//   - field form: an exported field with @property. We synthesize
-	//     getter/setter methods at emit time.
-	//   - method form: a Get<Name> method with @property. The user owns
-	//     the getter (and optional setter); we just register.
-	// The two forms must not collide for the same property name — that
-	// would leave the binding ambiguous.
+	// Properties: walk each registered class's struct fields and
+	// methods for @property declarations. Both @class and @innerclass
+	// run through the same collector — inner classes can carry their
+	// own properties, registered against their own ClassDB entry.
 	if err := collectProperties(fset, d.MainClass); err != nil {
 		return nil, err
+	}
+	for _, ic := range d.InnerClasses {
+		if err := collectProperties(fset, ic); err != nil {
+			return nil, err
+		}
 	}
 
 	// Signals: walk @signals-tagged interfaces. Each interface method
 	// becomes a signal on the main class. Codegen attaches an emit
 	// method directly to *<MainClass> for each signal — no embedded
 	// struct in the user's source, no boilerplate beyond the interface
-	// declaration itself.
+	// declaration itself. Signals on inner classes aren't supported in
+	// the current release; the user can always declare them in a
+	// separate file with its own @class.
 	if err := collectSignals(fset, d.MainClass, signalIfaces); err != nil {
 		return nil, err
 	}

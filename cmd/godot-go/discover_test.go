@@ -269,11 +269,17 @@ type MyNode struct {
 }
 
 // @innerclass
-type Helper struct {}
+type Helper struct {
+	// @extends
+	core.Object
+}
 `
 	d := mustDiscover(t, src)
 	if len(d.InnerClasses) != 1 || d.InnerClasses[0].Name != "Helper" {
 		t.Fatalf("inner classes = %+v", d.InnerClasses)
+	}
+	if d.InnerClasses[0].Parent != "Object" {
+		t.Errorf("inner Parent = %q, want Object", d.InnerClasses[0].Parent)
 	}
 }
 
@@ -940,7 +946,10 @@ type MyNode struct {
 
 // @innerclass
 // @editor
-type Helper struct {}
+type Helper struct {
+	// @extends
+	core.Object
+}
 `
 	mustFailDiscover(t, src, "@editor on inner class")
 }
