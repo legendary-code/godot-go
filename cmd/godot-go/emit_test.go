@@ -71,6 +71,7 @@ type N struct {
 	// @extends
 	core.Node
 }
+// @static
 func (N) Origin() int64 { return 42 }
 `
 	out := emitFor(t, src)

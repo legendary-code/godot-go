@@ -1073,7 +1073,7 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
             <return type="int"></return>
-            <description>Exercises Phase 5e static dispatch — unnamed receiver makes this&#xA;` + "`" + `MyNode.origin()` + "`" + ` from GDScript, no instance lookup, no MethodFlagStatic&#xA;double-counting.</description>
+            <description>Is a class-level method — ` + "`" + `@static` + "`" + ` registers it with&#xA;MethodFlagStatic so GDScript callers reach it as ` + "`" + `MyNode.origin()` + "`" + `&#xA;without an instance.</description>
         </method>
         <method name="get_score">
             <return type="int"></return>

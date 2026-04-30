@@ -165,7 +165,7 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="parse" qualifiers="static">
             <return type="int"></return>
             <param index="0" name="value" type="String"></param>
-            <description>Is, by convention, a static function in Godot.  In general, if the receiver of a method has no&#xA;assigned name, we treat this like a static function in Godot, attached to our ` + "`" + `LocaleLanguage` + "`" + ` class in this instance</description>
+            <description>Is registered as a class-level static via the ` + "`" + `@static` + "`" + `&#xA;doctag — Godot exposes it as ` + "`" + `LocaleLanguage.parse(value)` + "`" + ` with&#xA;no instance lookup. The receiver stays unnamed since the body&#xA;doesn&#39;t need one.</description>
         </method>
         <method name="do_something_alt_name">
             <description>Demonstrates a regular member function of LocaleLanguage.  Because the receiver has an assigned name,&#xA;this is an instance function rather than a static function.  Exported methods will be bound to their snake case&#xA;equivalent, unless a @name doc comment is provided as shown below.</description>

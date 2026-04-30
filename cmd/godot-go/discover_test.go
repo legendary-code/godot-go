@@ -85,11 +85,62 @@ type MyNode struct {
 	// @extends
 	core.Node
 }
+// @static
 func (MyNode) Helper() {}
 `
 	d := mustDiscover(t, src)
 	if d.MainClass.Methods[0].Kind != methodStatic {
-		t.Errorf("Kind = %v, want static (unnamed receiver)", d.MainClass.Methods[0].Kind)
+		t.Errorf("Kind = %v, want static (@static-tagged)", d.MainClass.Methods[0].Kind)
+	}
+}
+
+func TestDiscoverUnnamedReceiverWithoutStaticRejected(t *testing.T) {
+	// `func (T) Foo()` used to silently classify as static — now
+	// requires explicit @static so the user's intent is visible.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (MyNode) Helper() {}
+`
+	mustFailDiscover(t, src, "unnamed receiver but no @static")
+}
+
+func TestDiscoverStaticAndOverrideRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+// @static
+// @override
+func (n *MyNode) Helper() {}
+`
+	mustFailDiscover(t, src, "both @static and @override")
+}
+
+func TestDiscoverStaticWithNamedReceiver(t *testing.T) {
+	// Named receiver + @static is allowed — the method's body just
+	// doesn't use the receiver, but Godot still sees it as static
+	// (registered with MethodFlagStatic).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+// @static
+func (n *MyNode) Helper() int64 { return 42 }
+`
+	d := mustDiscover(t, src)
+	if d.MainClass.Methods[0].Kind != methodStatic {
+		t.Errorf("Kind = %v, want static", d.MainClass.Methods[0].Kind)
 	}
 }
 

@@ -391,20 +391,28 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		return nil, fmt.Errorf("multiple @class structs (one per file is allowed): %s", strings.Join(names, ", "))
 	}
 
-	// Methods: walk all FuncDecls with named receivers matching one of the
-	// discovered struct types. Static (unnamed receiver) methods are
-	// identified by an empty Names slice on the receiver field.
+	// Methods: walk all FuncDecls with receivers matching one of the
+	// discovered struct types. The classification rule is explicit-tag-
+	// driven, no implicit behavior keyed off receiver shape:
 	//
-	// Classification rule (Phase 6):
-	//   - unnamed receiver           → static
+	//   - @static doctag             → static (registered with MethodFlagStatic)
 	//   - @override doctag           → override (registered as a Godot virtual)
 	//   - else                       → regular instance method
-	// Lowercase-first methods with no @override are treated as Go-private
-	// helpers and skipped — they don't get registered with Godot at all,
-	// matching Go's own export model. The @name doctag overrides the
-	// derived Godot name verbatim; otherwise the name is snake_case(GoName)
-	// with a leading `_` for overrides (or for cases where @name already
-	// supplies a leading underscore explicitly).
+	//
+	// Lowercase-first methods with no @override / @static are treated
+	// as Go-private helpers and skipped — they belong to the user's
+	// package, not to Godot's ClassDB. The @name doctag overrides the
+	// derived Godot name verbatim; otherwise the name is
+	// snake_case(GoName) with a leading `_` for overrides (or for
+	// cases where @name already supplies a leading underscore
+	// explicitly).
+	//
+	// Receiver shape: a method tagged @static may have either an
+	// unnamed receiver (`func (T) Foo()` — clearer about not using
+	// the instance) or a named one (`func (t *T) Foo()` — fine, the
+	// argument is just unused). An unnamed receiver WITHOUT @static
+	// errors out — silently treating it as static was the old
+	// implicit behavior the explicit tag replaces.
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 {
@@ -415,12 +423,22 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		if !ok {
 			continue
 		}
-		isStatic := len(fn.Recv.List[0].Names) == 0
 		tags := doctag.Parse(fn.Doc)
+		hasStatic := doctag.Has(tags, "static")
 		hasOverride := doctag.Has(tags, "override")
-		// Skip Go-private methods that aren't explicit overrides — they
-		// belong to the user's package, not to Godot's ClassDB.
-		if !isStatic && !hasOverride && isLowerFirst(fn.Name.Name) {
+		recvUnnamed := len(fn.Recv.List[0].Names) == 0
+		if recvUnnamed && !hasStatic {
+			return nil, fmt.Errorf("%s: %s.%s has an unnamed receiver but no @static — add @static to register the method as a class method, or name the receiver to register an instance method",
+				posStr(fset, fn.Pos()), recvType, fn.Name.Name)
+		}
+		if hasStatic && hasOverride {
+			return nil, fmt.Errorf("%s: %s.%s carries both @static and @override — pick one (statics aren't dispatched virtually)",
+				posStr(fset, fn.Pos()), recvType, fn.Name.Name)
+		}
+		// Skip Go-private methods that aren't explicit overrides or
+		// statics — they belong to the user's package, not to Godot's
+		// ClassDB.
+		if !hasStatic && !hasOverride && isLowerFirst(fn.Name.Name) {
 			continue
 		}
 		mi := &methodInfo{
@@ -432,7 +450,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			IsPointerRcv: isPtr,
 		}
 		switch {
-		case isStatic:
+		case hasStatic:
 			mi.Kind = methodStatic
 		case hasOverride:
 			mi.Kind = methodOverride

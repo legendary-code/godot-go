@@ -51,8 +51,12 @@ const (
 	LanguageGerman
 )
 
-// Parse is, by convention, a static function in Godot.  In general, if the receiver of a method has no
-// assigned name, we treat this like a static function in Godot, attached to our `LocaleLanguage` class in this instance
+// Parse is registered as a class-level static via the `@static`
+// doctag — Godot exposes it as `LocaleLanguage.parse(value)` with
+// no instance lookup. The receiver stays unnamed since the body
+// doesn't need one.
+//
+// @static
 func (LocaleLanguage) Parse(value string) Language {
 	switch value {
 	case "en":

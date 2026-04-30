@@ -153,10 +153,11 @@ func (n *MyNode) Greet(name string) string {
 	return fmt.Sprintf("hello, %s!", name)
 }
 
-// Origin exercises Phase 5e static dispatch — unnamed receiver makes this
-// `MyNode.origin()` from GDScript, no instance lookup, no MethodFlagStatic
-// double-counting.
+// Origin is a class-level method — `@static` registers it with
+// MethodFlagStatic so GDScript callers reach it as `MyNode.origin()`
+// without an instance.
 //
+// @static
 // @experimental Behavior may shift once the static-method ABI moves out of beta.
 func (MyNode) Origin() int64 {
 	return 42
