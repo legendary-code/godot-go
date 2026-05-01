@@ -1,6 +1,1 @@
-- make static explicit via `@static` doc tag, remove implicit behavior, update the docs to reflect this
-- the logic for defaulting to single for precision for pre-4.5 extension api json should live in loadApi, since it's responsible for all things related to population that struct
-- register @innerclass tagged structs, as they are a usable in godot (documentation suggests they're not registered) 
-- is validateGroupOrdering still used? I thought we made it explicitly required to tag each property with a group so there's less implicit behavior?
-- Does @extends support user defined classes in the GDExtension? it should
-- 
+- drop @innerclass entirely, restrict files to one @class at most, error on @extends outside @class — Godot's GDExtension ABI has no nesting so the doctag asserted a Godot concept that doesn't exist

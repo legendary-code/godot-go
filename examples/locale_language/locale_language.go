@@ -1,9 +1,9 @@
 package main
 
 // This go:generate call will run our tool and generate binding/registration code for the current file in a separate
-// file, `main_bindings.go`.  By convention, only one struct declaration without an `@innerclass` doc string is allowed
-// and will be the main class we are generating bindings for.  One file = one godot class to register.  Any additional
-// struct declarations must use `@innerclass` doc string will be treated as inner classes of the main class.
+// file, `<sourcefile>_bindings.go`.  One file = one Godot class — exactly one struct in this file must carry the
+// `@class` doctag, and that's the struct codegen registers with Godot's ClassDB. Other structs in the file are plain
+// Go types and aren't registered.
 //go:generate godot-go
 
 import "github.com/legendary-code/godot-go/godot"
@@ -31,31 +31,6 @@ type LocaleLanguage struct {
 	//
 	// @extends
 	godot.Node
-}
-
-// InnerExample demonstrates how to declare an additional class in the
-// same file. `@innerclass` registers it with Godot's ClassDB alongside
-// the main `@class` — Godot's ClassDB is a flat namespace, so the
-// "inner" terminology is a source-organization convention rather than
-// a nesting relationship. GDScript callers reach `InnerExample.new()`
-// the same way they reach the main class.
-//
-// @innerclass
-type InnerExample struct {
-	// @extends
-	godot.Object
-}
-
-// LocaleLanguageVariant extends the file's main `@class` directly via
-// the bare-identifier `@extends LocaleLanguage` form — useful when an
-// inner class is conceptually a specialization of its outer. The
-// codegen does a deferred parent-resolution pass so this works
-// regardless of declaration order in the file.
-//
-// @innerclass
-type LocaleLanguageVariant struct {
-	// @extends
-	LocaleLanguage
 }
 
 // Language defines an enum type, which will automatically be part of LocaleLanguage, since that's our main type being

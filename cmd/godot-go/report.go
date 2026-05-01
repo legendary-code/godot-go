@@ -25,14 +25,6 @@ func report(w io.Writer, fset *token.FileSet, d *discovered) {
 	}
 	reportMethods(w, c.Methods)
 
-	for _, ic := range d.InnerClasses {
-		fmt.Fprintf(w, "  inner class %s\n", ic.Name)
-		if ic.Description != "" {
-			fmt.Fprintf(w, "    description: %s\n", ic.Description)
-		}
-		reportMethods(w, ic.Methods)
-	}
-
 	for _, e := range d.Enums {
 		fmt.Fprintf(w, "  enum %s (%d values)\n", e.Name, len(e.Values))
 		for _, v := range e.Values {

@@ -1,8 +1,8 @@
 // Package doctag parses `@<name>[ <value>]` directives out of Go doc
 // comments. The codegen tool (cmd/godot-go) reads these to learn user
-// intent that doesn't fit cleanly in the type system — e.g. `@innerclass`
-// to opt a struct into nested-class registration, `@name foo` to override
-// the auto-generated GDScript-visible method name.
+// intent that doesn't fit cleanly in the type system — e.g. `@class`
+// to opt a struct into Godot ClassDB registration, `@name foo` to
+// override the auto-generated GDScript-visible method name.
 //
 // The parser is deliberately liberal: it surfaces every recognized tag,
 // without checking applicability. The AST consumer enforces context (a

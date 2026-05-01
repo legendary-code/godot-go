@@ -259,7 +259,10 @@ func (n *MyNode) Hello() {}
 	}
 }
 
-func TestDiscoverInnerClass(t *testing.T) {
+func TestDiscoverInnerClassRejected(t *testing.T) {
+	// @innerclass was removed: only one @class per file is registered.
+	// A struct still carrying @innerclass gets a clear error pointing at
+	// the new model rather than silently going unregistered.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -274,13 +277,27 @@ type Helper struct {
 	core.Object
 }
 `
-	d := mustDiscover(t, src)
-	if len(d.InnerClasses) != 1 || d.InnerClasses[0].Name != "Helper" {
-		t.Fatalf("inner classes = %+v", d.InnerClasses)
-	}
-	if d.InnerClasses[0].Parent != "Object" {
-		t.Errorf("inner Parent = %q, want Object", d.InnerClasses[0].Parent)
-	}
+	mustFailDiscover(t, src, "@innerclass")
+}
+
+func TestDiscoverExtendsOutsideClassRejected(t *testing.T) {
+	// @extends only makes sense on the @class struct's embedded parent.
+	// On any other struct it's a misuse — typically the user thought
+	// they were declaring a registered class but forgot @class.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+
+type Helper struct {
+	// @extends
+	core.Object
+}
+`
+	mustFailDiscover(t, src, "not tagged @class")
 }
 
 func TestDiscoverExtendsCrossPackage(t *testing.T) {
@@ -307,74 +324,19 @@ type MyHero struct {
 	}
 }
 
-func TestDiscoverExtendsSameFileSibling(t *testing.T) {
-	// Bare-Ident parent on @extends names a sibling class in the
-	// same file. Useful for inner classes that compose with their
-	// containing class. parentImport stays empty since no import
-	// is involved.
+func TestDiscoverExtendsBareIdentRejected(t *testing.T) {
+	// Bare-identifier parents (`@extends Outer` referring to a
+	// same-file sibling) are no longer supported — only one @class
+	// per file is registered, and cross-file parents take the
+	// qualified `pkg.Type` form.
 	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-type Outer struct {
-	// @extends
-	core.Node
-}
-
-// @innerclass
-type Inner struct {
-	// @extends
-	Outer
-}
-`
-	d := mustDiscover(t, src)
-	if len(d.InnerClasses) != 1 {
-		t.Fatalf("inner classes = %+v", d.InnerClasses)
-	}
-	inner := d.InnerClasses[0]
-	if inner.Parent != "Outer" {
-		t.Errorf("inner Parent = %q, want Outer", inner.Parent)
-	}
-	if inner.ParentImport != "" {
-		t.Errorf("inner ParentImport = %q, want empty (same-file sibling)", inner.ParentImport)
-	}
-}
-
-func TestDiscoverExtendsForwardSibling(t *testing.T) {
-	// Same as above, but the sibling parent is declared AFTER the
-	// extending class — verifies the deferred resolution catches
-	// forward references.
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @innerclass
-type Inner struct {
-	// @extends
-	Outer
-}
-
-// @class
-type Outer struct {
-	// @extends
-	core.Node
-}
-`
-	d := mustDiscover(t, src)
-	if len(d.InnerClasses) != 1 || d.InnerClasses[0].Parent != "Outer" {
-		t.Fatalf("inner = %+v", d.InnerClasses)
-	}
-}
-
-func TestDiscoverExtendsBareIdentNotASibling(t *testing.T) {
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
 // @class
 type Lonely struct {
 	// @extends
-	NotASiblingClass
+	SomeOtherType
 }
-
-type NotASiblingClass = core.Node
 `
-	mustFailDiscover(t, src, "bare-identifier parents must name a same-file")
+	mustFailDiscover(t, src, "must be an embedded package-qualified type")
 }
 
 func TestDiscoverEnum(t *testing.T) {
@@ -472,20 +434,6 @@ type Wrong struct {
 }
 `
 	mustFailDiscover(t, src, "@extends on named field")
-}
-
-func TestDiscoverErrorOnClassAndInnerClass(t *testing.T) {
-	// @class and @innerclass are mutually exclusive — pick one role.
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-// @innerclass
-type Confused struct {
-	// @extends
-	core.Node
-}
-`
-	mustFailDiscover(t, src, "both @class and @innerclass")
 }
 
 func TestDiscoverPropertyFieldForm(t *testing.T) {
@@ -1029,22 +977,4 @@ type MyEditorPlugin struct {
 	}
 }
 
-func TestDiscoverEditorOnInnerClassRejected(t *testing.T) {
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-type MyNode struct {
-	// @extends
-	core.Node
-}
-
-// @innerclass
-// @editor
-type Helper struct {
-	// @extends
-	core.Object
-}
-`
-	mustFailDiscover(t, src, "@editor on inner class")
-}
 

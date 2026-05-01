@@ -1,7 +1,7 @@
 // Package main is the godot-go locale_language example — the verbatim
 // PLAN.md showcase of doc-tagged class authoring (LocaleLanguage with
-// @abstract, an @innerclass companion, an enum, a static method, an
-// @name-renamed instance method, and a virtual override).
+// @abstract, an enum, a @static method, an @name-renamed instance
+// method, and a virtual override).
 //
 // At SCENE init it announces itself and reports whether ClassDB picked up
 // the generated bindings; the rest of the surface is exercised by the

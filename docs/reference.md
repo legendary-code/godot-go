@@ -51,8 +51,7 @@ below organize the tags by attachment site.
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@class` | one per file | none | Marks this struct as the file's main extension class. The codegen registers it with Godot's ClassDB. Mutually exclusive with `@innerclass`. |
-| `@innerclass` | optional | none | Marks an additional struct in the file as a registered class. Godot's ClassDB is a flat namespace — the "inner" terminology is a source-organization convention rather than a nesting relationship. Inner classes need their own `@extends` parent and may carry methods + properties. Today they don't carry signals or enums (those stay scoped to the file's `@class`); declare a separate file if an inner needs its own. |
+| `@class` | exactly one per file | none | Marks this struct as the file's extension class. The codegen registers it with Godot's ClassDB. Each file declares at most one Godot class; additional Go structs in the same file are plain Go types and aren't registered. |
 | `@abstract` | optional | none | Only valid on `@class` structs. Sets `is_abstract` on the registration so GDScript can't instantiate the class directly — only subclasses. Equivalent to GDScript's `class_name` + `abstract`. |
 | `@editor` | optional | none | Only valid on `@class` structs. Registers the class at `INIT_LEVEL_EDITOR` instead of `INIT_LEVEL_SCENE`, so it's invisible to deployed game builds. Use for `EditorPlugin` subclasses, custom inspectors, gizmos, etc. |
 
@@ -90,23 +89,13 @@ type MyEditorTool struct {
     // @extends
     godot.EditorPlugin
 }
-
-// Helper is registered alongside MyNode as a sibling class in
-// Godot's flat ClassDB. GDScript callers reach Helper.new()
-// directly.
-//
-// @innerclass
-type Helper struct {
-    // @extends
-    godot.Object
-}
 ```
 
 ### On an embedded field of a `@class` struct
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@extends` | exactly one per `@class` / `@innerclass` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type can be (a) a class from any imported package — your bindings package (`godot.Node`, `godot.RefCounted`), the user-class package of another GDExtension, or any third-party module that re-exports a registered class — or (b) a same-file sibling `@class` / `@innerclass` referenced by bare identifier (useful for inner classes specializing their containing class). For cross-package parents the runtime registration succeeds when the parent class is in Godot's ClassDB by the time this class loads, so cross-extension inheritance requires the providing extension to register first. |
+| `@extends` | exactly one per `@class` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type must be a package-qualified type like `godot.Node` — works for your bindings package (`godot.Node`, `godot.RefCounted`), the user-class package of another GDExtension, or any third-party module that re-exports a registered class. The runtime registration succeeds when the parent class is in Godot's ClassDB by the time this class loads, so cross-extension inheritance requires the providing extension to register first. |
 
 ```go
 // @class
@@ -114,21 +103,16 @@ type MyNode struct {
     // @extends — required, exactly one, must sit on an embedded field.
     godot.Node
 }
-
-// Inner classes can extend the file's main class via the bare-
-// identifier form. Source order doesn't matter — discovery does a
-// deferred parent-resolution pass so forward references resolve.
-//
-// @innerclass
-type MyNodeVariant struct {
-    // @extends
-    MyNode
-}
 ```
 
 `@extends` on a *named* (non-embedded) field is rejected — Go's
 embedding is what gives the wrapper its inherited methods, so the
 parent must come through embedding.
+
+`@extends` on a struct that isn't tagged `@class` is also rejected
+— only `@class` structs are registered with Godot's ClassDB, so
+finding `@extends` elsewhere is almost always a missing-tag mistake
+worth catching loudly.
 
 Cross-extension inheritance (extending a class from another
 GDExtension) is supported via the standard package-qualified form.
@@ -444,12 +428,11 @@ func (p *Player) LegacyAttack() { /* ... */ }
 
 ### Class registration
 
-Every file with extension code declares one main class via
-`@class`. The codegen emits a `register<Class>()` function plus an
-`init()` that hooks it into `INIT_LEVEL_SCENE` (or
-`INIT_LEVEL_EDITOR` if `@editor` is set). `@innerclass` siblings
-register alongside the main class as flat entries in Godot's
-ClassDB at the same init level.
+Every file with extension code declares one class via `@class`.
+The codegen emits a `register<Class>()` function plus an `init()`
+that hooks it into `INIT_LEVEL_SCENE` (or `INIT_LEVEL_EDITOR` if
+`@editor` is set). One file = one registered class; additional Go
+structs in the same file are plain Go types.
 
 The synthesized `<file>_bindings.go` contains:
 
@@ -483,9 +466,6 @@ Valid parents are:
   any other Go package is. Runtime registration succeeds when the
   parent class is in Godot's ClassDB by the time this class
   registers.
-- A same-file sibling `@class` / `@innerclass` declared with a
-  bare-identifier @extends. Source order doesn't matter — the
-  codegen does a deferred parent-resolution pass.
 
 ### Methods
 

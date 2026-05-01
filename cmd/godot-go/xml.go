@@ -146,18 +146,18 @@ func composeDescription(info docInfo) string {
 	return b.String()
 }
 
-// buildClassXML constructs the <class>…</class> document for one
+// buildClassXML constructs the <class>…</class> document for the
 // extension class and returns the marshaled UTF-8 string the bindings
 // pass to editor_help_load_xml_from_utf8_chars at register time.
 //
-// ec is the per-class emit data — methods, properties, signals,
+// d is the per-file emit data — methods, properties, signals,
 // enums — already resolved with their docInfo and Godot type names.
 // classDocs / classBrief / tutorials carry the class-level
 // metadata captured during discovery.
-func buildClassXML(ec emitClass, classDocs docInfo, classBrief string, tutorials []tutorialInfo) (string, error) {
+func buildClassXML(d emitData, classDocs docInfo, classBrief string, tutorials []tutorialInfo) (string, error) {
 	root := xmlClass{
-		Name:         ec.Class,
-		Inherits:     ec.Parent,
+		Name:         d.Class,
+		Inherits:     d.Parent,
 		Version:      classDocXMLVersion,
 		Deprecated:   classDocs.Deprecated,
 		Experimental: classDocs.Experimental,
@@ -173,31 +173,31 @@ func buildClassXML(ec emitClass, classDocs docInfo, classBrief string, tutorials
 		root.Tutorials = t
 	}
 
-	if len(ec.Methods) > 0 {
+	if len(d.Methods) > 0 {
 		m := &xmlMethods{}
-		for _, em := range ec.Methods {
+		for _, em := range d.Methods {
 			m.Methods = append(m.Methods, methodToXML(em))
 		}
 		root.Methods = m
 	}
 
-	if len(ec.Properties) > 0 {
+	if len(d.Properties) > 0 {
 		mem := &xmlMembers{}
-		for _, ep := range ec.Properties {
+		for _, ep := range d.Properties {
 			mem.Members = append(mem.Members, propertyToXML(ep))
 		}
 		root.Members = mem
 	}
 
-	if len(ec.Signals) > 0 {
+	if len(d.Signals) > 0 {
 		sig := &xmlSignals{}
-		for _, es := range ec.Signals {
+		for _, es := range d.Signals {
 			sig.Signals = append(sig.Signals, signalToXML(es))
 		}
 		root.Signals = sig
 	}
 
-	if c := constantsFromEnums(ec.Enums); c != nil {
+	if c := constantsFromEnums(d.Enums); c != nil {
 		root.Constants = c
 	}
 

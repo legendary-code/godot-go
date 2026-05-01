@@ -20,9 +20,8 @@ type discovered struct {
 
 	Imports map[string]string // local name → import path
 
-	MainClass    *classInfo
-	InnerClasses []*classInfo
-	Enums        []*enumInfo
+	MainClass *classInfo
+	Enums     []*enumInfo
 }
 
 // docInfo carries the documentation metadata captured from a Go doc
@@ -84,17 +83,11 @@ type classInfo struct {
 	// Tutorials accumulates `@tutorial("title", "url")` entries.
 	Tutorials []tutorialInfo
 
-	// Parent is the framework class this struct embeds. Empty for inner
-	// classes — those don't extend a Godot class.
+	// Parent is the framework class this struct embeds.
 	Parent       string
 	ParentImport string // e.g. "github.com/legendary-code/godot-go/core"
 
 	IsAbstract bool
-	IsInner    bool
-	// IsClass marks structs explicitly tagged `@class` — the
-	// registered extension class for this file. Exactly one struct
-	// per file must carry @class. Mutually exclusive with @innerclass.
-	IsClass bool
 	// IsEditor flips registration from INIT_LEVEL_SCENE to
 	// INIT_LEVEL_EDITOR — Godot only fires editor-level init callbacks
 	// when the engine is in editor mode, so the class is invisible to
@@ -275,13 +268,20 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		d.Imports[local] = path
 	}
 
-	// First pass: top-level types. Distinguish struct types (candidate
-	// classes), named-int types (candidate enums), and interface types
-	// tagged @signals (signal contracts). Other type aliases are out of
-	// scope here.
-	structs := map[string]*classInfo{}
+	// Top-level types. Distinguish struct types (candidate classes),
+	// named-int types (candidate enums), and interface types tagged
+	// @signals (signal contracts). Other type aliases are out of scope
+	// here.
+	//
+	// One file = one registered class. The struct tagged @class is the
+	// only one codegen registers with Godot's ClassDB; any other struct
+	// is a plain Go type. @extends is meaningful only on the @class
+	// struct's embedded parent — finding it elsewhere is a misuse and
+	// errors out so users don't think they declared a Godot class
+	// without registering it.
 	intTypes := map[string]*enumInfo{}
 	signalIfaces := []*ast.TypeSpec{}
+	mainName := ""
 	for _, decl := range file.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.TYPE {
@@ -293,11 +293,22 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			tags := doctag.Parse(doc)
 			switch t := ts.Type.(type) {
 			case *ast.StructType:
-				isClass := doctag.Has(tags, "class")
-				isInner := doctag.Has(tags, "innerclass")
-				if isClass && isInner {
-					return nil, fmt.Errorf("%s: %s carries both @class and @innerclass — pick one (the framework registers @class structs and discovers @innerclass structs as nested types)",
-						posStr(fset, ts.Pos()), ts.Name.Name)
+				if doctag.Has(tags, "innerclass") {
+					return nil, fmt.Errorf("%s: %s carries @innerclass — the doctag is no longer supported. One @class per file is registered with Godot's ClassDB; move %s to its own file with @class to register it.",
+						posStr(fset, ts.Pos()), ts.Name.Name, ts.Name.Name)
+				}
+				if !doctag.Has(tags, "class") {
+					// Non-@class structs are plain Go types. Reject
+					// @extends on their fields so users get a clear
+					// error instead of silently-not-registered.
+					if err := rejectExtendsOutsideClass(fset, ts, t); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				if mainName != "" {
+					return nil, fmt.Errorf("%s: multiple @class structs in one file (%s and %s) — declare each in its own file",
+						posStr(fset, ts.Pos()), mainName, ts.Name.Name)
 				}
 				docs := parseDocInfo(doc, tags, ts.Name.Name)
 				brief := extractBrief(docs.Description)
@@ -308,24 +319,24 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				if terr != nil {
 					return nil, fmt.Errorf("%s: %s: %w", posStr(fset, ts.Pos()), ts.Name.Name, terr)
 				}
-				ci := &classInfo{
-					docInfo:    docs,
-					Name:       ts.Name.Name,
-					Pos:        ts.Pos(),
-					Decl:       ts,
-					Doc:        tags,
-					Brief:      brief,
-					Tutorials:  tutorials,
-					IsAbstract: doctag.Has(tags, "abstract"),
-					IsInner:    isInner,
-					IsClass:    isClass,
-					IsEditor:   doctag.Has(tags, "editor"),
+				parent, parentImport, perr := findExtendsParent(fset, t, ts.Pos(), d.Imports)
+				if perr != nil {
+					return nil, perr
 				}
-				// Parent resolution is deferred until after the whole
-				// TypeSpec sweep so @extends can reference a sibling
-				// class declared later in the same file. Stash the
-				// struct AST on the classInfo for the second pass.
-				structs[ts.Name.Name] = ci
+				d.MainClass = &classInfo{
+					docInfo:      docs,
+					Name:         ts.Name.Name,
+					Pos:          ts.Pos(),
+					Decl:         ts,
+					Doc:          tags,
+					Brief:        brief,
+					Tutorials:    tutorials,
+					Parent:       parent,
+					ParentImport: parentImport,
+					IsAbstract:   doctag.Has(tags, "abstract"),
+					IsEditor:     doctag.Has(tags, "editor"),
+				}
+				mainName = ts.Name.Name
 			case *ast.Ident:
 				if t.Name == "int" || t.Name == "int32" || t.Name == "int64" {
 					hasEnum := doctag.Has(tags, "enum")
@@ -350,61 +361,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
-	// Deferred @extends resolution. Done after the type sweep so
-	// `@extends` on one class can reference a sibling declared later
-	// in the same file — it would have failed inline. Builds a set
-	// of same-file class names (every struct seen in this file) so
-	// findExtendsParent can recognize bare-Ident parents alongside
-	// the package-qualified form.
-	siblings := map[string]bool{}
-	for name := range structs {
-		siblings[name] = true
-	}
-	for _, ci := range structs {
-		if !ci.IsClass && !ci.IsInner {
-			continue
-		}
-		st, ok := ci.Decl.Type.(*ast.StructType)
-		if !ok {
-			continue
-		}
-		parent, parentImport, perr := findExtendsParent(fset, st, ci.Pos, d.Imports, siblings)
-		if perr != nil {
-			return nil, perr
-		}
-		ci.Parent = parent
-		ci.ParentImport = parentImport
-	}
-
-	// Identify the main class — the struct explicitly tagged @class.
-	// Inner classes get bucketed by @innerclass; everything else (no
-	// tag at all) is a regular Go struct that codegen ignores.
-	var mainCandidates []*classInfo
-	for _, ci := range structs {
-		if ci.IsInner {
-			if ci.IsEditor {
-				return nil, fmt.Errorf("%s: @editor on inner class %s — inner classes aren't registered with Godot, so the init-level distinction has no effect",
-					posStr(fset, ci.Pos), ci.Name)
-			}
-			d.InnerClasses = append(d.InnerClasses, ci)
-			continue
-		}
-		if ci.IsClass {
-			mainCandidates = append(mainCandidates, ci)
-		}
-	}
-	switch len(mainCandidates) {
-	case 0:
+	if d.MainClass == nil {
 		return nil, fmt.Errorf("%s: no @class struct found — tag exactly one top-level struct with @class to register it as a Godot extension class",
 			posStr(fset, file.Pos()))
-	case 1:
-		d.MainClass = mainCandidates[0]
-	default:
-		names := make([]string, 0, len(mainCandidates))
-		for _, c := range mainCandidates {
-			names = append(names, c.Name+"@"+posStr(fset, c.Pos))
-		}
-		return nil, fmt.Errorf("multiple @class structs (one per file is allowed): %s", strings.Join(names, ", "))
 	}
 
 	// Methods: walk all FuncDecls with receivers matching one of the
@@ -435,8 +394,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			continue
 		}
 		recvType, isPtr := receiverTypeName(fn.Recv.List[0].Type)
-		ci, ok := structs[recvType]
-		if !ok {
+		if recvType != d.MainClass.Name {
 			continue
 		}
 		tags := doctag.Parse(fn.Doc)
@@ -481,7 +439,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				mi.GodotName = "_" + mi.GodotName
 			}
 		}
-		ci.Methods = append(ci.Methods, mi)
+		d.MainClass.Methods = append(d.MainClass.Methods, mi)
 	}
 
 	// Enums: a const block whose entries are typed as one of the discovered
@@ -542,26 +500,17 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
-	// Properties: walk each registered class's struct fields and
-	// methods for @property declarations. Both @class and @innerclass
-	// run through the same collector — inner classes can carry their
-	// own properties, registered against their own ClassDB entry.
+	// Properties: walk the main class's struct fields and methods for
+	// @property declarations.
 	if err := collectProperties(fset, d.MainClass); err != nil {
 		return nil, err
-	}
-	for _, ic := range d.InnerClasses {
-		if err := collectProperties(fset, ic); err != nil {
-			return nil, err
-		}
 	}
 
 	// Signals: walk @signals-tagged interfaces. Each interface method
 	// becomes a signal on the main class. Codegen attaches an emit
 	// method directly to *<MainClass> for each signal — no embedded
 	// struct in the user's source, no boilerplate beyond the interface
-	// declaration itself. Signals on inner classes aren't supported in
-	// the current release; the user can always declare them in a
-	// separate file with its own @class.
+	// declaration itself.
 	if err := collectSignals(fset, d.MainClass, signalIfaces); err != nil {
 		return nil, err
 	}
@@ -971,20 +920,14 @@ func sortByPos(props []*propertyInfo) {
 }
 
 
-// findExtendsParent locates the parent class for a `@class` /
-// `@innerclass` struct by walking its fields for the one tagged
-// with `@extends`. The tag must sit on an *embedded* (anonymous)
-// field whose type resolves to one of:
-//
-//   - A package-qualified type like `godot.Node` — works for any
-//     imported package, including the framework's bindings, another
-//     GDExtension's user-class package, or any user library that
-//     re-exports a registered class. The runtime registration
-//     succeeds as long as that class is in Godot's ClassDB by the
-//     time this class registers.
-//   - A bare Ident like `Outer` — refers to a sibling `@class` /
-//     `@innerclass` declared in the same file. Useful for inner
-//     classes that extend their containing class.
+// findExtendsParent locates the parent class for the `@class` struct
+// by walking its fields for the one tagged with `@extends`. The tag
+// must sit on an *embedded* (anonymous) field whose type is a
+// package-qualified type like `godot.Node` — works for any imported
+// package, including the framework's bindings, another GDExtension's
+// user-class package, or any third-party module that re-exports a
+// registered class. The runtime registration succeeds as long as
+// that class is in Godot's ClassDB by the time this class registers.
 //
 // Validation surfaces:
 //   - no field carries @extends → error (the class needs a parent).
@@ -992,11 +935,10 @@ func sortByPos(props []*propertyInfo) {
 //   - @extends on a named (non-embedded) field → error (parent
 //     inheritance must come from an embed; named fields are
 //     composition).
-//   - bare Ident that doesn't match a sibling class → error.
 //
 // Returns the bare class name (e.g. "Node") + the import path it
-// came from. parentImport is empty for same-file siblings.
-func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.Pos, imports map[string]string, siblings map[string]bool) (parent, parentImport string, err error) {
+// came from.
+func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.Pos, imports map[string]string) (parent, parentImport string, err error) {
 	if st.Fields == nil {
 		return "", "", fmt.Errorf("%s: @class struct has no fields — it needs an embedded type tagged @extends",
 			posStr(fset, structPos))
@@ -1011,31 +953,23 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.
 			return "", "", fmt.Errorf("%s: @extends on named field %q — @extends marks the *embedded* parent type (anonymous field), not a regular composition field",
 				posStr(fset, f.Pos()), f.Names[0].Name)
 		}
-		switch ft := f.Type.(type) {
-		case *ast.SelectorExpr:
-			pkgIdent, ok := ft.X.(*ast.Ident)
-			if !ok {
-				return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded type like godot.Node or a same-file sibling",
-					posStr(fset, f.Pos()))
-			}
-			path, ok := imports[pkgIdent.Name]
-			if !ok {
-				return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
-					posStr(fset, f.Pos()), pkgIdent.Name, ft.Sel.Name, pkgIdent.Name)
-			}
-			parent = ft.Sel.Name
-			parentImport = path
-		case *ast.Ident:
-			if !siblings[ft.Name] {
-				return "", "", fmt.Errorf("%s: @extends %s — bare-identifier parents must name a same-file @class / @innerclass struct (cross-package parents take the qualified `pkg.Type` form)",
-					posStr(fset, f.Pos()), ft.Name)
-			}
-			parent = ft.Name
-			parentImport = ""
-		default:
-			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded type like godot.Node or a same-file sibling",
+		ft, ok := f.Type.(*ast.SelectorExpr)
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded package-qualified type like godot.Node",
 				posStr(fset, f.Pos()), f.Type)
 		}
+		pkgIdent, ok := ft.X.(*ast.Ident)
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded type like godot.Node",
+				posStr(fset, f.Pos()))
+		}
+		path, ok := imports[pkgIdent.Name]
+		if !ok {
+			return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
+				posStr(fset, f.Pos()), pkgIdent.Name, ft.Sel.Name, pkgIdent.Name)
+		}
+		parent = ft.Sel.Name
+		parentImport = path
 	}
 	switch hits {
 	case 0:
@@ -1047,6 +981,25 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.
 		return "", "", fmt.Errorf("%s: multiple @extends fields — Godot is single-inheritance, pick one",
 			posStr(fset, structPos))
 	}
+}
+
+// rejectExtendsOutsideClass walks the fields of a non-@class struct
+// and errors if any carry @extends. @extends only makes sense on a
+// @class struct's embedded parent — finding it elsewhere usually
+// means the user thought they were declaring a registered class but
+// forgot the @class tag. Erroring out is friendlier than silently
+// not registering the type.
+func rejectExtendsOutsideClass(fset *token.FileSet, ts *ast.TypeSpec, st *ast.StructType) error {
+	if st.Fields == nil {
+		return nil
+	}
+	for _, f := range st.Fields.List {
+		if doctag.Has(doctag.Parse(f.Doc), "extends") {
+			return fmt.Errorf("%s: @extends on a field of %s, but %s is not tagged @class — only @class structs are registered with Godot's ClassDB. Add @class to %s, or remove @extends if %s isn't meant to be a Godot class.",
+				posStr(fset, f.Pos()), ts.Name.Name, ts.Name.Name, ts.Name.Name, ts.Name.Name)
+		}
+	}
+	return nil
 }
 
 // receiverTypeName returns the bare type name of a method receiver and

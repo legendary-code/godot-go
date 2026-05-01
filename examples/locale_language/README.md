@@ -8,11 +8,10 @@ the codegen surface that landed across Phase 5b–5f:
 | Source feature                                    | Where it shows up                |
 | ------------------------------------------------- | -------------------------------- |
 | `@abstract` on the main class                     | `IsAbstract: true` on RegisterClass |
-| `@innerclass` on a sibling struct                 | discovered, not registered (intentional — Godot has no public inner-class concept) |
 | `type Language int` + `iota` const block          | recognized as a user enum, accepted as an `int64`-backed return type |
-| Unnamed-receiver method (`func (LocaleLanguage) Parse`) | bound as a Godot static method (`MethodFlagStatic`) |
+| `@static` on `Parse`                              | bound as a Godot static method (`MethodFlagStatic`) — callable as `LocaleLanguage.parse(...)` from GDScript |
 | `@name do_something_alt_name` on `DoSomething`    | binding name overridden — `do_something` is *not* registered |
-| Lowercase `process(_ float32)`                    | bound as the engine virtual `_process` |
+| `@override` on `Process`                          | bound as the engine virtual `_process` |
 
 ## Build
 

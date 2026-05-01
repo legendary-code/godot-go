@@ -23,15 +23,15 @@ func commentGroup(base token.Pos, lines ...string) *ast.CommentGroup {
 func TestParseExtractsTags(t *testing.T) {
 	cg := commentGroup(1,
 		"MyNode is a Godot extension class.",
-		"@innerclass",
+		"@abstract",
 		"@description Custom-described node",
 	)
 	tags := Parse(cg)
 	if len(tags) != 2 {
 		t.Fatalf("got %d tags, want 2: %+v", len(tags), tags)
 	}
-	if tags[0].Name != "innerclass" || tags[0].Value != "" {
-		t.Errorf("tag[0] = %+v, want {innerclass, \"\"}", tags[0])
+	if tags[0].Name != "abstract" || tags[0].Value != "" {
+		t.Errorf("tag[0] = %+v, want {abstract, \"\"}", tags[0])
 	}
 	if tags[1].Name != "description" || tags[1].Value != "Custom-described node" {
 		t.Errorf("tag[1] = %+v, want {description, \"Custom-described node\"}", tags[1])
