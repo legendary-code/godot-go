@@ -278,6 +278,17 @@ end-to-end, full CI matrix green.
 
 ---
 
+## Pre-existing bindgen quirks surfaced during this work
+
+- **PackedFloat32Array / PackedFloat64Array surface elements as float32.**
+  The per-builtin generator emits `Get(...) float32` and `PushBack(value
+  float32)` for both float Packed types, narrowing internally even though
+  PackedFloat64Array's storage is double. Phase 2's `MakePackedFloat64Array`
+  matches that surface (variadic `float32`), so users can already do this
+  through the per-type methods — Phase 2 just exposes it in slice form.
+  Genuine `float64` round-trip on PackedFloat64Array needs a separate
+  bindgen fix (track as its own task).
+
 ## Decisions still open across phases
 
 - **PtrCall vs Call for Array/Packed types.** Existing codegen emits
