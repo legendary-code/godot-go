@@ -126,6 +126,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := emitArrayRuntime(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit array runtime: %v\n", err)
+		os.Exit(1)
+	}
+
 	if cfg.PkgImportPath != "" {
 		if err := emitRuntimeSubpkg(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit runtime subpkg: %v\n", err)
