@@ -338,3 +338,11 @@ A few conventions that keep the tree predictable:
 common are `task generate:bindings`, `task build:example`, and
 `task test`. `task clean` wipes generated artifacts when you want
 a fresh state.
+
+## License
+
+godot-go is released under the [MIT License](./LICENSE) — same
+license posture as Godot itself. Use it in commercial games, modify
+it, redistribute it; just keep the copyright notice. The framework
+includes Godot's `gdextension_interface.h` (also MIT) under
+`godot/`; both copyright notices are preserved.
