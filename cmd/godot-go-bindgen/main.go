@@ -69,6 +69,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Tell the type table which Go float type maps to Godot's "float"
+	// (real_t) under the chosen build config — float32 for single-precision
+	// builds, float64 for double-precision. Must run before any emit* call
+	// since the type resolver reads it eagerly.
+	setBuildPrecision(*buildConfig)
+
 	if err := os.MkdirAll(cfg.Dir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "godot-go-bindgen: %v\n", err)
 		os.Exit(1)

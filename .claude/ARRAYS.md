@@ -278,16 +278,34 @@ end-to-end, full CI matrix green.
 
 ---
 
-## Pre-existing bindgen quirks surfaced during this work
+## Build-config / precision notes
 
-- **PackedFloat32Array / PackedFloat64Array surface elements as float32.**
-  The per-builtin generator emits `Get(...) float32` and `PushBack(value
-  float32)` for both float Packed types, narrowing internally even though
-  PackedFloat64Array's storage is double. Phase 2's `MakePackedFloat64Array`
-  matches that surface (variadic `float32`), so users can already do this
-  through the per-type methods — Phase 2 just exposes it in slice form.
-  Genuine `float64` round-trip on PackedFloat64Array needs a separate
-  bindgen fix (track as its own task).
+Godot's GDExtension API has four build configurations distinguished by
+`<precision>_<arch_int_size>`: `float_32`, `float_64`, `double_32`,
+`double_64`. The `<precision>` axis controls Godot's `real_t` typedef
+— `float32` for `float_*` builds, `float64` for `double_*` builds. The
+framework defaults to `float_64` (single-precision real_t on 64-bit
+pointer architecture).
+
+The api.json `"float"` type at the ABI boundary is `real_t`. So:
+
+- **Under `float_*` builds**: `"float"` is float32, methods narrow at the
+  boundary. PackedFloat64Array's storage is double internally but the
+  ABI surfaces float32 elements — **this is intentional Godot ABI
+  behavior**, not a bindgen bug. Both Packed float types end up with
+  float32 element types.
+- **Under `double_*` builds**: `"float"` is float64. PackedFloat32Array's
+  storage is float32 but its ABI signature widens to float64; both Packed
+  float types end up with float64 element types.
+
+The bindgen used to hardcode `"float" → float32` regardless of build
+config. Fixed during the Phase 2 work via a precision-aware typemap
+(setBuildPrecision in typemap.go). Phase 2's float Packed entries pull
+their element type from the same source, so they auto-track.
+
+Caveat: only `float_*` builds are exercised by CI today. The
+double-precision path is built and emits the correct types but isn't
+yet tested end-to-end against a double-precision Godot engine.
 
 ## Decisions still open across phases
 

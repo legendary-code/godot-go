@@ -16,7 +16,7 @@ const (
 	kindUnsupported typeKind = iota
 	kindBool                  // bool
 	kindInt                   // int -> int64
-	kindFloat                 // float -> float32 (single precision build)
+	kindFloat                 // float -> float32 (single precision) / float64 (double precision)
 	kindString                // String -> string (transparent boundary)
 	kindStringName            // StringName -> string
 	kindNodePath              // NodePath -> string
@@ -31,6 +31,27 @@ const (
 // lands in the same package now, so we just need to know whether a name
 // is a class — not where it lives).
 var engineClassNames = map[string]bool{}
+
+// floatGoType is the Go-side type the bindgen emits for Godot's `"float"`
+// (real_t) at the ABI boundary. Float-precision builds carry real_t as
+// 32-bit; double-precision builds carry it as 64-bit. Set by
+// setBuildPrecision before any emit* call so goType's "float" branch lands
+// on the correct width. Defaults to float32 — matches the framework's
+// historical behavior on its float_64 default.
+var floatGoType = "float32"
+
+// setBuildPrecision configures the float-type mapping for the current
+// bindgen run. Call this once after parsing the -build-config flag and
+// before any emit*. Unknown build configs leave floatGoType at its
+// float32 default — main.go validates the flag separately.
+func setBuildPrecision(buildConfig string) {
+	switch buildConfig {
+	case "double_32", "double_64":
+		floatGoType = "float64"
+	default:
+		floatGoType = "float32"
+	}
+}
 
 // registerEngineClasses fills engineClassNames from the loaded API. Must run
 // before any emit* call so type lookups resolve correctly.
@@ -106,7 +127,7 @@ func goType(godot string) (string, typeKind) {
 	case "int":
 		return "int64", kindInt
 	case "float":
-		return "float32", kindFloat
+		return floatGoType, kindFloat
 	case "String":
 		return "string", kindString
 	case "StringName":
