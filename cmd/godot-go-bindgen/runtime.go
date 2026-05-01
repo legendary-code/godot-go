@@ -151,6 +151,12 @@ var (
 	variantToString = sync.OnceValue(func() gdextension.VariantToTypeFunc {
 		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeString)
 	})
+	variantFromObject = sync.OnceValue(func() gdextension.VariantFromTypeFunc {
+		return gdextension.GetVariantFromTypeConstructor(gdextension.VariantTypeObject)
+	})
+	variantToObject = sync.OnceValue(func() gdextension.VariantToTypeFunc {
+		return gdextension.GetVariantToTypeConstructor(gdextension.VariantTypeObject)
+	})
 )
 
 // NewVariantInt wraps an int64 in a fresh Variant. Caller owns the result;
@@ -198,12 +204,58 @@ func NewVariantString(s string) Variant {
 	return out
 }
 
+// AsBool unwraps a BOOL-typed Variant. Behavior is undefined if the Variant
+// holds any other type — callers that don't know the runtime type should
+// inspect Type() first.
+func (v *Variant) AsBool() bool {
+	var out bool
+	gdextension.CallTypeFromVariant(variantToBool(),
+		gdextension.TypePtr(unsafe.Pointer(&out)),
+		gdextension.VariantPtr(unsafe.Pointer(v)))
+	return out
+}
+
 // AsInt unwraps an INT-typed Variant. Behavior is undefined if the Variant
 // holds any other type — callers that don't know the runtime type should
 // inspect Type() first.
 func (v *Variant) AsInt() int64 {
 	var out int64
 	gdextension.CallTypeFromVariant(variantToInt(),
+		gdextension.TypePtr(unsafe.Pointer(&out)),
+		gdextension.VariantPtr(unsafe.Pointer(v)))
+	return out
+}
+
+// AsFloat unwraps a FLOAT-typed Variant. Behavior is undefined if the Variant
+// holds any other type. Godot's FLOAT slot is double on the wire regardless
+// of build config (the precision axis affects real_t for the variable-width
+// "float" type, not the Variant FLOAT slot itself).
+func (v *Variant) AsFloat() float64 {
+	var out float64
+	gdextension.CallTypeFromVariant(variantToFloat(),
+		gdextension.TypePtr(unsafe.Pointer(&out)),
+		gdextension.VariantPtr(unsafe.Pointer(v)))
+	return out
+}
+
+// AsString unwraps a STRING-typed Variant. Behavior is undefined if the
+// Variant holds any other type.
+func (v *Variant) AsString() string {
+	var tmp String
+	gdextension.CallTypeFromVariant(variantToString(),
+		gdextension.TypePtr(unsafe.Pointer(&tmp)),
+		gdextension.VariantPtr(unsafe.Pointer(v)))
+	defer stringDestroy(&tmp)
+	return stringToGo(&tmp)
+}
+
+// AsObject unwraps an OBJECT-typed Variant into a raw ObjectPtr. Callers
+// reconstruct *<EngineClass> / *<UserClass> from the pointer via the
+// relevant per-class wrapper or side-table lookup. Behavior is undefined
+// if the Variant holds any other type.
+func (v *Variant) AsObject() gdextension.ObjectPtr {
+	var out gdextension.ObjectPtr
+	gdextension.CallTypeFromVariant(variantToObject(),
 		gdextension.TypePtr(unsafe.Pointer(&out)),
 		gdextension.VariantPtr(unsafe.Pointer(v)))
 	return out
@@ -282,6 +334,36 @@ func PtrCallArgString(args unsafe.Pointer, idx int) string {
 // PtrCallStoreString writes s into a PtrCall return slot.
 func PtrCallStoreString(ret unsafe.Pointer, s string) {
 	stringFromGo((*String)(ret), s)
+}
+
+// VariantAsObject reads an OBJECT-typed variant slot into a raw ObjectPtr.
+// Callers reconstruct *<EngineClass> / *<UserClass> from the pointer via
+// the relevant per-class wrapper or side-table lookup.
+func VariantAsObject(src gdextension.VariantPtr) gdextension.ObjectPtr {
+	var out gdextension.ObjectPtr
+	gdextension.CallTypeFromVariant(variantToObject(),
+		gdextension.TypePtr(unsafe.Pointer(&out)), src)
+	return out
+}
+
+// VariantSetObject writes p into an uninitialized variant slot dst (type = OBJECT).
+// p remains owned by its source — Variant ownership of the pointer is
+// strictly a slot-level alias here, not a refcount transfer; refcounted
+// classes manage their own lifetime via the existing Object base.
+func VariantSetObject(dst gdextension.VariantPtr, p gdextension.ObjectPtr) {
+	src := p
+	gdextension.CallVariantFromType(variantFromObject(), dst,
+		gdextension.TypePtr(unsafe.Pointer(&src)))
+}
+
+// NewVariantObject wraps an ObjectPtr in a fresh Variant. Release with Destroy.
+func NewVariantObject(p gdextension.ObjectPtr) Variant {
+	var out Variant
+	src := p
+	gdextension.CallVariantFromType(variantFromObject(),
+		gdextension.VariantPtr(unsafe.Pointer(&out)),
+		gdextension.TypePtr(unsafe.Pointer(&src)))
+	return out
 }
 
 // internStringName is a thin facade over gdextension.InternStringName so the

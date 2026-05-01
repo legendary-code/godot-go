@@ -211,4 +211,109 @@ func (p *{{.Name}}) ToSlice() []{{.SliceElem}} {
 	return out
 }
 {{end}}
-{{end}}`))
+{{end}}
+
+// makeTypedArray builds an empty Array with the given Variant-type filter
+// applied. Class name is used for OBJECT-typed arrays (the engine class to
+// filter on) and for INT-typed arrays (the typed-enum class identity).
+// The returned Array's refcount is 1; the caller owns it.
+func makeTypedArray(typ gdextension.VariantType, className string) Array {
+	var base Array
+	gdextension.CallPtrConstructor(arrayCtor0(),
+		gdextension.TypePtr(unsafe.Pointer(&base)), nil)
+	defer (&base).Destroy()
+	var script Variant
+	return NewArrayBaseTypeClassNameScript(base, int64(typ), className, script)
+}
+
+// MakeArrayOfBools constructs Array[bool] from a Go slice. There is no
+// PackedBoolArray in Godot, so []bool's wire form is a TypedArray. Caller
+// owns the result; release with (*Array).Destroy() when done.
+func MakeArrayOfBools(values ...bool) Array {
+	a := makeTypedArray(gdextension.VariantTypeBool, "")
+	for _, v := range values {
+		variant := NewVariantBool(v)
+		a.PushBack(variant)
+		variant.Destroy()
+	}
+	return a
+}
+
+// ToBoolSlice extracts the bool elements of a typed-bool Array. Returns nil
+// for empty. Behavior is undefined if a holds elements of any other type.
+func (a *Array) ToBoolSlice() []bool {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]bool, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = v.AsBool()
+		v.Destroy()
+	}
+	return out
+}
+
+// MakeArrayOfInts constructs Array[int] (TypedArray of int64). className
+// carries the typed-enum class identity for []<UserEnum> use cases and
+// should be empty for plain typed-int arrays. Caller owns the result;
+// release with (*Array).Destroy().
+func MakeArrayOfInts(className string, values ...int64) Array {
+	a := makeTypedArray(gdextension.VariantTypeInt, className)
+	for _, v := range values {
+		variant := NewVariantInt(v)
+		a.PushBack(variant)
+		variant.Destroy()
+	}
+	return a
+}
+
+// ToInt64Slice extracts int64 elements of a typed-int Array. Returns nil
+// for empty. Used by codegen for both plain typed-int arrays and
+// []<UserEnum> arrays (codegen casts each int64 to the user's enum type).
+func (a *Array) ToInt64Slice() []int64 {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]int64, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = v.AsInt()
+		v.Destroy()
+	}
+	return out
+}
+
+// MakeArrayOfObjects constructs Array[<className>] from a slice of raw
+// ObjectPtrs. Codegen calls this when the user method takes/returns
+// []*<EngineClass> or []*<UserClass>; the per-class wrapper's Ptr() method
+// supplies each element. Caller owns the result.
+func MakeArrayOfObjects(className string, ptrs ...gdextension.ObjectPtr) Array {
+	a := makeTypedArray(gdextension.VariantTypeObject, className)
+	for _, p := range ptrs {
+		variant := NewVariantObject(p)
+		a.PushBack(variant)
+		variant.Destroy()
+	}
+	return a
+}
+
+// ToObjectSlice extracts ObjectPtrs from a typed-Object Array. Returns nil
+// for empty. Codegen reconstructs *<EngineClass> / *<UserClass> from each
+// pointer via the per-class wrapper or side-table lookup.
+func (a *Array) ToObjectSlice() []gdextension.ObjectPtr {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]gdextension.ObjectPtr, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = v.AsObject()
+		v.Destroy()
+	}
+	return out
+}
+`))
