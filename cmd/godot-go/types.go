@@ -680,11 +680,17 @@ arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b
 // userIntSliceTypeInfo builds the marshal fragments for slices of any
 // user `type X int` alias — tagged or untagged. Wire form is
 // PackedInt64Array; the boundary cast bridges the user's named type
-// and int64. Propagates the element's EnumName onto the returned
-// typeInfo so the registration's ArgClassNames / ReturnClassName
-// carries "<MainClass>.<EnumName>" — the editor's docs panel renders
-// the enum identity on the Packed-array param/return even though the
-// runtime wire form has no element-level typing of its own.
+// and int64.
+//
+// Note: we deliberately do NOT propagate elem.EnumName onto the slice
+// typeInfo. Setting class_name on a non-OBJECT-typed registration
+// confuses GDScript's autocomplete (it reads class_name as the return
+// type and shows `Kind parse_multiple(...) static` instead of
+// `PackedInt64Array parse_multiple(...) static`). Element-level enum
+// identity for slice returns is tracked as a follow-up via
+// PROPERTY_HINT_TYPE_STRING — the standard Godot mechanism for
+// expressing "Array of int with enum hint" — once the bindings expose
+// hint metadata on method args/returns.
 func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
 	cat := sliceCategory{
 		PackedTypeName: "PackedInt64Array",
@@ -692,9 +698,7 @@ func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
 		CastTo:         "int64",      // user-type → wire
 		CastFrom:       elem.GoType,  // wire → user-type
 	}
-	info := slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
-	info.EnumName = elem.EnumName
-	return info
+	return slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
 }
 
 // sliceBoolTypeInfo builds the marshaling fragments for []bool, which

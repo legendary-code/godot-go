@@ -278,11 +278,10 @@ func registerLocaleLanguage() {
 			}
 			*(*godot.PackedInt64Array)(ret) = result_arr
 		},
-		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypePackedInt64Array,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "LocaleLanguage.Language",
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypePackedInt64Array,
+		ReturnMetadata: gdextension.ArgMetaNone,
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -323,11 +322,10 @@ func registerLocaleLanguage() {
 			}
 			*(*godot.PackedInt64Array)(ret) = result_arr
 		},
-		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypePackedInt64Array,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "LocaleLanguage.Language",
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypePackedInt64Array,
+		ReturnMetadata: gdextension.ArgMetaNone,
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypePackedInt64Array,
 		},
@@ -338,7 +336,7 @@ func registerLocaleLanguage() {
 			"values",
 		},
 		ArgClassNames: []string{
-			"LocaleLanguage.Language",
+			"",
 		},
 	})
 
@@ -442,12 +440,12 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Demonstrates a slice return at the @class boundary. The&#xA;codegen builds a PackedStringArray from the returned []string before&#xA;handing the value back to Godot.</description>
         </method>
         <method name="languages" qualifiers="static">
-            <return type="PackedInt64Array" enum="LocaleLanguage.Language"></return>
+            <return type="PackedInt64Array"></return>
             <description>Demonstrates a slice-of-typed-enum return at the @class&#xA;boundary. The wire form is Array[Language] (TypedArray); Godot sees&#xA;each element as a typed Language value, not a bare int.</description>
         </method>
         <method name="filter_languages" qualifiers="static">
-            <return type="PackedInt64Array" enum="LocaleLanguage.Language"></return>
-            <param index="0" name="values" type="PackedInt64Array" enum="LocaleLanguage.Language"></param>
+            <return type="PackedInt64Array"></return>
+            <param index="0" name="values" type="PackedInt64Array"></param>
             <description>Demonstrates two boundary features at once: a&#xA;variadic typed-enum parameter (Go&#39;s ` + "`" + `...Language` + "`" + ` is identical to&#xA;` + "`" + `[]Language` + "`" + ` at the wire boundary, just nicer at the call site) and&#xA;a typed-enum slice return. Returns the subset matching the given&#xA;known set.</description>
         </method>
         <method name="concat_names" qualifiers="static">
