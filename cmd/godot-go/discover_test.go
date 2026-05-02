@@ -586,8 +586,9 @@ func (n *MyNode) Echo(other *OtherClass) *OtherClass { return other }
 
 func TestEmitNestedSliceRejected(t *testing.T) {
 	// Discovery accepts any AST shape; rejection happens at emit time
-	// via resolveType. Drive the codegen explicitly to surface the
-	// `slice element` error path with file:line context.
+	// via resolveType. Phase 7 sharpened the message — instead of
+	// bubbling up via the generic slice-element error, the codegen now
+	// recognizes `[][]T` directly and tells the user "nested slices".
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -603,8 +604,101 @@ func (n *MyNode) Bad(values [][]int64) {}
 	if err == nil {
 		t.Fatalf("expected emit error for nested slice, got nil; output: %s", buf.String())
 	}
-	if !strings.Contains(err.Error(), "slice element") {
-		t.Fatalf("error %q does not mention slice element", err.Error())
+	if !strings.Contains(err.Error(), "nested slices") {
+		t.Fatalf("error %q does not mention nested slices", err.Error())
+	}
+}
+
+func TestEmitMapArgRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(m map[string]int) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil || !strings.Contains(err.Error(), "map types") {
+		t.Fatalf("expected map-types error, got %v", err)
+	}
+}
+
+func TestEmitFuncArgRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(cb func()) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil || !strings.Contains(err.Error(), "function types") {
+		t.Fatalf("expected function-types error, got %v", err)
+	}
+}
+
+func TestEmitChanArgRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(ch chan int) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil || !strings.Contains(err.Error(), "channel types") {
+		t.Fatalf("expected channel-types error, got %v", err)
+	}
+}
+
+func TestEmitInterfaceArgRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(x interface{}) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil || !strings.Contains(err.Error(), "interface types") {
+		t.Fatalf("expected interface-types error, got %v", err)
+	}
+}
+
+func TestEmitBareSelectorArgRejected(t *testing.T) {
+	// Bare `<bindings>.<Type>` (no pointer) — like passing a Variant or
+	// Vector2 directly. Today only the pointer form is recognized for
+	// cross-package types.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(v core.Variant) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil || !strings.Contains(err.Error(), "bare cross-package type") {
+		t.Fatalf("expected bare cross-package error, got %v", err)
 	}
 }
 

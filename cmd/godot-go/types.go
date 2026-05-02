@@ -271,6 +271,9 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		if t.Len != nil {
 			return nil, fmt.Errorf("fixed-size arrays unsupported (only Go slices `[]T` cross the @class boundary)")
 		}
+		if _, nested := t.Elt.(*ast.ArrayType); nested {
+			return nil, fmt.Errorf("nested slices `[][]T` are not supported at the @class boundary")
+		}
 		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("slice element: %w", err)
@@ -282,11 +285,33 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		// Packed<X>Array / Array[T] arg), so route to the same slice
 		// typeInfo. The caller flips IsVariadic on the emitMethod so
 		// the dispatch site emits `f(argN...)` rather than `f(argN)`.
+		if _, nested := t.Elt.(*ast.ArrayType); nested {
+			return nil, fmt.Errorf("nested slices `...[]T` are not supported at the @class boundary")
+		}
 		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("variadic element: %w", err)
 		}
 		return sliceTypeInfo(elem)
+	case *ast.MapType:
+		return nil, fmt.Errorf("map types are not supported at the @class boundary (Godot has no map ABI — use multiple args or @property fields for keyed data)")
+	case *ast.FuncType:
+		return nil, fmt.Errorf("function types are not supported at the @class boundary (use @signals for callback contracts)")
+	case *ast.ChanType:
+		return nil, fmt.Errorf("channel types are not supported at the @class boundary")
+	case *ast.InterfaceType:
+		return nil, fmt.Errorf("interface types are not supported at the @class boundary (only @signals interfaces are recognized, declared at file scope)")
+	case *ast.SelectorExpr:
+		// Bare cross-package type used as a method arg / return — like
+		// `godot.Variant` or `godot.Vector2`. Today only the pointer
+		// form `*<bindings>.<EngineClass>` is recognized for cross-
+		// package types (Phase 6c). Surface a clear error rather than
+		// hitting the generic default.
+		pkgName := "<unknown>"
+		if id, ok := t.X.(*ast.Ident); ok {
+			pkgName = id.Name
+		}
+		return nil, fmt.Errorf("bare cross-package type %s.%s is not supported at the @class boundary (cross-package types are only recognized via pointer — e.g. *%s.<EngineClass> — wrap or qualify accordingly)", pkgName, t.Sel.Name, bindings)
 	default:
 		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, slice, variadic, and pointer-to-class types are supported)", expr)
 	}
