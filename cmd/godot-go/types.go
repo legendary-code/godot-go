@@ -41,6 +41,14 @@ type typeInfo struct {
 	// types.
 	ClassName string
 
+	// IsEngineClass distinguishes Phase 6c engine-class boundaries
+	// (`*<bindings>.<Class>` and slice variants) from Phase 6a/b
+	// user-class boundaries. The two paths share the OBJECT wire form
+	// but differ on wrapper construction: engine classes wrap
+	// borrowed-view via &<bindings>.<Class>{} + BindPtr, while user
+	// classes go through the per-class engine-pointer side table.
+	IsEngineClass bool
+
 	PtrCallReadArg     func(bindings string, idx int) string
 	PtrCallWriteReturn func(bindings, expr string) string
 	CallReadArg        func(bindings string, idx int) string
@@ -218,7 +226,7 @@ var typeTable = map[string]*typeInfo{
 // pointer side table (lookup<MainClass>ByEngine) which the emitter
 // synthesizes alongside the trampolines. Cross-file user classes and
 // engine class pointers are deferred to later phases.
-func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass string) (*typeInfo, error) {
+func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings string) (*typeInfo, error) {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		if info, ok := typeTable[t.Name]; ok {
@@ -233,22 +241,37 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass string) (*
 		}
 		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", t.Name)
 	case *ast.StarExpr:
-		// `*T` — only the file's @class is supported as a self-reference.
-		// Cross-file user classes and engine class pointers (`*godot.Node`)
-		// are deferred to later phases of the array/object work.
-		id, ok := t.X.(*ast.Ident)
-		if !ok {
-			return nil, fmt.Errorf("unsupported pointer type %T (only `*<MainClass>` self-references are supported in this phase)", t.X)
+		// `*T` — three cases:
+		//   - *ast.Ident matching the file's @class: user-class self-
+		//     reference (Phase 6a).
+		//   - *ast.SelectorExpr where the package alias matches the
+		//     bindings import: engine-class pointer (Phase 6c). Codegen
+		//     wraps borrowed-view-style — no refcount handling. RefCounted-
+		//     derived classes still work but the user owns lifecycle.
+		//   - Anything else: rejected.
+		switch x := t.X.(type) {
+		case *ast.Ident:
+			if mainClass == "" || x.Name != mainClass {
+				return nil, fmt.Errorf("unsupported pointer type %q (only `*%s` self-references are supported for same-package user classes; cross-file user classes are deferred)", x.Name, mainClass)
+			}
+			return userClassTypeInfo(x.Name), nil
+		case *ast.SelectorExpr:
+			pkg, ok := x.X.(*ast.Ident)
+			if !ok {
+				return nil, fmt.Errorf("unsupported pointer selector %T (engine class pointers must take the bare `<bindings>.<Class>` form)", x.X)
+			}
+			if bindings == "" || pkg.Name != bindings {
+				return nil, fmt.Errorf("unsupported pointer type %q.%q (only the bindings package alias %q is recognized for engine class pointers; cross-package types must be vendored through the bindings)", pkg.Name, x.Sel.Name, bindings)
+			}
+			return engineClassTypeInfo(bindings, x.Sel.Name), nil
+		default:
+			return nil, fmt.Errorf("unsupported pointer type %T (only `*<MainClass>` and `*<bindings>.<EngineClass>` are supported)", t.X)
 		}
-		if mainClass == "" || id.Name != mainClass {
-			return nil, fmt.Errorf("unsupported pointer type %q (only `*%s` self-references are supported in this phase; cross-file user classes and engine class pointers are deferred)", id.Name, mainClass)
-		}
-		return userClassTypeInfo(id.Name), nil
 	case *ast.ArrayType:
 		if t.Len != nil {
 			return nil, fmt.Errorf("fixed-size arrays unsupported (only Go slices `[]T` cross the @class boundary)")
 		}
-		elem, err := resolveType(t.Elt, enums, mainClass)
+		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("slice element: %w", err)
 		}
@@ -259,13 +282,13 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass string) (*
 		// Packed<X>Array / Array[T] arg), so route to the same slice
 		// typeInfo. The caller flips IsVariadic on the emitMethod so
 		// the dispatch site emits `f(argN...)` rather than `f(argN)`.
-		elem, err := resolveType(t.Elt, enums, mainClass)
+		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("variadic element: %w", err)
 		}
 		return sliceTypeInfo(elem)
 	default:
-		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, slice, variadic, and `*<MainClass>` types are supported)", expr)
+		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, slice, variadic, and pointer-to-class types are supported)", expr)
 	}
 }
 
@@ -404,13 +427,155 @@ func sliceTypeInfo(elem *typeInfo) (*typeInfo, error) {
 		return userIntSliceTypeInfo(elem), nil
 	}
 	if elem.VariantType == "VariantTypeObject" && elem.ClassName != "" {
-		// `[]*<MainClass>` — Phase 6b. Wire form is Array[<MainClass>]
-		// (TypedArray with class_name = "<MainClass>"). Godot does
-		// support set_typed for OBJECT-typed arrays with a class_name,
-		// so per-element identity actually round-trips at runtime.
+		// `[]*<UserClass>` (Phase 6b) or `[]*<bindings>.<EngineClass>`
+		// (Phase 6c). Both ride on Array[<Class>] (TypedArray with
+		// class_name set — the one filtered Array shape Godot supports).
+		// Element handling differs: user classes route through the
+		// engine-pointer side table (foreign-instance check); engine
+		// classes wrap borrowed-view via &<bindings>.<Class>{} + BindPtr
+		// (no foreign-instance concept — every ObjectPtr is "valid"
+		// from the framework's perspective).
+		if elem.IsEngineClass {
+			return engineClassSliceTypeInfo(elem), nil
+		}
 		return userClassSliceTypeInfo(elem), nil
 	}
 	return nil, fmt.Errorf("unsupported slice element type %q (supported: bool, byte, int, int32, int64, float32, string, *<MainClass>, or a user int / @enum / @bitfield type declared in this file)", elem.GoType)
+}
+
+// engineClassTypeInfo builds the marshal fragments for `*<bindings>.<EngineClass>`
+// — Phase 6c borrowed-view semantics. Wrapper construction is inline:
+// `&<bindings>.<Class>{}` + `.BindPtr(p)` for any engine class, no
+// inheritance-chain knowledge required. nil engine ObjectPtr maps to a
+// nil Go pointer (so user methods can branch on `if other == nil`).
+//
+// Lifecycle caveat for RefCounted-derived classes (Resource, Image,
+// RegEx, …): the wrapper is a borrowed view. Godot's owner — the
+// caller of our method — manages the underlying refcount; if the user
+// retains the wrapper past the call (stores on the struct, captures
+// in a goroutine), they must call `Reference()` themselves to extend
+// the lifetime. This is the documented limitation of Phase 6c.
+func engineClassTypeInfo(bindings, className string) *typeInfo {
+	return &typeInfo{
+		GoType:        "*" + bindings + "." + className,
+		VariantType:   "VariantTypeObject",
+		ArgMeta:       "ArgMetaNone",
+		ClassName:     className,
+		IsEngineClass: true,
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_ptr := %s.VariantAsObject(args[%d])
+var arg%d *%s.%s
+if arg%d_ptr != nil {
+	arg%d = &%s.%s{}
+	arg%d.BindPtr(arg%d_ptr)
+}`, idx, b, idx, idx, b, className, idx, idx, b, className, idx, idx)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`var result_ptr gdextension.ObjectPtr
+if %s != nil {
+	result_ptr = %s.Ptr()
+}
+%s.VariantSetObject(ret, result_ptr)`, expr, expr, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_ptr := *(*gdextension.ObjectPtr)(gdextension.PtrCallArg(args, %d))
+var arg%d *%s.%s
+if arg%d_ptr != nil {
+	arg%d = &%s.%s{}
+	arg%d.BindPtr(arg%d_ptr)
+}`, idx, idx, idx, b, className, idx, idx, b, className, idx, idx)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`var result_ptr gdextension.ObjectPtr
+if %s != nil {
+	result_ptr = %s.Ptr()
+}
+*(*gdextension.ObjectPtr)(ret) = result_ptr`, expr, expr)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`var arg%d_ptr gdextension.ObjectPtr
+if %s != nil {
+	arg%d_ptr = %s.Ptr()
+}
+arg%d := %s.NewVariantObject(arg%d_ptr)`, idx, srcExpr, idx, srcExpr, idx, b, idx)
+		},
+	}
+}
+
+// engineClassSliceTypeInfo builds the marshal fragments for slices of an
+// engine class — `[]*<bindings>.<EngineClass>`. Wire form is
+// Array[<EngineClass>] (TypedArray with class_name set). Per-element
+// wrapping uses the same borrowed-view construction as the scalar path;
+// nil ObjectPtr elements produce nil Go pointers in the slice.
+func engineClassSliceTypeInfo(elem *typeInfo) *typeInfo {
+	className := elem.ClassName
+	// elem.GoType is "*<bindings>.<Class>"; trim the leading "*" to
+	// preserve the bindings alias the engine class typeInfo was built
+	// with. We don't have bindings handy as a separate field, but the
+	// GoType already encodes it.
+	goType := "[]" + elem.GoType
+	return &typeInfo{
+		GoType:        goType,
+		VariantType:   "VariantTypeArray",
+		ArgMeta:       "ArgMetaNone",
+		ClassName:     className,
+		IsEngineClass: true,
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := %s.VariantAsArray(args[%d])
+defer arg%d_arr.Destroy()
+arg%d_ptrs := arg%d_arr.ToObjectSlice()
+arg%d := make([]*%s.%s, len(arg%d_ptrs))
+for i, p := range arg%d_ptrs {
+	if p != nil {
+		arg%d[i] = &%s.%s{}
+		arg%d[i].BindPtr(p)
+	}
+}`, idx, b, idx, idx, idx, idx, idx, b, className, idx, idx, idx, b, className, idx)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		result_ptrs[i] = v.Ptr()
+	}
+}
+result_arr := %s.MakeArrayOfObjects(%q, result_ptrs...)
+%s.VariantSetArray(ret, result_arr)
+result_arr.Destroy()`, expr, expr, b, className, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := *(*%s.Array)(gdextension.PtrCallArg(args, %d))
+arg%d_ptrs := arg%d_arr.ToObjectSlice()
+arg%d := make([]*%s.%s, len(arg%d_ptrs))
+for i, p := range arg%d_ptrs {
+	if p != nil {
+		arg%d[i] = &%s.%s{}
+		arg%d[i].BindPtr(p)
+	}
+}`, idx, b, idx, idx, idx, idx, b, className, idx, idx, idx, b, className, idx)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		result_ptrs[i] = v.Ptr()
+	}
+}
+result_arr := %s.MakeArrayOfObjects(%q, result_ptrs...)
+*(*%s.Array)(ret) = result_arr`, expr, expr, b, className, b)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`arg%d_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		arg%d_ptrs[i] = v.Ptr()
+	}
+}
+arg%d_arr := %s.MakeArrayOfObjects(%q, arg%d_ptrs...)
+arg%d := %s.NewVariantArray(arg%d_arr)
+arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b, idx, idx)
+		},
+	}
 }
 
 // userClassSliceTypeInfo builds the marshal fragments for slices of the

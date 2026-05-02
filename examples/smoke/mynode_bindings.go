@@ -376,6 +376,136 @@ func registerMyNode() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
+		Name:  "echo_node",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0_ptr := godot.VariantAsObject(args[0])
+			var arg0 *godot.Node
+			if arg0_ptr != nil {
+				arg0 = &godot.Node{}
+				arg0.BindPtr(arg0_ptr)
+			}
+			result := self.EchoNode(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			godot.VariantSetObject(ret, result_ptr)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0_ptr := *(*gdextension.ObjectPtr)(gdextension.PtrCallArg(args, 0))
+			var arg0 *godot.Node
+			if arg0_ptr != nil {
+				arg0 = &godot.Node{}
+				arg0.BindPtr(arg0_ptr)
+			}
+			result := self.EchoNode(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			*(*gdextension.ObjectPtr)(ret) = result_ptr
+		},
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeObject,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "Node",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeObject,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"other",
+		},
+		ArgClassNames: []string{
+			"Node",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "echo_nodes",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0_arr := godot.VariantAsArray(args[0])
+			defer arg0_arr.Destroy()
+			arg0_ptrs := arg0_arr.ToObjectSlice()
+			arg0 := make([]*godot.Node, len(arg0_ptrs))
+			for i, p := range arg0_ptrs {
+				if p != nil {
+					arg0[i] = &godot.Node{}
+					arg0[i].BindPtr(p)
+				}
+			}
+			result := self.EchoNodes(arg0)
+			result_ptrs := make([]gdextension.ObjectPtr, len(result))
+			for i, v := range result {
+				if v != nil {
+					result_ptrs[i] = v.Ptr()
+				}
+			}
+			result_arr := godot.MakeArrayOfObjects("Node", result_ptrs...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0_arr := *(*godot.Array)(gdextension.PtrCallArg(args, 0))
+			arg0_ptrs := arg0_arr.ToObjectSlice()
+			arg0 := make([]*godot.Node, len(arg0_ptrs))
+			for i, p := range arg0_ptrs {
+				if p != nil {
+					arg0[i] = &godot.Node{}
+					arg0[i].BindPtr(p)
+				}
+			}
+			result := self.EchoNodes(arg0)
+			result_ptrs := make([]gdextension.ObjectPtr, len(result))
+			for i, v := range result {
+				if v != nil {
+					result_ptrs[i] = v.Ptr()
+				}
+			}
+			result_arr := godot.MakeArrayOfObjects("Node", result_ptrs...)
+			*(*godot.Array)(ret) = result_arr
+		},
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeArray,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "Node",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeArray,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"others",
+		},
+		ArgClassNames: []string{
+			"Node",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
 		Name:  "origin",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
@@ -1230,6 +1360,16 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type="Array" enum="MyNode"></return>
             <param index="0" name="others" type="Array" enum="MyNode"></param>
             <description>Exercises Phase 6b []*&lt;MainClass&gt; arg + return marshalling.&#xA;Godot passes an Array[MyNode] (TypedArray of OBJECT with class_name&#xA;= &#34;MyNode&#34;); the codegen unpacks it into a Go slice via per-element&#xA;engine-pointer lookup, then re-packs the return value into a fresh&#xA;Array[MyNode]. Per-element foreign-instance handling matches Echo&#39;s:&#xA;any nil lookup short-circuits the call.</description>
+        </method>
+        <method name="echo_node">
+            <return type="Object" enum="Node"></return>
+            <param index="0" name="other" type="Object" enum="Node"></param>
+            <description>Exercises Phase 6c *&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. The codegen wraps the borrowed engine ObjectPtr inline&#xA;(` + "`" + `&amp;godot.Node{}` + "`" + ` + BindPtr); no refcount management. Returning the&#xA;same pointer round-trips the underlying engine identity.&#xA;&#xA;Lifecycle caveat for RefCounted classes: the wrapper is a borrowed&#xA;view. Callers retaining it past the method scope must call&#xA;Reference() themselves. Plain Node isn&#39;t RefCounted, so this method&#xA;is safe to use without lifecycle care.</description>
+        </method>
+        <method name="echo_nodes">
+            <return type="Array" enum="Node"></return>
+            <param index="0" name="others" type="Array" enum="Node"></param>
+            <description>Exercises Phase 6c []*&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. Wire form is Array[Node] — TypedArray of OBJECT with&#xA;class_name = &#34;Node&#34;.</description>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
             <return type="int"></return>

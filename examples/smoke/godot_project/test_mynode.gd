@@ -211,6 +211,30 @@ func _initialize() -> void:
 	_check("echo_many: typed at runtime", output_array.is_typed(), true)
 	_check("echo_many: typed-class identity", output_array.get_typed_class_name(), &"MyNode")
 
+	# Phase 6c — *<bindings>.<EngineClass> arg + return marshaling.
+	# EchoNode takes a *godot.Node (engine class), returns it. The
+	# codegen wraps the engine ObjectPtr borrowed-view-style — no
+	# refcount management. We pass a plain Node (not a MyNode) and
+	# verify identity round-trips at the engine level.
+	var plain_node: Node = Node.new()
+	var got_node: Node = n.echo_node(plain_node)
+	_check("echo_node: returned engine identity", got_node, plain_node)
+
+	# MyNode IS-A Node, so echo_node should accept a MyNode just fine
+	# (Godot upcasts the OBJECT slot at the variant boundary).
+	var got_via_mynode: Node = n.echo_node(other)
+	_check("echo_node: accepts MyNode upcast", got_via_mynode, other)
+
+	# Phase 6c slice — EchoNodes takes []*godot.Node.
+	var node_array: Array[Node] = [plain_node, other, third]
+	var got_nodes: Array[Node] = n.echo_nodes(node_array)
+	_check("echo_nodes: returned size", got_nodes.size(), 3)
+	_check("echo_nodes: element 0 identity", got_nodes[0], plain_node)
+	_check("echo_nodes: element 1 identity", got_nodes[1], other)
+	_check("echo_nodes: element 2 identity", got_nodes[2], third)
+	_check("echo_nodes: typed-class identity", got_nodes.get_typed_class_name(), &"Node")
+
+	plain_node.free()
 	third.free()
 	other.free()
 

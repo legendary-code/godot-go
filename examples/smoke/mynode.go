@@ -178,6 +178,26 @@ func (n *MyNode) EchoMany(others []*MyNode) []*MyNode {
 	return others
 }
 
+// EchoNode exercises Phase 6c *<bindings>.<EngineClass> arg + return
+// marshalling. The codegen wraps the borrowed engine ObjectPtr inline
+// (`&godot.Node{}` + BindPtr); no refcount management. Returning the
+// same pointer round-trips the underlying engine identity.
+//
+// Lifecycle caveat for RefCounted classes: the wrapper is a borrowed
+// view. Callers retaining it past the method scope must call
+// Reference() themselves. Plain Node isn't RefCounted, so this method
+// is safe to use without lifecycle care.
+func (n *MyNode) EchoNode(other *godot.Node) *godot.Node {
+	return other
+}
+
+// EchoNodes exercises Phase 6c []*<bindings>.<EngineClass> arg + return
+// marshalling. Wire form is Array[Node] — TypedArray of OBJECT with
+// class_name = "Node".
+func (n *MyNode) EchoNodes(others []*godot.Node) []*godot.Node {
+	return others
+}
+
 // Origin is a class-level method — `@static` registers it with
 // MethodFlagStatic so GDScript callers reach it as `MyNode.origin()`
 // without an instance.

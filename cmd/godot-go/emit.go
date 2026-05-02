@@ -376,7 +376,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 	idx := 0
 	paramFields := fieldsOf(m.Decl.Type.Params)
 	for fIdx, field := range paramFields {
-		info, err := resolveType(field.Type, enums, mainClass)
+		info, err := resolveType(field.Type, enums, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("arg %d: %w", idx, err)
 		}
@@ -440,7 +440,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		if len(ret.Names) > 1 {
 			return em, fmt.Errorf("multi-name return field unsupported")
 		}
-		info, err := resolveType(ret.Type, enums, mainClass)
+		info, err := resolveType(ret.Type, enums, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("return: %w", err)
 		}
@@ -620,7 +620,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 	curGroup := ""
 	curSubgroup := ""
 	for _, p := range props {
-		info, terr := resolveType(p.GoType, enums, mainClass)
+		info, terr := resolveType(p.GoType, enums, mainClass, bindings)
 		if terr != nil {
 			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
 		}
@@ -715,7 +715,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 		}
 		idx := 0
 		for _, field := range s.Args {
-			info, err := resolveType(field.Type, enums, mainClass)
+			info, err := resolveType(field.Type, enums, mainClass, bindings)
 			if err != nil {
 				return nil, fmt.Errorf("@signals %s arg %d: %w", s.Name, idx, err)
 			}

@@ -498,6 +498,67 @@ func (n *MyNode) Combine(others ...*MyNode) *MyNode {
 	}
 }
 
+func TestDiscoverEngineClassPointer(t *testing.T) {
+	// `*<bindings>.<EngineClass>` — Phase 6c. The codegen wraps the
+	// borrowed engine ObjectPtr via &<bindings>.<Class>{} + BindPtr.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) EchoNode(other *core.Node) *core.Node { return other }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 || d.MainClass.Methods[0].GoName != "EchoNode" {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestDiscoverEngineClassSlice(t *testing.T) {
+	// `[]*<bindings>.<EngineClass>` — Phase 6c slice variant.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) EchoNodes(others []*core.Node) []*core.Node { return others }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestEmitNonBindingsPackagePointerRejected(t *testing.T) {
+	// `*<other_pkg>.<Class>` is rejected — Phase 6c only recognizes
+	// pointers through the user's bindings package alias.
+	src := `package x
+import (
+	"github.com/legendary-code/godot-go/core"
+	"some/other/pkg"
+)
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Echo(other *pkg.Thing) *pkg.Thing { return other }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil {
+		t.Fatalf("expected emit error for non-bindings pointer, got nil")
+	}
+	if !strings.Contains(err.Error(), "bindings package alias") {
+		t.Fatalf("error %q does not mention bindings package alias", err.Error())
+	}
+}
+
 func TestEmitForeignClassPointerRejected(t *testing.T) {
 	// `*<OtherClass>` is rejected — Phase 6a only supports same-class
 	// self-references. Cross-file user classes and engine class pointers
