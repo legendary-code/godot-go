@@ -53,6 +53,29 @@ func lookupMoverByEngine(p gdextension.ObjectPtr) *Mover {
 	return moverByEngine[uintptr(p)]
 }
 
+// NewMover constructs a fresh Mover instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table). If a method named Init is
+// defined on Mover, it's registered as the engine's _init
+// virtual and Godot calls it during construction.
+//
+// Use this instead of plain &Mover{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*Mover).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func NewMover() *Mover {
+	parent := gdextension.ConstructObject(gdextension.InternStringName("Mover"))
+	return lookupMoverByEngine(parent)
+}
+
 func releaseMoverInstance(handle unsafe.Pointer) {
 	moverInstancesMu.Lock()
 	defer moverInstancesMu.Unlock()

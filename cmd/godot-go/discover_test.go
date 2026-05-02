@@ -533,6 +533,76 @@ func (n *MyNode) EchoNodes(others []*core.Node) []*core.Node { return others }
 	}
 }
 
+func TestDiscoverInitAutoOverride(t *testing.T) {
+	// Method named Init on a @class struct should auto-register as
+	// the engine _init virtual without needing an explicit @override
+	// doctag — matches GDScript's `func _init():` constructor pattern.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Init() {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+	m := d.MainClass.Methods[0]
+	if m.Kind != methodOverride {
+		t.Errorf("Kind = %v, want override (Init should auto-bind to _init virtual)", m.Kind)
+	}
+	if m.GodotName != "_init" {
+		t.Errorf("GodotName = %q, want _init", m.GodotName)
+	}
+}
+
+func TestEmitFactorySynthesis(t *testing.T) {
+	// Non-abstract @class structs get a New<Class>() factory in the
+	// generated bindings; abstract classes don't.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Concrete struct {
+	// @extends
+	core.RefCounted
+}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	if !strings.Contains(buf.String(), "func NewConcrete() *Concrete") {
+		t.Errorf("expected NewConcrete factory in output")
+	}
+	if !strings.Contains(buf.String(), `gdextension.ConstructObject(gdextension.InternStringName("Concrete"))`) {
+		t.Errorf("factory body should call ConstructObject with the class name")
+	}
+}
+
+func TestEmitNoFactoryForAbstractClass(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+// @abstract
+type Abstract struct {
+	// @extends
+	core.RefCounted
+}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	if strings.Contains(buf.String(), "func NewAbstract") {
+		t.Errorf("abstract @class should not get a factory")
+	}
+}
+
 func TestEmitNonBindingsPackagePointerRejected(t *testing.T) {
 	// `*<other_pkg>.<Class>` is rejected — Phase 6c only recognizes
 	// pointers through the user's bindings package alias.

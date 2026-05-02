@@ -410,6 +410,14 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		tags := doctag.Parse(fn.Doc)
 		hasStatic := doctag.Has(tags, "static")
 		hasOverride := doctag.Has(tags, "override")
+		// `Init` on a @class struct auto-binds to Godot's `_init` virtual
+		// without requiring an explicit @override doctag — matches how
+		// GDScript treats `func _init():` as the constructor hook. Users
+		// who want a regular method named Init should rename it; the
+		// framework reserves this method name on @class structs.
+		if !hasStatic && !hasOverride && fn.Name.Name == "Init" {
+			hasOverride = true
+		}
 		recvUnnamed := len(fn.Recv.List[0].Names) == 0
 		if recvUnnamed && !hasStatic {
 			return nil, fmt.Errorf("%s: %s.%s has an unnamed receiver but no @static — add @static to register the method as a class method, or name the receiver to register an instance method",

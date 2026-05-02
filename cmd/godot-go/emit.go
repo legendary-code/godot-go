@@ -1055,6 +1055,31 @@ func lookup{{$class.Class}}ByEngine(p gdextension.ObjectPtr) *{{$class.Class}} {
 	return {{$class.Lower}}ByEngine[uintptr(p)]
 }
 
+{{if not $class.IsAbstract}}
+// New{{$class.Class}} constructs a fresh {{$class.Class}} instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table). If a method named Init is
+// defined on {{$class.Class}}, it's registered as the engine's _init
+// virtual and Godot calls it during construction.
+//
+// Use this instead of plain &{{$class.Class}}{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*{{$class.Class}}).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func New{{$class.Class}}() *{{$class.Class}} {
+	parent := gdextension.ConstructObject(gdextension.InternStringName({{printf "%q" $class.Class}}))
+	return lookup{{$class.Class}}ByEngine(parent)
+}
+{{end}}
+
 func release{{$class.Class}}Instance(handle unsafe.Pointer) {
 	{{$class.Lower}}InstancesMu.Lock()
 	defer {{$class.Lower}}InstancesMu.Unlock()

@@ -53,6 +53,29 @@ func lookupGreeterByEngine(p gdextension.ObjectPtr) *Greeter {
 	return greeterByEngine[uintptr(p)]
 }
 
+// NewGreeter constructs a fresh Greeter instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table). If a method named Init is
+// defined on Greeter, it's registered as the engine's _init
+// virtual and Godot calls it during construction.
+//
+// Use this instead of plain &Greeter{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*Greeter).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func NewGreeter() *Greeter {
+	parent := gdextension.ConstructObject(gdextension.InternStringName("Greeter"))
+	return lookupGreeterByEngine(parent)
+}
+
 func releaseGreeterInstance(handle unsafe.Pointer) {
 	greeterInstancesMu.Lock()
 	defer greeterInstancesMu.Unlock()
@@ -79,6 +102,26 @@ func registerGreeter() {
 
 		Free: func(instance unsafe.Pointer) {
 			releaseGreeterInstance(instance)
+		},
+	})
+
+	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
+		Class: "Greeter",
+		Name:  "_init",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupGreeterInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			self.Init()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupGreeterInstance(instance)
+			if self == nil {
+				return
+			}
+			self.Init()
 		},
 	})
 
@@ -130,6 +173,9 @@ const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <brief_description>Exercises cross-file enum references.</brief_description>
     <description>Exercises cross-file enum references. It lives in a separate&#xA;file from LocaleLanguage but takes a Language enum value (declared&#xA;alongside LocaleLanguage) as its arg. Without cross-file enum&#xA;resolution, the codegen would fail to find Language in this file&#39;s&#xA;scope; with it, the registration&#39;s ArgClassNames carries&#xA;&#34;LocaleLanguage.Language&#34; — the owning class&#39;s qualifier — so the&#xA;editor renders the typed-enum identity correctly.</description>
     <methods>
+        <method name="_init">
+            <description>Is auto-registered as the engine _init virtual without needing&#xA;structs for the constructor hook, matching GDScript&#39;s&#xA;` + "`" + `func _init():` + "`" + ` convention. Godot calls this when the Greeter&#xA;instance is constructed (whether via Greeter.new() from GDScript&#xA;or NewGreeter() from Go).</description>
+        </method>
         <method name="greet_in" qualifiers="static">
             <return type="String"></return>
             <param index="0" name="lang" type="int" enum="LocaleLanguage.Language"></param>

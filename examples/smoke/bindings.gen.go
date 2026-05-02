@@ -53,6 +53,29 @@ func lookupMyNodeByEngine(p gdextension.ObjectPtr) *MyNode {
 	return myNodeByEngine[uintptr(p)]
 }
 
+// NewMyNode constructs a fresh MyNode instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table). If a method named Init is
+// defined on MyNode, it's registered as the engine's _init
+// virtual and Godot calls it during construction.
+//
+// Use this instead of plain &MyNode{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*MyNode).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func NewMyNode() *MyNode {
+	parent := gdextension.ConstructObject(gdextension.InternStringName("MyNode"))
+	return lookupMyNodeByEngine(parent)
+}
+
 func releaseMyNodeInstance(handle unsafe.Pointer) {
 	myNodeInstancesMu.Lock()
 	defer myNodeInstancesMu.Unlock()
