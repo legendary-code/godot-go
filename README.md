@@ -306,12 +306,16 @@ library.
   aren't reachable from doctags yet.
 - **Method-form `@property` doesn't accept export hints.** Hints
   are field-form only in the current release.
-- **Method args/returns are restricted to primitives + user int
-  enums.** `Vector2`, `Array`, engine-class pointers, etc. work
-  fine when calling INTO Godot from your extension code, but you
-  can't yet declare them as parameter types on a `@class` method
-  that GDScript calls. See the
-  [type-support reference](./docs/reference.md#supported-types).
+- **Some boundary types still aren't supported.** Most common
+  shapes work — primitives, user int enums, slices and `...T`
+  variadics over those, `*<MainClass>` self-references, and
+  `*<bindings>.<EngineClass>` borrowed views (plus their slice
+  forms). What's still missing: `[]float64` (precision-aware
+  codegen TODO), bare cross-package types like `godot.Variant`
+  or `godot.Vector2` (only the pointer form is recognized for
+  cross-package types), and cross-file user classes. See the
+  [type-support reference](./docs/reference.md#supported-types)
+  for the full list.
 
 ## Contributing
 

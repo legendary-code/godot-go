@@ -616,22 +616,94 @@ and the matching files in
 The user-class boundary (method args/returns, signal arguments,
 property types) currently accepts:
 
-| Go type | Notes |
-|---|---|
-| `bool` | one-byte bool on the wire |
-| `int` | int64 on the wire |
-| `int32` | int64 on the wire (narrows on read, widens on write) |
-| `int64` | int64 on the wire |
-| `float32` | double on the wire (Godot's FLOAT is always double-width regardless of build config) |
-| `float64` | double on the wire |
-| `string` | transparent — internally crosses as Godot's `String`/`StringName`/`NodePath` opaque type, but the user never sees it |
-| user-defined `int` enum types | e.g., `type Mode int; const ( Idle Mode = iota; ...)` declared in the same file. Wire type is int64; the user-facing arg/return uses the typed name for ergonomics. |
+### Scalar types
 
-Outside this list — `Vector2`, `Array`, engine-class pointers,
-`Variant`, packed arrays, etc. — the codegen rejects with a
-file:line error. Calling INTO these types from your extension code
-works fine (the bindings package provides them); you just can't
-expose your own methods that take/return them yet.
+| Go type | Wire form | Notes |
+|---|---|---|
+| `bool` | `Variant::BOOL` | one-byte bool on the wire |
+| `int` | `Variant::INT` | int64 on the wire |
+| `int32` | `Variant::INT` | int64 on the wire (narrows on read, widens on write) |
+| `int64` | `Variant::INT` | int64 on the wire |
+| `float32` | `Variant::FLOAT` | always double-width on the Variant wire regardless of build config |
+| `float64` | `Variant::FLOAT` | as above |
+| `string` | `Variant::STRING` | transparent — internally crosses as Godot's `String`/`StringName`/`NodePath` opaque type, but the user never sees it |
+| user-defined `int` enum types | `Variant::INT` | e.g., `type Mode int` declared in the same file. Wire type is int64; the user-facing arg/return uses the typed name for ergonomics. Tagged with `@enum` / `@bitfield`, the enum's class identity flows through `ArgClassNames` / `ReturnClassName` so the editor docs panel shows the typed-element identity. |
+| `*<MainClass>` | `Variant::OBJECT` | self-reference to the file's `@class` struct. Codegen looks up the engine `ObjectPtr` in a per-class side table; instances not constructed by this extension fail with `CallErrorInvalidArgument` (see [Foreign-instance handling](#foreign-instance-handling)). |
+| `*<bindings>.<EngineClass>` | `Variant::OBJECT` | borrowed view of any engine class from the bindings package (`*godot.Node`, `*godot.Resource`, etc.). Wrapper construction is inline (`&<bindings>.<Class>{}` + `BindPtr`); no refcount management. RefCounted-derived classes work but lifecycle is the caller's responsibility — see [RefCounted borrowed views](#refcounted-borrowed-views). |
+
+### Slice and variadic types
+
+Go slices (and the variadic `...T` shorthand for them) cross the
+boundary as either a `Packed<X>Array` (efficient, contiguous storage
+for primitive elements) or `Array[T]` (TypedArray, when no Packed
+form exists or when element identity needs to flow):
+
+| Go type | Wire form | Notes |
+|---|---|---|
+| `[]bool` | `Array[bool]` | no `PackedBoolArray` exists in Godot |
+| `[]byte` | `PackedByteArray` | wire elements are int64; codegen narrows on read, widens on write |
+| `[]int32` | `PackedInt32Array` | wire elements are int64; narrowing/widening cast at the boundary |
+| `[]int` / `[]int64` | `PackedInt64Array` | direct |
+| `[]float32` | `PackedFloat32Array` | direct under single-precision builds |
+| `[]string` | `PackedStringArray` | direct |
+| `[]<UserEnum>` / `[]<UserInt>` | `PackedInt64Array` | Godot has no enum-typed Array at runtime — `Array[<EnumName>]` in GDScript is compile-time sugar over `Array[int]`, and `set_typed(TYPE_INT, class_name, ...)` is rejected. The enum class identity still flows through `ArgClassNames` / `ReturnClassName` and the XML `enum=` attribute, so the editor docs panel renders the typed-element identity correctly. |
+| `[]*<MainClass>` | `Array[<MainClass>]` | TypedArray of `OBJECT` with class_name set — the one filtered Array shape Godot supports natively at runtime. Per-element foreign-instance check applies. |
+| `[]*<bindings>.<EngineClass>` | `Array[<EngineClass>]` | TypedArray of `OBJECT` with class_name set. Borrowed-view per-element wrapping. |
+| `...T` (variadic, any supported `T`) | same as `[]T` | identical at the wire boundary. The Go method body sees `[]T`; the dispatch site spreads with `argN...` so the variadic shape works at the call site. |
+
+#### Foreign-instance handling
+
+When a method takes `*<MainClass>` or `[]*<MainClass>`, the codegen
+recovers the Go wrapper from the engine `ObjectPtr` Godot passes
+through the variant slot. Lookup happens in a per-class side table
+the framework maintains (populated by the `Construct` hook).
+Instances Godot got from another extension or constructed without
+going through that hook fail the lookup. The codegen's response:
+
+- **Call path**: returns `CallErrorInvalidArgument`. The user
+  method body never runs.
+- **PtrCall path**: bails without invoking the user method (writes
+  a zero return slot if the method has a return type).
+
+If you need to accept arbitrary `MyNode`-typed instances (rare —
+typically only relevant when multiple extensions co-declare a
+class), reach for `*<bindings>.<EngineClass>` instead, which uses
+borrowed-view semantics.
+
+#### RefCounted borrowed views
+
+For `*<bindings>.<EngineClass>` arg/return types where the class
+derives from `RefCounted` (`Resource`, `Image`, `RegEx`, `JSON`,
+…), the wrapper is a borrowed view: the codegen constructs it
+inline via `BindPtr` and does **not** bump the refcount. The
+caller (Godot, GDScript, another extension) owns the underlying
+engine pointer's lifecycle.
+
+If your method body retains the wrapper past the method scope —
+storing it on the `@class` struct, capturing it in a goroutine —
+call `Reference()` on the wrapper yourself to extend the lifetime,
+and `Unreference()` when you're done. The framework handles this
+automatically only for wrappers constructed via the bindings'
+`New<Class>()` factories, not for borrowed views.
+
+For non-RefCounted classes (`Node`, `Node2D`, most of the engine),
+the engine pointer's lifecycle is owned by the scene tree; borrowed
+views just work without lifecycle care.
+
+### Currently unsupported
+
+- `[]float64` — under single-precision bindings (the framework
+  default) the float Packed types narrow at the boundary; bridging
+  cleanly needs a `RealT` typedef in the bindings.
+- Bare cross-package types like `godot.Variant`, `godot.Vector2`,
+  `godot.Array` — only the pointer form `*<bindings>.<EngineClass>`
+  is recognized for cross-package types today.
+- Cross-file user classes — `*<OtherUserClass>` only works for the
+  file's own `@class`; you can't cross-reference a class from a
+  different file in the same package.
+- Nested slices `[][]T`, maps, channels, function types, untyped
+  interfaces — the codegen rejects each with a clear `file:line`
+  message.
 
 For `@extends`, any engine class from the generated bindings
 package is valid as the parent type — the bindgen emits all 1023+
