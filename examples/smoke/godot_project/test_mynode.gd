@@ -205,7 +205,7 @@ func _initialize() -> void:
 	var third: MyNode = MyNode.new()
 	var input_array: Array[MyNode] = [other, third]
 	var output_array: Array[MyNode] = n.echo_many(input_array)
-	_check("echo_many: returned size", output_array.size(), 2) and ok
+	_check("echo_many: returned size", output_array.size(), 2)
 	_check("echo_many: element 0 identity", output_array[0], other)
 	_check("echo_many: element 1 identity", output_array[1], third)
 	_check("echo_many: typed at runtime", output_array.is_typed(), true)
