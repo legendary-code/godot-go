@@ -73,14 +73,15 @@ func _initialize() -> void:
 	ok = _check("class_call_static('LocaleLanguage', 'names').has('unknown')",
 			got_names.has("unknown"), true) and ok
 
-	# Phase 5 — user-enum slice return. Languages() returns
-	# []Language on the Go side; the wire form is PackedInt64Array.
-	# (Godot has no enum-typed Array at runtime — `Array[<Enum>]` in
-	# GDScript is compile-time sugar over `Array[int]` — so Packed is
-	# the right wire form, and the editor still treats individual
-	# values as Language thanks to the @enum class_name on the
-	# Languages() method's return registration.)
-	var got_langs: PackedInt64Array = ClassDB.class_call_static("LocaleLanguage", "languages")
+	# Phase 5 + 9 — user-enum slice return. Languages() returns
+	# []Language on the Go side; wire form is untyped Variant::ARRAY
+	# with PROPERTY_HINT_TYPE_STRING carrying the typed-element
+	# identity ("2/2:UNKNOWN,ENGLISH,GERMAN"). The editor's autocomplete
+	# / docs panel reads the hint and renders this as Array[Language]
+	# rather than the bare PackedInt64Array we'd get with the
+	# more-efficient wire form. Per-element marshal boxes each int
+	# through a Variant.
+	var got_langs: Array = ClassDB.class_call_static("LocaleLanguage", "languages")
 	ok = _check("class_call_static('LocaleLanguage', 'languages').size() = 3",
 			got_langs.size(), 3) and ok
 	ok = _check("class_call_static('LocaleLanguage', 'languages')[0] = UNKNOWN(0)",
@@ -90,13 +91,11 @@ func _initialize() -> void:
 	ok = _check("class_call_static('LocaleLanguage', 'languages')[2] = GERMAN(2)",
 			got_langs[2], 2) and ok
 
-	# Phase 5 — user-enum slice arg + variadic. FilterLanguages takes
-	# ...Language (variadic) and returns []Language; Godot sees a single
-	# PackedInt64Array arg either way. Pass a PackedInt64Array
-	# containing all three, expect only ENGLISH and GERMAN back
-	# (UNKNOWN drops out).
-	var input_langs := PackedInt64Array([0, 1, 2])
-	var filtered: PackedInt64Array = ClassDB.class_call_static("LocaleLanguage", "filter_languages", input_langs)
+	# Phase 5 + 9 — user-enum slice arg + variadic. Wire form on both
+	# sides is Variant::ARRAY now (the typed-element-identity path);
+	# pass an Array of [0, 1, 2], expect [1, 2] back.
+	var input_langs: Array = [0, 1, 2]
+	var filtered: Array = ClassDB.class_call_static("LocaleLanguage", "filter_languages", input_langs)
 	ok = _check("filter_languages([UNKNOWN, ENGLISH, GERMAN]).size() = 2",
 			filtered.size(), 2) and ok
 	ok = _check("filter_languages(...)[0] = ENGLISH(1)",

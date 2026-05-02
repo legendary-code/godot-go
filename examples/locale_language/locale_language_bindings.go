@@ -260,27 +260,29 @@ func registerLocaleLanguage() {
 			_ = instance
 			var self LocaleLanguage
 			result := self.Languages()
-			result_arr := godot.NewPackedInt64Array()
-			defer result_arr.Destroy()
-			for _, v := range result {
-				result_arr.PushBack(int64(v))
+			result_i64 := make([]int64, len(result))
+			for i, v := range result {
+				result_i64[i] = int64(v)
 			}
-			godot.VariantSetPackedInt64Array(ret, result_arr)
+			result_arr := godot.MakeArrayOfInts(result_i64...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
 			var self LocaleLanguage
 			result := self.Languages()
-			result_arr := godot.NewPackedInt64Array()
-			for _, v := range result {
-				result_arr.PushBack(int64(v))
+			result_i64 := make([]int64, len(result))
+			for i, v := range result {
+				result_i64[i] = int64(v)
 			}
-			*(*godot.PackedInt64Array)(ret) = result_arr
+			result_arr := godot.MakeArrayOfInts(result_i64...)
+			*(*godot.Array)(ret) = result_arr
 		},
 		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
 		HasReturn:        true,
-		ReturnType:       gdextension.VariantTypePackedInt64Array,
+		ReturnType:       gdextension.VariantTypeArray,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintTypeString,
 		ReturnHintString: "2/2:UNKNOWN,ENGLISH,GERMAN",
@@ -292,46 +294,52 @@ func registerLocaleLanguage() {
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
 			var self LocaleLanguage
-			arg0_arr := godot.VariantAsPackedInt64Array(args[0])
+			arg0_arr := godot.VariantAsArray(args[0])
 			defer arg0_arr.Destroy()
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]Language, arg0_n)
 			for i := int64(0); i < arg0_n; i++ {
-				arg0[i] = Language(arg0_arr.Get(i))
+				v := arg0_arr.Get(i)
+				arg0[i] = Language(v.AsInt())
+				v.Destroy()
 			}
 			result := self.FilterLanguages(arg0...)
-			result_arr := godot.NewPackedInt64Array()
-			defer result_arr.Destroy()
-			for _, v := range result {
-				result_arr.PushBack(int64(v))
+			result_i64 := make([]int64, len(result))
+			for i, v := range result {
+				result_i64[i] = int64(v)
 			}
-			godot.VariantSetPackedInt64Array(ret, result_arr)
+			result_arr := godot.MakeArrayOfInts(result_i64...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
 			var self LocaleLanguage
-			arg0_arr := *(*godot.PackedInt64Array)(gdextension.PtrCallArg(args, 0))
+			arg0_arr := *(*godot.Array)(gdextension.PtrCallArg(args, 0))
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]Language, arg0_n)
 			for i := int64(0); i < arg0_n; i++ {
-				arg0[i] = Language(arg0_arr.Get(i))
+				v := arg0_arr.Get(i)
+				arg0[i] = Language(v.AsInt())
+				v.Destroy()
 			}
 			result := self.FilterLanguages(arg0...)
-			result_arr := godot.NewPackedInt64Array()
-			for _, v := range result {
-				result_arr.PushBack(int64(v))
+			result_i64 := make([]int64, len(result))
+			for i, v := range result {
+				result_i64[i] = int64(v)
 			}
-			*(*godot.PackedInt64Array)(ret) = result_arr
+			result_arr := godot.MakeArrayOfInts(result_i64...)
+			*(*godot.Array)(ret) = result_arr
 		},
 		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
 		HasReturn:        true,
-		ReturnType:       gdextension.VariantTypePackedInt64Array,
+		ReturnType:       gdextension.VariantTypeArray,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintTypeString,
 		ReturnHintString: "2/2:UNKNOWN,ENGLISH,GERMAN",
 		ArgTypes: []gdextension.VariantType{
-			gdextension.VariantTypePackedInt64Array,
+			gdextension.VariantTypeArray,
 		},
 		ArgMetadata: []gdextension.MethodArgumentMetadata{
 			gdextension.ArgMetaNone,
@@ -450,12 +458,12 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Demonstrates a slice return at the @class boundary. The&#xA;codegen builds a PackedStringArray from the returned []string before&#xA;handing the value back to Godot.</description>
         </method>
         <method name="languages" qualifiers="static">
-            <return type="PackedInt64Array"></return>
+            <return type="Array"></return>
             <description>Demonstrates a slice-of-typed-enum return at the @class&#xA;boundary. The wire form is Array[Language] (TypedArray); Godot sees&#xA;each element as a typed Language value, not a bare int.</description>
         </method>
         <method name="filter_languages" qualifiers="static">
-            <return type="PackedInt64Array"></return>
-            <param index="0" name="values" type="PackedInt64Array"></param>
+            <return type="Array"></return>
+            <param index="0" name="values" type="Array"></param>
             <description>Demonstrates two boundary features at once: a&#xA;variadic typed-enum parameter (Go&#39;s ` + "`" + `...Language` + "`" + ` is identical to&#xA;` + "`" + `[]Language` + "`" + ` at the wire boundary, just nicer at the call site) and&#xA;a typed-enum slice return. Returns the subset matching the given&#xA;known set.</description>
         </method>
         <method name="concat_names" qualifiers="static">

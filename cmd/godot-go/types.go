@@ -687,27 +687,99 @@ arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b
 }
 
 // userIntSliceTypeInfo builds the marshal fragments for slices of any
-// user `type X int` alias — tagged or untagged. Wire form is
-// PackedInt64Array; the boundary cast bridges the user's named type
-// and int64.
+// user `type X int` alias. Two wire forms by tag status:
 //
-// Note: we deliberately do NOT propagate elem.EnumName onto the slice
-// typeInfo's ClassName/EnumName fields — setting class_name on a
-// non-OBJECT-typed registration confuses GDScript's autocomplete (it
-// reads class_name as the return type and shows `Kind F(...) static`
-// instead of `PackedInt64Array F(...) static`). Element-level enum
-// identity flows through HintEnum instead, which the emitter turns
-// into a PROPERTY_HINT_TYPE_STRING hint string at registration time.
+//   - Tagged @enum / @bitfield: wire is untyped Variant::ARRAY with
+//     PROPERTY_HINT_TYPE_STRING carrying the element identity. This
+//     is the only shape Godot's editor honors for typed-element
+//     rendering on method args/returns — Packed types ignore the
+//     hint, and `set_typed(TYPE_INT, class_name, ...)` is rejected at
+//     runtime. Per-element marshaling boxes each int through a
+//     Variant, slightly slower than Packed but unlocks the
+//     `Array[Kind]`-style rendering in the editor.
+//
+//   - Untagged: wire stays as PackedInt64Array — no enum identity to
+//     preserve, contiguous storage and faster element marshaling.
+//
+// Both routes propagate the EnumName as HintEnum so the emitter
+// builds the hint string. For Packed-wire-form (untagged) the hint
+// is harmless but ignored by the editor; for untyped-Array (tagged)
+// the editor reads it and renders the typed-element identity.
 func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
+	if elem.EnumName != "" {
+		return taggedEnumSliceTypeInfo(elem)
+	}
 	cat := sliceCategory{
 		PackedTypeName: "PackedInt64Array",
 		VariantType:    "VariantTypePackedInt64Array",
 		CastTo:         "int64",      // user-type → wire
 		CastFrom:       elem.GoType,  // wire → user-type
 	}
-	info := slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
-	info.HintEnum = elem.EnumName
-	return info
+	return slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
+}
+
+// taggedEnumSliceTypeInfo builds the marshal fragments for
+// `[]<TaggedEnum>` — untyped Variant::ARRAY at the wire boundary so
+// PROPERTY_HINT_TYPE_STRING fires the editor's typed-element
+// rendering. Per-element marshal boxes each int through a Variant
+// (Phase 3's MakeArrayOfInts on the write side; Variant.AsInt on the
+// read side).
+func taggedEnumSliceTypeInfo(elem *typeInfo) *typeInfo {
+	goType := "[]" + elem.GoType
+	enumGoType := elem.GoType
+	return &typeInfo{
+		GoType:      goType,
+		VariantType: "VariantTypeArray",
+		ArgMeta:     "ArgMetaNone",
+		HintEnum:    elem.EnumName,
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := %s.VariantAsArray(args[%d])
+defer arg%d_arr.Destroy()
+arg%d_n := arg%d_arr.Size()
+arg%d := make([]%s, arg%d_n)
+for i := int64(0); i < arg%d_n; i++ {
+	v := arg%d_arr.Get(i)
+	arg%d[i] = %s(v.AsInt())
+	v.Destroy()
+}`, idx, b, idx, idx, idx, idx, idx, enumGoType, idx, idx, idx, idx, enumGoType)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_i64 := make([]int64, len(%s))
+for i, v := range %s {
+	result_i64[i] = int64(v)
+}
+result_arr := %s.MakeArrayOfInts(result_i64...)
+%s.VariantSetArray(ret, result_arr)
+result_arr.Destroy()`, expr, expr, b, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := *(*%s.Array)(gdextension.PtrCallArg(args, %d))
+arg%d_n := arg%d_arr.Size()
+arg%d := make([]%s, arg%d_n)
+for i := int64(0); i < arg%d_n; i++ {
+	v := arg%d_arr.Get(i)
+	arg%d[i] = %s(v.AsInt())
+	v.Destroy()
+}`, idx, b, idx, idx, idx, idx, enumGoType, idx, idx, idx, idx, enumGoType)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_i64 := make([]int64, len(%s))
+for i, v := range %s {
+	result_i64[i] = int64(v)
+}
+result_arr := %s.MakeArrayOfInts(result_i64...)
+*(*%s.Array)(ret) = result_arr`, expr, expr, b, b)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`arg%d_i64 := make([]int64, len(%s))
+for i, v := range %s {
+	arg%d_i64[i] = int64(v)
+}
+arg%d_arr := %s.MakeArrayOfInts(arg%d_i64...)
+arg%d := %s.NewVariantArray(arg%d_arr)
+arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, idx, idx, b, idx, idx)
+		},
+	}
 }
 
 // sliceBoolTypeInfo builds the marshaling fragments for []bool, which
