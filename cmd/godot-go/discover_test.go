@@ -533,32 +533,6 @@ func (n *MyNode) EchoNodes(others []*core.Node) []*core.Node { return others }
 	}
 }
 
-func TestDiscoverInitAutoOverride(t *testing.T) {
-	// Method named Init on a @class struct should auto-register as
-	// the engine _init virtual without needing an explicit @override
-	// doctag — matches GDScript's `func _init():` constructor pattern.
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-type MyNode struct {
-	// @extends
-	core.Node
-}
-func (n *MyNode) Init() {}
-`
-	d := mustDiscover(t, src)
-	if len(d.MainClass.Methods) != 1 {
-		t.Fatalf("methods = %+v", d.MainClass.Methods)
-	}
-	m := d.MainClass.Methods[0]
-	if m.Kind != methodOverride {
-		t.Errorf("Kind = %v, want override (Init should auto-bind to _init virtual)", m.Kind)
-	}
-	if m.GodotName != "_init" {
-		t.Errorf("GodotName = %q, want _init", m.GodotName)
-	}
-}
-
 func TestEmitFactorySynthesis(t *testing.T) {
 	// Non-abstract @class structs get a New<Class>() factory in the
 	// generated bindings; abstract classes don't.

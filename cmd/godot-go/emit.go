@@ -1059,9 +1059,9 @@ func lookup{{$class.Class}}ByEngine(p gdextension.ObjectPtr) *{{$class.Class}} {
 // New{{$class.Class}} constructs a fresh {{$class.Class}} instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If a method named Init is
-// defined on {{$class.Class}}, it's registered as the engine's _init
-// virtual and Godot calls it during construction.
+// registering it in the side table). If {{$class.Class}} defines an
+// Init method tagged @override, Godot's _init virtual dispatch
+// invokes it during construction.
 //
 // Use this instead of plain &{{$class.Class}}{} when you need an
 // engine-backed instance. Hollow struct literals have no engine

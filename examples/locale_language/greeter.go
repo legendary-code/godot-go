@@ -19,12 +19,12 @@ type Greeter struct {
 	godot.Object
 }
 
-// Init is auto-registered as the engine _init virtual without needing
-// @override — the codegen reserves the method name `Init` on @class
-// structs for the constructor hook, matching GDScript's
-// `func _init():` convention. Godot calls this when the Greeter
-// instance is constructed (whether via Greeter.new() from GDScript
-// or NewGreeter() from Go).
+// Init is registered as the engine _init virtual via @override —
+// Godot calls this hook as part of instance construction (whether
+// triggered by Greeter.new() from GDScript or NewGreeter() from Go).
+// Same explicit-opt-in shape as @override on _process / _ready.
+//
+// @override
 func (g *Greeter) Init() {
 	runtime.Print("Greeter.Init: constructor virtual fired")
 }

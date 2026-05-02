@@ -56,9 +56,9 @@ func lookupGreeterByEngine(p gdextension.ObjectPtr) *Greeter {
 // NewGreeter constructs a fresh Greeter instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If a method named Init is
-// defined on Greeter, it's registered as the engine's _init
-// virtual and Godot calls it during construction.
+// registering it in the side table). If Greeter defines an
+// Init method tagged @override, Godot's _init virtual dispatch
+// invokes it during construction.
 //
 // Use this instead of plain &Greeter{} when you need an
 // engine-backed instance. Hollow struct literals have no engine
@@ -174,7 +174,7 @@ const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <description>Exercises cross-file enum references. It lives in a separate&#xA;file from LocaleLanguage but takes a Language enum value (declared&#xA;alongside LocaleLanguage) as its arg. Without cross-file enum&#xA;resolution, the codegen would fail to find Language in this file&#39;s&#xA;scope; with it, the registration&#39;s ArgClassNames carries&#xA;&#34;LocaleLanguage.Language&#34; — the owning class&#39;s qualifier — so the&#xA;editor renders the typed-enum identity correctly.</description>
     <methods>
         <method name="_init">
-            <description>Is auto-registered as the engine _init virtual without needing&#xA;structs for the constructor hook, matching GDScript&#39;s&#xA;` + "`" + `func _init():` + "`" + ` convention. Godot calls this when the Greeter&#xA;instance is constructed (whether via Greeter.new() from GDScript&#xA;or NewGreeter() from Go).</description>
+            <description>Is registered as the engine _init virtual via @override —&#xA;Godot calls this hook as part of instance construction (whether&#xA;triggered by Greeter.new() from GDScript or NewGreeter() from Go).&#xA;Same explicit-opt-in shape as @override on _process / _ready.</description>
         </method>
         <method name="greet_in" qualifiers="static">
             <return type="String"></return>
