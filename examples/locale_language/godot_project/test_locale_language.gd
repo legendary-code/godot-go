@@ -131,6 +131,16 @@ func _initialize() -> void:
 	ok = _check("Greeter.greet_in arg[0].class_name = LocaleLanguage.Language",
 			greet_meta["args"][0]["class_name"], &"LocaleLanguage.Language") and ok
 
+	# Default-init constructor hook: Greeter defines an unexported
+	# newGreeter() factory that seeds defaultLang to LanguageEnglish.
+	# Codegen routes the engine-side Construct callback through it, so
+	# Greeter.new() from GDScript picks up the same defaults Go-side
+	# NewGreeter() would.
+	var g: Greeter = ClassDB.instantiate("Greeter")
+	ok = _check("Greeter.new() succeeded", g != null, true) and ok
+	ok = _check("Greeter.new().hello() = 'hello' (newGreeter seeded ENGLISH)",
+			g.hello(), "hello") and ok
+
 	if ok:
 		print("test_locale_language: ALL CHECKS PASSED")
 		quit(0)

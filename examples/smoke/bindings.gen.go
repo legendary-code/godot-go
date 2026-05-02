@@ -56,9 +56,7 @@ func lookupMyNodeByEngine(p gdextension.ObjectPtr) *MyNode {
 // NewMyNode constructs a fresh MyNode instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If a method named Init is
-// defined on MyNode, it's registered as the engine's _init
-// virtual and Godot calls it during construction.
+// registering it in the side table).
 //
 // Use this instead of plain &MyNode{} when you need an
 // engine-backed instance. Hollow struct literals have no engine

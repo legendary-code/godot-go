@@ -56,9 +56,11 @@ func lookupGreeterByEngine(p gdextension.ObjectPtr) *Greeter {
 // NewGreeter constructs a fresh Greeter instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If Greeter defines an
-// Init method tagged @override, Godot's _init virtual dispatch
-// invokes it during construction.
+// registering it in the side table).
+// The wrapper itself comes from the user's package-level
+// newGreeter() factory, so default field values seeded there
+// flow into both Go-side construction and GDScript-driven
+// Greeter.new() calls.
 //
 // Use this instead of plain &Greeter{} when you need an
 // engine-backed instance. Hollow struct literals have no engine
@@ -94,7 +96,7 @@ func registerGreeter() {
 		IsExposed: true,
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
-			n := &Greeter{}
+			n := newGreeter()
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Object"))
 			n.BindPtr(parent)
 			return parent, registerGreeterInstance(n, parent)
@@ -123,6 +125,31 @@ func registerGreeter() {
 			}
 			self.Init()
 		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
+		Name:  "hello",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupGreeterInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.Hello()
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupGreeterInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.Hello()
+			godot.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -170,11 +197,15 @@ func registerGreeter() {
 // nil and the load call is a no-op).
 const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
 <class name="Greeter" inherits="Object" version="4.4">
-    <brief_description>Exercises cross-file enum references.</brief_description>
-    <description>Exercises cross-file enum references. It lives in a separate&#xA;file from LocaleLanguage but takes a Language enum value (declared&#xA;alongside LocaleLanguage) as its arg. Without cross-file enum&#xA;resolution, the codegen would fail to find Language in this file&#39;s&#xA;scope; with it, the registration&#39;s ArgClassNames carries&#xA;&#34;LocaleLanguage.Language&#34; — the owning class&#39;s qualifier — so the&#xA;editor renders the typed-enum identity correctly.</description>
+    <brief_description>Exercises cross-file enum references plus the default-init constructor hook.</brief_description>
+    <description>Exercises cross-file enum references plus the default-init&#xA;constructor hook. It lives in a separate file from LocaleLanguage&#xA;but takes a Language enum value (declared alongside LocaleLanguage)&#xA;as its arg. Without cross-file enum resolution, the codegen would&#xA;fail to find Language in this file&#39;s scope; with it, the&#xA;registration&#39;s ArgClassNames carries &#34;LocaleLanguage.Language&#34; —&#xA;the owning class&#39;s qualifier — so the editor renders the typed-enum&#xA;identity correctly.</description>
     <methods>
         <method name="_init">
-            <description>Is registered as the engine _init virtual via @override —&#xA;Godot calls this hook as part of instance construction (whether&#xA;triggered by Greeter.new() from GDScript or NewGreeter() from Go).&#xA;Same explicit-opt-in shape as @override on _process / _ready.</description>
+            <description>Is registered as the engine _init virtual via @override —&#xA;Godot calls this hook as part of instance construction (whether&#xA;triggered by Greeter.new() from GDScript or NewGreeter() from Go).&#xA;Independent of newGreeter above; both run during construction&#xA;(newGreeter populates the wrapper&#39;s defaults; Init fires after,&#xA;once Godot has bound the engine pointer).</description>
+        </method>
+        <method name="hello">
+            <return type="String"></return>
+            <description>Returns the greeting in the instance&#39;s defaultLang —&#xA;exercises the newGreeter() factory&#39;s seeded state reaching a&#xA;regular ClassDB-bound method.</description>
         </method>
         <method name="greet_in" qualifiers="static">
             <return type="String"></return>

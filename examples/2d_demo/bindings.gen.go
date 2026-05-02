@@ -56,9 +56,7 @@ func lookupMoverByEngine(p gdextension.ObjectPtr) *Mover {
 // NewMover constructs a fresh Mover instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If a method named Init is
-// defined on Mover, it's registered as the engine's _init
-// virtual and Godot calls it during construction.
+// registering it in the side table).
 //
 // Use this instead of plain &Mover{} when you need an
 // engine-backed instance. Hollow struct literals have no engine

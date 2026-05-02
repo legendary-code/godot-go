@@ -167,17 +167,18 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 	}
 
 	ec := emitClass{
-		SourceFile: filepath.Base(d.FilePath),
-		Class:      ci.Name,
-		Parent:     ci.Parent,
-		Lower:      lowerFirst(ci.Name),
-		InitLevel:  initLevel,
-		IsAbstract: ci.IsAbstract,
-		Methods:    supported,
-		Accessors:  accessors,
-		Properties: properties,
-		Signals:    signals,
-		Enums:      buildEmitEnums(d.Enums),
+		SourceFile:     filepath.Base(d.FilePath),
+		Class:          ci.Name,
+		Parent:         ci.Parent,
+		Lower:          lowerFirst(ci.Name),
+		InitLevel:      initLevel,
+		IsAbstract:     ci.IsAbstract,
+		HasConstructor: ci.HasConstructor,
+		Methods:        supported,
+		Accessors:      accessors,
+		Properties:     properties,
+		Signals:        signals,
+		Enums:          buildEmitEnums(d.Enums),
 	}
 
 	if emitHasDocSurface(ci, ec) {
@@ -245,6 +246,12 @@ type emitClass struct {
 	// content (no description, no docs on any declaration); the
 	// template skips the LoadEditorDocXML call when empty.
 	DocXML string
+
+	// HasConstructor is true when the source defines an unexported
+	// `func new<Class>() *<Class>` default-init hook. The Construct
+	// callback then routes through it instead of the zero-value
+	// `&<Class>{}` literal.
+	HasConstructor bool
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -1059,9 +1066,13 @@ func lookup{{$class.Class}}ByEngine(p gdextension.ObjectPtr) *{{$class.Class}} {
 // New{{$class.Class}} constructs a fresh {{$class.Class}} instance via
 // Godot's ClassDB. Routes through gdextension.ConstructObject, which
 // fires the framework's Construct hook (creating the Go wrapper and
-// registering it in the side table). If {{$class.Class}} defines an
-// Init method tagged @override, Godot's _init virtual dispatch
-// invokes it during construction.
+// registering it in the side table).
+{{- if $class.HasConstructor}}
+// The wrapper itself comes from the user's package-level
+// new{{$class.Class}}() factory, so default field values seeded there
+// flow into both Go-side construction and GDScript-driven
+// {{$class.Class}}.new() calls.
+{{- end}}
 //
 // Use this instead of plain &{{$class.Class}}{} when you need an
 // engine-backed instance. Hollow struct literals have no engine
@@ -1128,7 +1139,11 @@ func register{{$class.Class}}() {
 {{- end}}
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			{{- if $class.HasConstructor}}
+			n := new{{$class.Class}}()
+			{{- else}}
 			n := &{{$class.Class}}{}
+			{{- end}}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.Parent}}"))
 			n.BindPtr(parent)
 			return parent, register{{$class.Class}}Instance(n, parent)

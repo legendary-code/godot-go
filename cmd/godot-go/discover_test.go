@@ -577,6 +577,103 @@ type Abstract struct {
 	}
 }
 
+func TestDiscoverConstructorDefaultsHook(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func newWords() *Words { return &Words{} }
+`
+	d := mustDiscover(t, src)
+	if !d.MainClass.HasConstructor {
+		t.Errorf("expected HasConstructor = true")
+	}
+}
+
+func TestDiscoverConstructorWithArgsRejected(t *testing.T) {
+	mustFailDiscover(t, `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func newWords(seed int64) *Words { return &Words{} }
+`, "must take no arguments")
+}
+
+func TestDiscoverConstructorWrongReturn(t *testing.T) {
+	mustFailDiscover(t, `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func newWords() *core.RefCounted { return nil }
+`, "must return *Words")
+}
+
+func TestDiscoverConstructorNoReturn(t *testing.T) {
+	mustFailDiscover(t, `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func newWords() {}
+`, "must return exactly one value")
+}
+
+func TestDiscoverConstructorOnAbstractRejected(t *testing.T) {
+	mustFailDiscover(t, `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+// @abstract
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func newWords() *Words { return &Words{} }
+`, "abstract class")
+}
+
+func TestEmitConstructorRoutesThroughFactory(t *testing.T) {
+	// When the user defines new<X>(), the Construct hook calls it
+	// instead of the zero-value &<X>{} literal — both Go-side
+	// New<X>() calls and GDScript-driven X.new() pick up the
+	// user-seeded defaults.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+	buffer string
+}
+func newWords() *Words { return &Words{buffer: "hi"} }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "n := newWords()") {
+		t.Errorf("Construct hook should call newWords()")
+	}
+	if strings.Contains(out, "n := &Words{}") {
+		t.Errorf("Construct hook should NOT fall back to &Words{} when newWords exists")
+	}
+	if !strings.Contains(out, "func NewWords() *Words") {
+		t.Errorf("expected NewWords() factory to remain")
+	}
+}
+
 func TestEmitNonBindingsPackagePointerRejected(t *testing.T) {
 	// `*<other_pkg>.<Class>` is rejected — Phase 6c only recognizes
 	// pointers through the user's bindings package alias.

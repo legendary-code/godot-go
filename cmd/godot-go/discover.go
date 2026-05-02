@@ -99,6 +99,16 @@ type classInfo struct {
 	Methods    []*methodInfo
 	Properties []*propertyInfo
 	Signals    []*signalInfo
+
+	// HasConstructor records whether the file defines an unexported
+	// package-level `func new<ClassName>() *<ClassName>`. Codegen
+	// routes the engine-side Construct hook through it instead of
+	// the default `&<ClassName>{}` literal so users can populate
+	// default field values without touching the Go-side factory.
+	// Strict zero-arg signature — args belong on the @override
+	// `_init` virtual where Godot's Class.new(args...) forwarding
+	// can deliver them.
+	HasConstructor bool
 }
 
 // signalInfo is one signal declared on a `@signals` interface. Multiple
@@ -518,6 +528,18 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 	}
 
+	// Constructor: an unexported package-level `func new<ClassName>()
+	// *<ClassName>` is the framework's recognized default-init hook.
+	// When present, codegen calls it from the engine-side Construct
+	// callback in place of the zero-value literal — so users can seed
+	// fields without intercepting Godot's allocation. Args are
+	// rejected at codegen time (the message points at @override
+	// `_init` for arg-bearing constructors, which is the GDScript-
+	// compatible mechanism).
+	if err := collectConstructor(fset, file, d.MainClass); err != nil {
+		return nil, err
+	}
+
 	// Properties: walk the main class's struct fields and methods for
 	// @property declarations.
 	if err := collectProperties(fset, d.MainClass); err != nil {
@@ -610,6 +632,61 @@ func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) 
 				})
 			}
 		}
+	}
+	return nil
+}
+
+// collectConstructor walks the file's top-level FuncDecls for a
+// receiver-less function named `new<MainClass>` and validates its
+// signature. Strict shape:
+//
+//   - zero parameters (use @override `_init` for arg-bearing init —
+//     GDScript's `Class.new(args...)` forwards args to _init AFTER
+//     the Construct hook fires, so args can't reach the wrapper-
+//     creation step regardless of how we'd like to surface them).
+//   - exactly one return value, type *<MainClass>, unnamed.
+//
+// Rejected combinations:
+//
+//   - Constructor on @abstract class: abstract classes aren't
+//     constructible via Godot's ClassDB, so a default-init hook is
+//     dead code.
+func collectConstructor(fset *token.FileSet, file *ast.File, ci *classInfo) error {
+	want := "new" + ci.Name
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil || fn.Name.Name != want {
+			continue
+		}
+		if params := fieldsOf(fn.Type.Params); len(params) > 0 {
+			return fmt.Errorf("%s: %s must take no arguments — only default-field initialization is supported here. For arg-bearing construction (e.g. Class.new(seed) from GDScript), declare an `_init` virtual: `// @override` + `// @name _init` on a method that takes the args you want.",
+				posStr(fset, fn.Pos()), want)
+		}
+		results := fieldsOf(fn.Type.Results)
+		if len(results) != 1 {
+			return fmt.Errorf("%s: %s must return exactly one value (*%s)",
+				posStr(fset, fn.Pos()), want, ci.Name)
+		}
+		ret := results[0]
+		if len(ret.Names) > 0 {
+			return fmt.Errorf("%s: %s must have an unnamed return", posStr(fset, fn.Pos()), want)
+		}
+		star, ok := ret.Type.(*ast.StarExpr)
+		if !ok {
+			return fmt.Errorf("%s: %s must return *%s",
+				posStr(fset, fn.Pos()), want, ci.Name)
+		}
+		ident, ok := star.X.(*ast.Ident)
+		if !ok || ident.Name != ci.Name {
+			return fmt.Errorf("%s: %s must return *%s",
+				posStr(fset, fn.Pos()), want, ci.Name)
+		}
+		if ci.IsAbstract {
+			return fmt.Errorf("%s: %s on @abstract class %s — abstract classes can't be constructed via Godot's ClassDB; remove %s or remove @abstract",
+				posStr(fset, fn.Pos()), want, ci.Name, want)
+		}
+		ci.HasConstructor = true
+		return nil
 	}
 	return nil
 }
