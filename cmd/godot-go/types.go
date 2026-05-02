@@ -33,6 +33,14 @@ type typeInfo struct {
 	// autocomplete instead of plain int.
 	EnumName string
 
+	// ClassName is the unqualified class identity for `*<UserClass>` /
+	// `*<EngineClass>` boundaries (Phase 6+ of the array/object work).
+	// Unlike EnumName this value goes into ArgClassNames / ReturnClassName
+	// directly, with no `<MainClass>.` prefix — Godot's class_name
+	// registration is bare for OBJECT-typed slots. Empty for non-class
+	// types.
+	ClassName string
+
 	PtrCallReadArg     func(bindings string, idx int) string
 	PtrCallWriteReturn func(bindings, expr string) string
 	CallReadArg        func(bindings string, idx int) string
@@ -203,7 +211,14 @@ var typeTable = map[string]*typeInfo{
 // inline loops with explicit casts at the boundary, calling into the
 // bindings' Variant<->Packed<X>Array adapters and per-type
 // PushBack / Get methods.
-func resolveType(expr ast.Expr, enums map[string]*enumInfo) (*typeInfo, error) {
+//
+// Pointer types `*T` are supported only when T names the file's @class
+// — i.e., a same-class self-reference like `func (n *MyNode) Echo(other
+// *MyNode) *MyNode`. The marshaling routes through a per-class engine-
+// pointer side table (lookup<MainClass>ByEngine) which the emitter
+// synthesizes alongside the trampolines. Cross-file user classes and
+// engine class pointers are deferred to later phases.
+func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass string) (*typeInfo, error) {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		if info, ok := typeTable[t.Name]; ok {
@@ -217,11 +232,23 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo) (*typeInfo, error) {
 			return enumTypeInfo(t.Name, exposedName), nil
 		}
 		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", t.Name)
+	case *ast.StarExpr:
+		// `*T` — only the file's @class is supported as a self-reference.
+		// Cross-file user classes and engine class pointers (`*godot.Node`)
+		// are deferred to later phases of the array/object work.
+		id, ok := t.X.(*ast.Ident)
+		if !ok {
+			return nil, fmt.Errorf("unsupported pointer type %T (only `*<MainClass>` self-references are supported in this phase)", t.X)
+		}
+		if mainClass == "" || id.Name != mainClass {
+			return nil, fmt.Errorf("unsupported pointer type %q (only `*%s` self-references are supported in this phase; cross-file user classes and engine class pointers are deferred)", id.Name, mainClass)
+		}
+		return userClassTypeInfo(id.Name), nil
 	case *ast.ArrayType:
 		if t.Len != nil {
 			return nil, fmt.Errorf("fixed-size arrays unsupported (only Go slices `[]T` cross the @class boundary)")
 		}
-		elem, err := resolveType(t.Elt, enums)
+		elem, err := resolveType(t.Elt, enums, mainClass)
 		if err != nil {
 			return nil, fmt.Errorf("slice element: %w", err)
 		}
@@ -232,13 +259,70 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo) (*typeInfo, error) {
 		// Packed<X>Array / Array[T] arg), so route to the same slice
 		// typeInfo. The caller flips IsVariadic on the emitMethod so
 		// the dispatch site emits `f(argN...)` rather than `f(argN)`.
-		elem, err := resolveType(t.Elt, enums)
+		elem, err := resolveType(t.Elt, enums, mainClass)
 		if err != nil {
 			return nil, fmt.Errorf("variadic element: %w", err)
 		}
 		return sliceTypeInfo(elem)
 	default:
-		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, slice, and variadic types are supported)", expr)
+		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, slice, variadic, and `*<MainClass>` types are supported)", expr)
+	}
+}
+
+// userClassTypeInfo builds the marshal fragments for `*<MainClass>` —
+// the file's own @class struct used as a method arg or return type.
+// The Variant wire form is OBJECT (Phase 3's Object adapters); the
+// per-class engine-pointer side table the emitter synthesizes lets us
+// recover the *<MainClass> Go pointer from the engine ObjectPtr Godot
+// passes us.
+//
+// Foreign-instance behavior: if the engine ObjectPtr doesn't appear in
+// our side table (i.e., it was created by another extension or by
+// GDScript without going through our Construct hook), the lookup
+// returns nil and the codegen short-circuits — Call returns
+// CallErrorInvalidArgument; PtrCall bails without invoking the user
+// method (and writes a zero return slot if the method returns
+// `*<MainClass>`).
+func userClassTypeInfo(name string) *typeInfo {
+	lookupName := "lookup" + name + "ByEngine"
+	return &typeInfo{
+		GoType:      "*" + name,
+		VariantType: "VariantTypeObject",
+		ArgMeta:     "ArgMetaNone",
+		ClassName:   name, // bare class identity in ArgClassNames / ReturnClassName
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d := %s(%s.VariantAsObject(args[%d]))
+if arg%d == nil {
+	return gdextension.CallErrorInvalidArgument
+}`, idx, lookupName, b, idx, idx)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`var result_ptr gdextension.ObjectPtr
+if %s != nil {
+	result_ptr = %s.Ptr()
+}
+%s.VariantSetObject(ret, result_ptr)`, expr, expr, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d := %s(*(*gdextension.ObjectPtr)(gdextension.PtrCallArg(args, %d)))
+if arg%d == nil {
+	return
+}`, idx, lookupName, idx, idx)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`var result_ptr gdextension.ObjectPtr
+if %s != nil {
+	result_ptr = %s.Ptr()
+}
+*(*gdextension.ObjectPtr)(ret) = result_ptr`, expr, expr)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`var arg%d_ptr gdextension.ObjectPtr
+if %s != nil {
+	arg%d_ptr = %s.Ptr()
+}
+arg%d := %s.NewVariantObject(arg%d_ptr)`, idx, srcExpr, idx, srcExpr, idx, b, idx)
+		},
 	}
 }
 

@@ -182,6 +182,23 @@ func _initialize() -> void:
 			.filter(func(m: Dictionary) -> bool: return m["name"] == "current_stance")[0]["return"]["class_name"],
 		&"MyNode.Stance")
 
+	# Phase 6a — *<MainClass> arg + return marshaling. Echo takes another
+	# MyNode, returns it. We construct a second MyNode and verify object
+	# identity round-trips through the engine ObjectPtr ↔ side-table
+	# bridge.
+	var other: MyNode = MyNode.new()
+	var got_back: MyNode = n.echo(other)
+	_check("echo: round-trip object identity", got_back, other)
+	_check("echo: returned object is not self", got_back == n, false)
+	# Method registration carries the bare class name as ArgClassNames /
+	# ReturnClassName — no <MainClass>.<EnumName> qualification on
+	# user-class boundaries.
+	var echo_meta: Dictionary = ClassDB.class_get_method_list("MyNode") \
+		.filter(func(m: Dictionary) -> bool: return m["name"] == "echo")[0]
+	_check("echo: arg[0].class_name", echo_meta["args"][0]["class_name"], &"MyNode")
+	_check("echo: return.class_name", echo_meta["return"]["class_name"], &"MyNode")
+	other.free()
+
 	n.free()
 
 	if _failed == 0:

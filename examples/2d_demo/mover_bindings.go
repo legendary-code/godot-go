@@ -11,20 +11,26 @@ import (
 	godot "github.com/legendary-code/godot-go/godot"
 )
 
-// Per-instance side table. The void* value the host hands back to us as
+// Per-instance side tables. The void* value the host hands back to us as
 // p_instance is the small integer id we returned from Construct, not a
-// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+// Go pointer (cgo forbids storing Go pointers in C-visible memory). The
+// parallel <X>ByEngine map is keyed by the engine ObjectPtr Godot uses
+// for object identity — populated by Construct so methods that take
+// *Mover args can recover the Go wrapper from the ObjectPtr Godot
+// passes through Variant arg slots.
 var (
 	moverInstancesMu sync.Mutex
 	moverInstances   = map[uintptr]*Mover{}
+	moverByEngine    = map[uintptr]*Mover{}
 	moverNextID      uintptr
 )
 
-func registerMoverInstance(n *Mover) unsafe.Pointer {
+func registerMoverInstance(n *Mover, parent gdextension.ObjectPtr) unsafe.Pointer {
 	moverInstancesMu.Lock()
 	moverNextID++
 	id := moverNextID
 	moverInstances[id] = n
+	moverByEngine[uintptr(parent)] = n
 	moverInstancesMu.Unlock()
 	return unsafe.Pointer(id)
 }
@@ -35,10 +41,28 @@ func lookupMoverInstance(handle unsafe.Pointer) *Mover {
 	return moverInstances[uintptr(handle)]
 }
 
+// lookupMoverByEngine resolves an engine ObjectPtr (the value Godot
+// passes through Variant OBJECT slots) to the *Mover we registered
+// at Construct time. Returns nil for foreign instances — i.e., Mover
+// pointers Godot got from another extension or constructed without
+// going through our hook. Codegen short-circuits on nil per the
+// foreign-instance policy (CallErrorInvalidArgument in Call mode; bail
+// without invoking the user method in PtrCall).
+func lookupMoverByEngine(p gdextension.ObjectPtr) *Mover {
+	moverInstancesMu.Lock()
+	defer moverInstancesMu.Unlock()
+	return moverByEngine[uintptr(p)]
+}
+
 func releaseMoverInstance(handle unsafe.Pointer) {
 	moverInstancesMu.Lock()
 	defer moverInstancesMu.Unlock()
+	n, ok := moverInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
 	delete(moverInstances, uintptr(handle))
+	delete(moverByEngine, uintptr(n.Ptr()))
 }
 
 func (n *Mover) GetSpeed() float64 { return n.Speed }
@@ -71,7 +95,7 @@ func registerMover() {
 			n := &Mover{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node2D"))
 			n.BindPtr(parent)
-			return parent, registerMoverInstance(n)
+			return parent, registerMoverInstance(n, parent)
 		},
 
 		Free: func(instance unsafe.Pointer) {

@@ -376,7 +376,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 	idx := 0
 	paramFields := fieldsOf(m.Decl.Type.Params)
 	for fIdx, field := range paramFields {
-		info, err := resolveType(field.Type, enums)
+		info, err := resolveType(field.Type, enums, mainClass)
 		if err != nil {
 			return em, fmt.Errorf("arg %d: %w", idx, err)
 		}
@@ -409,7 +409,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 				}
 			}
 			em.ArgNames = append(em.ArgNames, argName)
-			em.ArgClassNames = append(em.ArgClassNames, qualifyEnum(mainClass, info.EnumName))
+			em.ArgClassNames = append(em.ArgClassNames, classIdentity(mainClass, info))
 			idx++
 		}
 	}
@@ -440,7 +440,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		if len(ret.Names) > 1 {
 			return em, fmt.Errorf("multi-name return field unsupported")
 		}
-		info, err := resolveType(ret.Type, enums)
+		info, err := resolveType(ret.Type, enums, mainClass)
 		if err != nil {
 			return em, fmt.Errorf("return: %w", err)
 		}
@@ -448,7 +448,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		em.ReturnType = info.VariantType
 		em.ReturnMeta = info.ArgMeta
 		em.ReturnGodotType = godotXMLType(info.VariantType)
-		em.ReturnClassName = qualifyEnum(mainClass, info.EnumName)
+		em.ReturnClassName = classIdentity(mainClass, info)
 		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
 		em.CallReturn = info.CallWriteReturn(bindings, "result")
 	default:
@@ -469,6 +469,19 @@ func qualifyEnum(mainClass, enumName string) string {
 		return ""
 	}
 	return mainClass + "." + enumName
+}
+
+// classIdentity returns the value to put in ArgClassNames /
+// ReturnClassName for a typeInfo. User-class / engine-class boundaries
+// carry a bare class name in the typeInfo's ClassName field; enum
+// boundaries carry the unqualified enum name in EnumName and need
+// the "<MainClass>.<EnumName>" prefix at the use site. Returns empty
+// for primitives.
+func classIdentity(mainClass string, info *typeInfo) string {
+	if info.ClassName != "" {
+		return info.ClassName
+	}
+	return qualifyEnum(mainClass, info.EnumName)
 }
 
 // emitHasDocSurface reports whether the class has anything worth
@@ -607,7 +620,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 	curGroup := ""
 	curSubgroup := ""
 	for _, p := range props {
-		info, terr := resolveType(p.GoType, enums)
+		info, terr := resolveType(p.GoType, enums, mainClass)
 		if terr != nil {
 			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
 		}
@@ -622,7 +635,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 			GodotName:  propGodotName,
 			Type:       info.VariantType,
 			GodotType:  godotXMLType(info.VariantType),
-			ClassName:  qualifyEnum(mainClass, info.EnumName),
+			ClassName:  classIdentity(mainClass, info),
 			Getter:     getterGodotName,
 			Hint:       p.Hint,
 			HintString: p.HintString,
@@ -702,7 +715,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 		}
 		idx := 0
 		for _, field := range s.Args {
-			info, err := resolveType(field.Type, enums)
+			info, err := resolveType(field.Type, enums, mainClass)
 			if err != nil {
 				return nil, fmt.Errorf("@signals %s arg %d: %w", s.Name, idx, err)
 			}
@@ -726,7 +739,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 				es.ArgTypes = append(es.ArgTypes, info.VariantType)
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
 				es.ArgNames = append(es.ArgNames, registeredName)
-				es.ArgClassNames = append(es.ArgClassNames, qualifyEnum(mainClass, info.EnumName))
+				es.ArgClassNames = append(es.ArgClassNames, classIdentity(mainClass, info))
 				es.ArgGodotTypes = append(es.ArgGodotTypes, godotXMLType(info.VariantType))
 				idx++
 			}
@@ -748,7 +761,7 @@ func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings, m
 		HasReturn:       true,
 		ReturnType:      info.VariantType,
 		ReturnMeta:      info.ArgMeta,
-		ReturnClassName: qualifyEnum(mainClass, info.EnumName),
+		ReturnClassName: classIdentity(mainClass, info),
 		PtrCallReturn:   info.PtrCallWriteReturn(bindings, "result"),
 		CallReturn:      info.CallWriteReturn(bindings, "result"),
 	}
@@ -770,7 +783,7 @@ func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings, m
 		// is the conventional name and matches how Godot's own
 		// PropertyInfo entries label property setter parameters in docs.
 		ArgNames:      []string{"value"},
-		ArgClassNames: []string{qualifyEnum(mainClass, info.EnumName)},
+		ArgClassNames: []string{classIdentity(mainClass, info)},
 	}
 }
 
@@ -835,20 +848,26 @@ import (
 {{if .NeedsVariant}}	{{.BindingsAlias}} "{{.BindingsImport}}"
 {{end}})
 
-// Per-instance side table. The void* value the host hands back to us as
+// Per-instance side tables. The void* value the host hands back to us as
 // p_instance is the small integer id we returned from Construct, not a
-// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+// Go pointer (cgo forbids storing Go pointers in C-visible memory). The
+// parallel <X>ByEngine map is keyed by the engine ObjectPtr Godot uses
+// for object identity — populated by Construct so methods that take
+// *{{.Class}} args can recover the Go wrapper from the ObjectPtr Godot
+// passes through Variant arg slots.
 var (
 	{{.Lower}}InstancesMu sync.Mutex
 	{{.Lower}}Instances   = map[uintptr]*{{.Class}}{}
+	{{.Lower}}ByEngine    = map[uintptr]*{{.Class}}{}
 	{{.Lower}}NextID      uintptr
 )
 
-func register{{.Class}}Instance(n *{{.Class}}) unsafe.Pointer {
+func register{{.Class}}Instance(n *{{.Class}}, parent gdextension.ObjectPtr) unsafe.Pointer {
 	{{.Lower}}InstancesMu.Lock()
 	{{.Lower}}NextID++
 	id := {{.Lower}}NextID
 	{{.Lower}}Instances[id] = n
+	{{.Lower}}ByEngine[uintptr(parent)] = n
 	{{.Lower}}InstancesMu.Unlock()
 	return unsafe.Pointer(id)
 }
@@ -859,10 +878,28 @@ func lookup{{.Class}}Instance(handle unsafe.Pointer) *{{.Class}} {
 	return {{.Lower}}Instances[uintptr(handle)]
 }
 
+// lookup{{.Class}}ByEngine resolves an engine ObjectPtr (the value Godot
+// passes through Variant OBJECT slots) to the *{{.Class}} we registered
+// at Construct time. Returns nil for foreign instances — i.e., {{.Class}}
+// pointers Godot got from another extension or constructed without
+// going through our hook. Codegen short-circuits on nil per the
+// foreign-instance policy (CallErrorInvalidArgument in Call mode; bail
+// without invoking the user method in PtrCall).
+func lookup{{.Class}}ByEngine(p gdextension.ObjectPtr) *{{.Class}} {
+	{{.Lower}}InstancesMu.Lock()
+	defer {{.Lower}}InstancesMu.Unlock()
+	return {{.Lower}}ByEngine[uintptr(p)]
+}
+
 func release{{.Class}}Instance(handle unsafe.Pointer) {
 	{{.Lower}}InstancesMu.Lock()
 	defer {{.Lower}}InstancesMu.Unlock()
+	n, ok := {{.Lower}}Instances[uintptr(handle)]
+	if !ok {
+		return
+	}
 	delete({{.Lower}}Instances, uintptr(handle))
+	delete({{.Lower}}ByEngine, uintptr(n.Ptr()))
 }
 {{range .Accessors}}
 {{if .IsSetter -}}
@@ -905,7 +942,7 @@ func register{{.Class}}() {
 			n := &{{.Class}}{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("{{.Parent}}"))
 			n.BindPtr(parent)
-			return parent, register{{.Class}}Instance(n)
+			return parent, register{{.Class}}Instance(n, parent)
 		},
 
 		Free: func(instance unsafe.Pointer) {

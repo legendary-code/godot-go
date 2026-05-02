@@ -11,20 +11,26 @@ import (
 	godot "github.com/legendary-code/godot-go/godot"
 )
 
-// Per-instance side table. The void* value the host hands back to us as
+// Per-instance side tables. The void* value the host hands back to us as
 // p_instance is the small integer id we returned from Construct, not a
-// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+// Go pointer (cgo forbids storing Go pointers in C-visible memory). The
+// parallel <X>ByEngine map is keyed by the engine ObjectPtr Godot uses
+// for object identity — populated by Construct so methods that take
+// *MyNode args can recover the Go wrapper from the ObjectPtr Godot
+// passes through Variant arg slots.
 var (
 	myNodeInstancesMu sync.Mutex
 	myNodeInstances   = map[uintptr]*MyNode{}
+	myNodeByEngine    = map[uintptr]*MyNode{}
 	myNodeNextID      uintptr
 )
 
-func registerMyNodeInstance(n *MyNode) unsafe.Pointer {
+func registerMyNodeInstance(n *MyNode, parent gdextension.ObjectPtr) unsafe.Pointer {
 	myNodeInstancesMu.Lock()
 	myNodeNextID++
 	id := myNodeNextID
 	myNodeInstances[id] = n
+	myNodeByEngine[uintptr(parent)] = n
 	myNodeInstancesMu.Unlock()
 	return unsafe.Pointer(id)
 }
@@ -35,10 +41,28 @@ func lookupMyNodeInstance(handle unsafe.Pointer) *MyNode {
 	return myNodeInstances[uintptr(handle)]
 }
 
+// lookupMyNodeByEngine resolves an engine ObjectPtr (the value Godot
+// passes through Variant OBJECT slots) to the *MyNode we registered
+// at Construct time. Returns nil for foreign instances — i.e., MyNode
+// pointers Godot got from another extension or constructed without
+// going through our hook. Codegen short-circuits on nil per the
+// foreign-instance policy (CallErrorInvalidArgument in Call mode; bail
+// without invoking the user method in PtrCall).
+func lookupMyNodeByEngine(p gdextension.ObjectPtr) *MyNode {
+	myNodeInstancesMu.Lock()
+	defer myNodeInstancesMu.Unlock()
+	return myNodeByEngine[uintptr(p)]
+}
+
 func releaseMyNodeInstance(handle unsafe.Pointer) {
 	myNodeInstancesMu.Lock()
 	defer myNodeInstancesMu.Unlock()
+	n, ok := myNodeInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
 	delete(myNodeInstances, uintptr(handle))
+	delete(myNodeByEngine, uintptr(n.Ptr()))
 }
 
 func (n *MyNode) GetHealth() int64 { return n.Health }
@@ -112,7 +136,7 @@ func registerMyNode() {
 			n := &MyNode{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node"))
 			n.BindPtr(parent)
-			return parent, registerMyNodeInstance(n)
+			return parent, registerMyNodeInstance(n, parent)
 		},
 
 		Free: func(instance unsafe.Pointer) {
@@ -221,6 +245,60 @@ func registerMyNode() {
 		},
 		ArgClassNames: []string{
 			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "echo",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := lookupMyNodeByEngine(godot.VariantAsObject(args[0]))
+			if arg0 == nil {
+				return gdextension.CallErrorInvalidArgument
+			}
+			result := self.Echo(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			godot.VariantSetObject(ret, result_ptr)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := lookupMyNodeByEngine(*(*gdextension.ObjectPtr)(gdextension.PtrCallArg(args, 0)))
+			if arg0 == nil {
+				return
+			}
+			result := self.Echo(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			*(*gdextension.ObjectPtr)(ret) = result_ptr
+		},
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeObject,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "MyNode",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeObject,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"other",
+		},
+		ArgClassNames: []string{
+			"MyNode",
 		},
 	})
 
@@ -1070,6 +1148,11 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type="String"></return>
             <param index="0" name="name" type="String"></param>
             <description>Exercises Phase 5d string marshalling in both directions.</description>
+        </method>
+        <method name="echo">
+            <return type="Object" enum="MyNode"></return>
+            <param index="0" name="other" type="Object" enum="MyNode"></param>
+            <description>Exercises Phase 6a *&lt;MainClass&gt; arg + return marshalling. Godot&#xA;passes other as the engine ObjectPtr for the MyNode instance the&#xA;caller constructed; the codegen looks it up in our parallel side&#xA;table and hands back the *MyNode wrapper. Returning other lets the&#xA;GDScript driver verify object identity round-tripped.&#xA;&#xA;Foreign-instance behavior (decision B from .claude/ARRAYS.md): if&#xA;the caller passes a *MyNode instance not registered with this&#xA;extension, the lookup returns nil and codegen returns&#xA;CallErrorInvalidArgument. The user method body never sees a nil&#xA;arg.</description>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
             <return type="int"></return>

@@ -11,20 +11,26 @@ import (
 	godot "github.com/legendary-code/godot-go/godot"
 )
 
-// Per-instance side table. The void* value the host hands back to us as
+// Per-instance side tables. The void* value the host hands back to us as
 // p_instance is the small integer id we returned from Construct, not a
-// Go pointer (cgo forbids storing Go pointers in C-visible memory).
+// Go pointer (cgo forbids storing Go pointers in C-visible memory). The
+// parallel <X>ByEngine map is keyed by the engine ObjectPtr Godot uses
+// for object identity — populated by Construct so methods that take
+// *LocaleLanguage args can recover the Go wrapper from the ObjectPtr Godot
+// passes through Variant arg slots.
 var (
 	localeLanguageInstancesMu sync.Mutex
 	localeLanguageInstances   = map[uintptr]*LocaleLanguage{}
+	localeLanguageByEngine    = map[uintptr]*LocaleLanguage{}
 	localeLanguageNextID      uintptr
 )
 
-func registerLocaleLanguageInstance(n *LocaleLanguage) unsafe.Pointer {
+func registerLocaleLanguageInstance(n *LocaleLanguage, parent gdextension.ObjectPtr) unsafe.Pointer {
 	localeLanguageInstancesMu.Lock()
 	localeLanguageNextID++
 	id := localeLanguageNextID
 	localeLanguageInstances[id] = n
+	localeLanguageByEngine[uintptr(parent)] = n
 	localeLanguageInstancesMu.Unlock()
 	return unsafe.Pointer(id)
 }
@@ -35,10 +41,28 @@ func lookupLocaleLanguageInstance(handle unsafe.Pointer) *LocaleLanguage {
 	return localeLanguageInstances[uintptr(handle)]
 }
 
+// lookupLocaleLanguageByEngine resolves an engine ObjectPtr (the value Godot
+// passes through Variant OBJECT slots) to the *LocaleLanguage we registered
+// at Construct time. Returns nil for foreign instances — i.e., LocaleLanguage
+// pointers Godot got from another extension or constructed without
+// going through our hook. Codegen short-circuits on nil per the
+// foreign-instance policy (CallErrorInvalidArgument in Call mode; bail
+// without invoking the user method in PtrCall).
+func lookupLocaleLanguageByEngine(p gdextension.ObjectPtr) *LocaleLanguage {
+	localeLanguageInstancesMu.Lock()
+	defer localeLanguageInstancesMu.Unlock()
+	return localeLanguageByEngine[uintptr(p)]
+}
+
 func releaseLocaleLanguageInstance(handle unsafe.Pointer) {
 	localeLanguageInstancesMu.Lock()
 	defer localeLanguageInstancesMu.Unlock()
+	n, ok := localeLanguageInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
 	delete(localeLanguageInstances, uintptr(handle))
+	delete(localeLanguageByEngine, uintptr(n.Ptr()))
 }
 
 func registerLocaleLanguage() {
@@ -52,7 +76,7 @@ func registerLocaleLanguage() {
 			n := &LocaleLanguage{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node"))
 			n.BindPtr(parent)
-			return parent, registerLocaleLanguageInstance(n)
+			return parent, registerLocaleLanguageInstance(n, parent)
 		},
 
 		Free: func(instance unsafe.Pointer) {

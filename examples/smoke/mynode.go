@@ -153,6 +153,21 @@ func (n *MyNode) Greet(name string) string {
 	return fmt.Sprintf("hello, %s!", name)
 }
 
+// Echo exercises Phase 6a *<MainClass> arg + return marshalling. Godot
+// passes other as the engine ObjectPtr for the MyNode instance the
+// caller constructed; the codegen looks it up in our parallel side
+// table and hands back the *MyNode wrapper. Returning other lets the
+// GDScript driver verify object identity round-tripped.
+//
+// Foreign-instance behavior (decision B from .claude/ARRAYS.md): if
+// the caller passes a *MyNode instance not registered with this
+// extension, the lookup returns nil and codegen returns
+// CallErrorInvalidArgument. The user method body never sees a nil
+// arg.
+func (n *MyNode) Echo(other *MyNode) *MyNode {
+	return other
+}
+
 // Origin is a class-level method — `@static` registers it with
 // MethodFlagStatic so GDScript callers reach it as `MyNode.origin()`
 // without an instance.

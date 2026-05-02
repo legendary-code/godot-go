@@ -438,6 +438,50 @@ func (n *MyNode) Tally(counters []Counter) {}
 	}
 }
 
+func TestDiscoverSelfClassPointerArg(t *testing.T) {
+	// `*<MainClass>` as a method arg / return type — Phase 6a. The codegen
+	// looks the engine ObjectPtr up in the parallel side table to recover
+	// the *<MainClass> Go wrapper.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Echo(other *MyNode) *MyNode { return other }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 || d.MainClass.Methods[0].GoName != "Echo" {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestEmitForeignClassPointerRejected(t *testing.T) {
+	// `*<OtherClass>` is rejected — Phase 6a only supports same-class
+	// self-references. Cross-file user classes and engine class pointers
+	// are deferred to later phases.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+type OtherClass struct{}
+func (n *MyNode) Echo(other *OtherClass) *OtherClass { return other }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil {
+		t.Fatalf("expected emit error for *OtherClass, got nil; output: %s", buf.String())
+	}
+	if !strings.Contains(err.Error(), "self-reference") {
+		t.Fatalf("error %q does not mention self-reference", err.Error())
+	}
+}
+
 func TestEmitNestedSliceRejected(t *testing.T) {
 	// Discovery accepts any AST shape; rejection happens at emit time
 	// via resolveType. Drive the codegen explicitly to surface the
