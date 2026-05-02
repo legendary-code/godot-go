@@ -45,7 +45,8 @@ batch — commit + green CI before starting the next.
 | `[]float64`         | `PackedFloat64Array`   | packed float64                   |
 | `[]string`          | `PackedStringArray`    | packed String                    |
 | `[]bool`            | `Array[bool]`          | TypedArray (no PackedBoolArray)  |
-| `[]<UserEnum>`      | `PackedInt64Array`     | Godot has no enum-typed Array at runtime — `Array[<EnumName>]` is GDScript compile-time sugar. Packed is the right wire form. |
+| `[]<UserEnum>` (tagged) | `Variant::ARRAY` | untyped Array + `PROPERTY_HINT_TYPE_STRING` payload `"2/2:VAL1,VAL2,..."`. Godot's autocomplete renders bare `Array` (the hint is property-only); we ship the hint anyway in case Godot's renderer evolves. |
+| `[]<UntaggedUserInt>` | `PackedInt64Array` | no enum identity to preserve; faster runtime. |
 | `[]*<UserClass>`    | `Array[<UserClass>]`   | TypedArray, Object elements, user class_name |
 | `[]*<EngineClass>`  | `Array[<EngineClass>]` | TypedArray, Object elements, engine class_name |
 

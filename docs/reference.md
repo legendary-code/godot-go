@@ -646,7 +646,8 @@ form exists or when element identity needs to flow):
 | `[]int` / `[]int64` | `PackedInt64Array` | direct |
 | `[]float32` | `PackedFloat32Array` | direct under single-precision builds |
 | `[]string` | `PackedStringArray` | direct |
-| `[]<UserEnum>` / `[]<UserInt>` | `PackedInt64Array` | Godot has no enum-typed Array at runtime — `Array[<EnumName>]` in GDScript is compile-time sugar over `Array[int]`, and `set_typed(TYPE_INT, class_name, ...)` is rejected. The enum class identity still flows through `ArgClassNames` / `ReturnClassName` and the XML `enum=` attribute, so the editor docs panel renders the typed-element identity correctly. |
+| `[]<UserEnum>` (tagged `@enum` / `@bitfield`) | `Variant::ARRAY` | wire form is untyped Array with `PROPERTY_HINT_TYPE_STRING` carrying the element identity (`"2/2:VAL1,VAL2,..."`). GDScript autocomplete renders this as bare `Array <method>(…)` — Godot's autocomplete reads only the variant type and ignores the hint for method args/returns. The hint *is* honored by the inspector for properties; we keep it on methods for forward-compat in case Godot's renderer evolves. Per-element marshal boxes each int through a Variant. |
+| `[]<UntaggedUserInt>` | `PackedInt64Array` | no enum identity to preserve; faster contiguous storage and direct int64 marshal. |
 | `[]*<MainClass>` | `Array[<MainClass>]` | TypedArray of `OBJECT` with class_name set — the one filtered Array shape Godot supports natively at runtime. Per-element foreign-instance check applies. |
 | `[]*<bindings>.<EngineClass>` | `Array[<EngineClass>]` | TypedArray of `OBJECT` with class_name set. Borrowed-view per-element wrapping. |
 | `...T` (variadic, any supported `T`) | same as `[]T` | identical at the wire boundary. The Go method body sees `[]T`; the dispatch site spreads with `argN...` so the variadic shape works at the call site. |
@@ -704,6 +705,15 @@ views just work without lifecycle care.
 - Nested slices `[][]T`, maps, channels, function types, untyped
   interfaces — the codegen rejects each with a clear `file:line`
   message.
+- `Array[<UserEnum>]` autocomplete rendering — Godot's GDExtension
+  registration API has no channel for "Array element is enum Kind."
+  `Array[<EngineClass>]` works (OBJECT-typed Arrays accept `class_name`
+  on `set_typed`), but `Array[<UserEnum>]` doesn't (INT-typed Arrays
+  reject `class_name`). GDScript's `Array[Kind]` is compile-time sugar
+  with no runtime equivalent the engine surfaces to extensions. We
+  ship the hint metadata anyway in case Godot's editor evolves to
+  honor it on method args/returns; today the autocomplete shows bare
+  `Array <method>(...)` for tagged-enum slice returns.
 
 For `@extends`, any engine class from the generated bindings
 package is valid as the parent type — the bindgen emits all 1023+
