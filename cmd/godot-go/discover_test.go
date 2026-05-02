@@ -550,7 +550,7 @@ func (n *MyNode) Echo(other *pkg.Thing) *pkg.Thing { return other }
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil {
 		t.Fatalf("expected emit error for non-bindings pointer, got nil")
 	}
@@ -575,7 +575,7 @@ func (n *MyNode) Echo(other *OtherClass) *OtherClass { return other }
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil {
 		t.Fatalf("expected emit error for *OtherClass, got nil; output: %s", buf.String())
 	}
@@ -600,7 +600,7 @@ func (n *MyNode) Bad(values [][]int64) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil {
 		t.Fatalf("expected emit error for nested slice, got nil; output: %s", buf.String())
 	}
@@ -621,7 +621,7 @@ func (n *MyNode) Bad(m map[string]int) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil || !strings.Contains(err.Error(), "map types") {
 		t.Fatalf("expected map-types error, got %v", err)
 	}
@@ -639,7 +639,7 @@ func (n *MyNode) Bad(cb func()) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil || !strings.Contains(err.Error(), "function types") {
 		t.Fatalf("expected function-types error, got %v", err)
 	}
@@ -657,7 +657,7 @@ func (n *MyNode) Bad(ch chan int) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil || !strings.Contains(err.Error(), "channel types") {
 		t.Fatalf("expected channel-types error, got %v", err)
 	}
@@ -675,7 +675,7 @@ func (n *MyNode) Bad(x interface{}) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil || !strings.Contains(err.Error(), "interface types") {
 		t.Fatalf("expected interface-types error, got %v", err)
 	}
@@ -696,7 +696,7 @@ func (n *MyNode) Bad(v core.Variant) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil || !strings.Contains(err.Error(), "bare cross-package type") {
 		t.Fatalf("expected bare cross-package error, got %v", err)
 	}
@@ -714,7 +714,7 @@ func (n *MyNode) Bad(values []float64) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil {
 		t.Fatalf("expected emit error for []float64, got nil; output: %s", buf.String())
 	}

@@ -14,7 +14,7 @@ func emitFor(t *testing.T, src string) string {
 	t.Helper()
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf bytes.Buffer
-	if err := emit(&buf, fset, d); err != nil {
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
 		t.Fatalf("emit: %v", err)
 	}
 	return buf.String()
@@ -226,7 +226,7 @@ func (n *N) Foo(c complex64) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf bytes.Buffer
-	err := emit(&buf, fset, d)
+	err := emit(&buf, fset, []*discovered{d})
 	if err == nil {
 		t.Fatalf("expected emit to reject complex64 arg")
 	}

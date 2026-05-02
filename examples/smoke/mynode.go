@@ -7,8 +7,6 @@ import (
 	"github.com/legendary-code/godot-go/godot/runtime"
 )
 
-//go:generate godot-go
-
 // Signals declares the engine-visible signals MyNode emits. Codegen
 // produces typed Emit-style methods on *MyNode for each interface method
 // (Damaged → snake_case "damaged"); GDScript subscribers can connect()

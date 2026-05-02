@@ -43,8 +43,6 @@ instead.
 ```go
 package main
 
-//go:generate godot-go
-
 import (
     "github.com/yourname/yourproject/godot"
     "github.com/yourname/yourproject/godot/runtime"
@@ -80,10 +78,20 @@ func (p *Player) TakeDamage(amount int64) {
 }
 ```
 
-Running `go generate` produces a sibling `<file>_bindings.go` that
-registers the class, the property (with the slider hint Godot's
-inspector shows), the signal, the `_process` virtual override, and
-`take_damage` as a regular method. The source above is the entire
+Add a one-line trigger to any file in the package (convention: a
+dedicated `generate.go`):
+
+```go
+package main
+
+//go:generate godot-go
+```
+
+Running `go generate ./...` produces a single `bindings.gen.go` at
+the package root covering every `@class` file in the package —
+class registrations, properties (with the slider hint the inspector
+shows), signals, virtual overrides, regular methods. One trigger
+per package, one output file. The source above is the entire
 ergonomic surface — no boilerplate.
 
 ## Install
@@ -171,8 +179,6 @@ minimal example:
 ```go
 // hello.go
 package main
-
-//go:generate godot-go
 
 import (
     "github.com/yourname/yourproject/godot"

@@ -1,7 +1,5 @@
 package main
 
-//go:generate godot-go
-
 import "github.com/legendary-code/godot-go/godot"
 
 // Mover oscillates its position along the X axis between -Range and

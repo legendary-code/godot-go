@@ -1,10 +1,9 @@
 package main
 
-// This go:generate call will run our tool and generate binding/registration code for the current file in a separate
-// file, `<sourcefile>_bindings.go`.  One file = one Godot class — exactly one struct in this file must carry the
-// `@class` doctag, and that's the struct codegen registers with Godot's ClassDB. Other structs in the file are plain
-// Go types and aren't registered.
-//go:generate godot-go
+// One @class per file is registered with Godot's ClassDB. The package-
+// wide bindings (a single `bindings.gen.go` at the package root) are
+// produced from a `//go:generate godot-go` in `generate.go` — one
+// trigger per package walks every @class file in the directory.
 
 import "github.com/legendary-code/godot-go/godot"
 

@@ -14,92 +14,76 @@ import (
 	"github.com/legendary-code/godot-go/internal/naming"
 )
 
-// emit renders the binding file for the discovered class to w. Phase 5d
-// scope: emit registration glue + instance methods that take primitive
-// args and return a primitive value (bool / int / int32 / int64 /
-// float32 / float64 / string). Static and virtual-candidate methods are
-// flagged as unsupported (Phase 5e); methods touching non-primitive
-// types are rejected with file:line context by resolveType.
+// emit renders the consolidated bindings file to w. Takes every
+// `@class` discovered across the package (one per source file —
+// discover enforces that at the file level) and emits a single
+// bindings.gen.go containing the registration glue for all of them.
+//
+// All classes in the package must agree on the bindings import path —
+// they all extend from the same user bindings package. Mixed bindings
+// imports across @class files in one package surface as an explicit
+// error.
 //
 // The emitter writes gofmt'd source so diffs against hand-written
-// references stay clean. Iteration order is deterministic — methods are
-// emitted in source-position order, mirroring the discovered slice.
-func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
-	if d.MainClass == nil {
-		return fmt.Errorf("no main class to emit")
+// references stay clean. Iteration order matches the slice order from
+// main (sorted by source filename, then source position within each
+// file) so the emitted file is deterministic across runs.
+func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
+	if len(classes) == 0 {
+		return fmt.Errorf("no @class structs to emit")
 	}
 
-	enumSet := map[string]*enumInfo{}
-	for _, e := range d.Enums {
-		enumSet[e.Name] = e
+	// All @class files in a package extend from the same bindings
+	// package; otherwise the user's source wouldn't compile (every
+	// package can have only one local name per import path).
+	bindingsImport := classes[0].MainClass.ParentImport
+	for _, d := range classes[1:] {
+		if d.MainClass.ParentImport != bindingsImport {
+			return fmt.Errorf("@class %q extends %q but @class %q in the same package extends %q — all classes in a package must use the same bindings import",
+				classes[0].MainClass.Name, bindingsImport,
+				d.MainClass.Name, d.MainClass.ParentImport)
+		}
 	}
-
-	// Bindings alias: the local name the user's source uses for the
-	// bindings package (e.g. "godot"). The parent's import comes from
-	// the @extends embed; that same import IS the bindings package
-	// (single-package layout means engine classes and variant helpers
-	// live together). Walk the user's imports to find the local name.
-	bindingsImport := d.MainClass.ParentImport
-	bindingsAlias := localNameFor(d.Imports, bindingsImport)
+	bindingsAlias := localNameFor(classes[0].Imports, bindingsImport)
 	if bindingsAlias == "" {
 		return fmt.Errorf("internal: bindings import %q not in file imports — discover should have rejected this", bindingsImport)
 	}
 
-	initLevel := "InitLevelScene"
-	if d.MainClass.IsEditor {
-		initLevel = "InitLevelEditor"
+	// Validate uniqueness — two @class files declaring the same class
+	// name would collide at registration. Cheap check; surface a
+	// clear error rather than letting the host's classdb panic.
+	seen := map[string]string{}
+	for _, d := range classes {
+		if prev, ok := seen[d.MainClass.Name]; ok {
+			return fmt.Errorf("duplicate @class name %q (declared in %s and %s)",
+				d.MainClass.Name, prev, d.FilePath)
+		}
+		seen[d.MainClass.Name] = d.FilePath
 	}
 
-	ci := d.MainClass
-	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, enumSet, bindingsAlias, ci.Name)
-	if err != nil {
-		return err
-	}
-
-	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, enumSet, bindingsAlias, ci.Name)
-	if err != nil {
-		return err
-	}
-	supported = append(supported, propMethods...)
-	if len(accessors) > 0 || len(properties) > 0 {
-		needsVariant = true
-	}
-
-	signals, err := buildEmitSignals(ci.Signals, enumSet, bindingsAlias, ci.Name)
-	if err != nil {
-		return err
-	}
-	if len(signals) > 0 {
-		needsVariant = true
+	// Build per-class emit payloads. Each @class file's enums scope to
+	// its own MainClass — they're isolated per-file in the discover
+	// result, so each class's enumSet is built from its own discovered
+	// struct, not unified across the package.
+	emitClasses := make([]emitClass, 0, len(classes))
+	needsVariant := false
+	for _, d := range classes {
+		ec, classNeedsVariant, err := buildEmitClass(fset, d, bindingsAlias)
+		if err != nil {
+			return err
+		}
+		if classNeedsVariant {
+			needsVariant = true
+		}
+		emitClasses = append(emitClasses, ec)
 	}
 
 	data := emitData{
-		PackageName:    d.PackageName,
-		SourceFile:     filepath.Base(d.FilePath),
-		InitLevel:      initLevel,
-		Class:          ci.Name,
-		Parent:         ci.Parent,
-		Lower:          lowerFirst(ci.Name),
-		IsAbstract:     ci.IsAbstract,
-		Methods:        supported,
-		Accessors:      accessors,
-		Properties:     properties,
-		Signals:        signals,
-		Enums:          buildEmitEnums(d.Enums),
+		PackageName:    classes[0].PackageName,
+		Classes:        emitClasses,
 		NeedsVariant:   needsVariant,
 		BindingsImport: bindingsImport,
 		BindingsAlias:  bindingsAlias,
-	}
-
-	// Render the class XML now that the per-class data is populated.
-	// Classes with no documentation surface at all skip emit — the
-	// template skips the LoadEditorDocXML call when DocXML is empty.
-	if emitHasDocSurface(ci, data) {
-		docXML, xerr := buildClassXML(data, ci.docInfo, ci.Brief, ci.Tutorials)
-		if xerr != nil {
-			return fmt.Errorf("build doc XML: %w", xerr)
-		}
-		data.DocXML = docXML
 	}
 
 	var buf bytes.Buffer
@@ -114,12 +98,96 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 	return err
 }
 
-// emitData is the single-class payload threaded through the bindings
-// template. One file = one @class = one emitData.
+// buildEmitClass produces the emitClass for one discovered file —
+// builds the methods / properties / signals / enums lists with their
+// rendered marshal fragments, plus the class-XML doc string when the
+// class has any doc surface.
+func buildEmitClass(fset *token.FileSet, d *discovered, bindingsAlias string) (emitClass, bool, error) {
+	ci := d.MainClass
+
+	enumSet := map[string]*enumInfo{}
+	for _, e := range d.Enums {
+		enumSet[e.Name] = e
+	}
+
+	initLevel := "InitLevelScene"
+	if ci.IsEditor {
+		initLevel = "InitLevelEditor"
+	}
+
+	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, enumSet, bindingsAlias, ci.Name)
+	if err != nil {
+		return emitClass{}, false, err
+	}
+
+	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, enumSet, bindingsAlias, ci.Name)
+	if err != nil {
+		return emitClass{}, false, err
+	}
+	supported = append(supported, propMethods...)
+	if len(accessors) > 0 || len(properties) > 0 {
+		needsVariant = true
+	}
+
+	signals, err := buildEmitSignals(ci.Signals, enumSet, bindingsAlias, ci.Name)
+	if err != nil {
+		return emitClass{}, false, err
+	}
+	if len(signals) > 0 {
+		needsVariant = true
+	}
+
+	ec := emitClass{
+		SourceFile: filepath.Base(d.FilePath),
+		Class:      ci.Name,
+		Parent:     ci.Parent,
+		Lower:      lowerFirst(ci.Name),
+		InitLevel:  initLevel,
+		IsAbstract: ci.IsAbstract,
+		Methods:    supported,
+		Accessors:  accessors,
+		Properties: properties,
+		Signals:    signals,
+		Enums:      buildEmitEnums(d.Enums),
+	}
+
+	if emitHasDocSurface(ci, ec) {
+		docXML, xerr := buildClassXML(ec, ci.docInfo, ci.Brief, ci.Tutorials)
+		if xerr != nil {
+			return emitClass{}, false, fmt.Errorf("build doc XML for %s: %w", ci.Name, xerr)
+		}
+		ec.DocXML = docXML
+	}
+
+	return ec, needsVariant, nil
+}
+
+// emitData is the package-level payload threaded through the bindings
+// template. Classes carries one emitClass per @class file in the
+// package, in deterministic order.
 type emitData struct {
 	PackageName string
-	SourceFile  string
-	InitLevel   string // bare InitializationLevel const name — "InitLevelScene" or "InitLevelEditor"
+
+	Classes []emitClass
+
+	NeedsVariant bool // any class's method touches a primitive (gates the bindings-package import)
+
+	// BindingsImport / BindingsAlias identify the user's bindings
+	// package — the import path and the local name the source uses for
+	// it (e.g. "github.com/foo/me/godot" + "godot"). Variant marshal
+	// helpers (VariantAsInt64, NewVariantString, …) live there in the
+	// single-package layout, so generated calls are qualified through
+	// the alias.
+	BindingsImport string
+	BindingsAlias  string
+}
+
+// emitClass is the per-@class payload. The bindings template ranges
+// over emitData.Classes and stamps out a side table + register<X>()
+// function + DocXML const per entry.
+type emitClass struct {
+	SourceFile string // filepath.Base of the source file — used in the per-class header comment
+	InitLevel  string // bare InitializationLevel const name — "InitLevelScene" or "InitLevelEditor"
 
 	Class      string
 	Parent     string
@@ -135,17 +203,6 @@ type emitData struct {
 	// content (no description, no docs on any declaration); the
 	// template skips the LoadEditorDocXML call when empty.
 	DocXML string
-
-	NeedsVariant bool // any method touches a primitive (gates the bindings-package import)
-
-	// BindingsImport / BindingsAlias identify the user's bindings
-	// package — the import path and the local name the source uses for
-	// it (e.g. "github.com/foo/me/godot" + "godot"). Variant marshal
-	// helpers (VariantAsInt64, NewVariantString, …) live there in the
-	// single-package layout, so generated calls are qualified through
-	// the alias.
-	BindingsImport string
-	BindingsAlias  string
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -557,13 +614,13 @@ func hintForTypeInfo(info *typeInfo, enums map[string]*enumInfo) (hint, hintStri
 // brief, description, deprecated/experimental marker, tutorials, or
 // any method/property/signal/enum at all (since those produce their
 // own rows in Godot's docs page even with no description text).
-func emitHasDocSurface(ci *classInfo, d emitData) bool {
+func emitHasDocSurface(ci *classInfo, ec emitClass) bool {
 	if ci.Description != "" || ci.Brief != "" || ci.Deprecated != nil || ci.Experimental != nil ||
 		ci.Since != "" || len(ci.See) > 0 || len(ci.Tutorials) > 0 {
 		return true
 	}
-	return len(d.Methods) > 0 || len(d.Properties) > 0 ||
-		len(d.Signals) > 0 || len(d.Enums) > 0
+	return len(ec.Methods) > 0 || len(ec.Properties) > 0 ||
+		len(ec.Signals) > 0 || len(ec.Enums) > 0
 }
 
 // godotXMLType maps a bare gdextension.VariantType const name (the
@@ -901,7 +958,6 @@ func goRawString(s string) string {
 var bindingTemplate = template.Must(template.New("binding").Funcs(template.FuncMap{
 	"godotGoBacktick": goRawString,
 }).Parse(`// Code generated by godot-go; DO NOT EDIT.
-// Source: {{.SourceFile}}
 
 package {{.PackageName}}
 
@@ -913,71 +969,71 @@ import (
 {{if .NeedsVariant}}	{{.BindingsAlias}} "{{.BindingsImport}}"
 {{end}})
 
-// Per-instance side tables. The void* value the host hands back to us as
-// p_instance is the small integer id we returned from Construct, not a
-// Go pointer (cgo forbids storing Go pointers in C-visible memory). The
-// parallel <X>ByEngine map is keyed by the engine ObjectPtr Godot uses
-// for object identity — populated by Construct so methods that take
-// *{{.Class}} args can recover the Go wrapper from the ObjectPtr Godot
-// passes through Variant arg slots.
+{{range .Classes}}{{$class := .}}
+// === {{$class.Class}} ({{$class.SourceFile}}) ===
+
+// Per-instance side tables for {{$class.Class}}. The void* value the host
+// hands back to us as p_instance is the small integer id we returned from
+// Construct, not a Go pointer (cgo forbids storing Go pointers in
+// C-visible memory). The parallel <X>ByEngine map is keyed by the engine
+// ObjectPtr Godot uses for object identity — populated by Construct so
+// methods that take *{{$class.Class}} args can recover the Go wrapper
+// from the ObjectPtr Godot passes through Variant arg slots.
 var (
-	{{.Lower}}InstancesMu sync.Mutex
-	{{.Lower}}Instances   = map[uintptr]*{{.Class}}{}
-	{{.Lower}}ByEngine    = map[uintptr]*{{.Class}}{}
-	{{.Lower}}NextID      uintptr
+	{{$class.Lower}}InstancesMu sync.Mutex
+	{{$class.Lower}}Instances   = map[uintptr]*{{$class.Class}}{}
+	{{$class.Lower}}ByEngine    = map[uintptr]*{{$class.Class}}{}
+	{{$class.Lower}}NextID      uintptr
 )
 
-func register{{.Class}}Instance(n *{{.Class}}, parent gdextension.ObjectPtr) unsafe.Pointer {
-	{{.Lower}}InstancesMu.Lock()
-	{{.Lower}}NextID++
-	id := {{.Lower}}NextID
-	{{.Lower}}Instances[id] = n
-	{{.Lower}}ByEngine[uintptr(parent)] = n
-	{{.Lower}}InstancesMu.Unlock()
+func register{{$class.Class}}Instance(n *{{$class.Class}}, parent gdextension.ObjectPtr) unsafe.Pointer {
+	{{$class.Lower}}InstancesMu.Lock()
+	{{$class.Lower}}NextID++
+	id := {{$class.Lower}}NextID
+	{{$class.Lower}}Instances[id] = n
+	{{$class.Lower}}ByEngine[uintptr(parent)] = n
+	{{$class.Lower}}InstancesMu.Unlock()
 	return unsafe.Pointer(id)
 }
 
-func lookup{{.Class}}Instance(handle unsafe.Pointer) *{{.Class}} {
-	{{.Lower}}InstancesMu.Lock()
-	defer {{.Lower}}InstancesMu.Unlock()
-	return {{.Lower}}Instances[uintptr(handle)]
+func lookup{{$class.Class}}Instance(handle unsafe.Pointer) *{{$class.Class}} {
+	{{$class.Lower}}InstancesMu.Lock()
+	defer {{$class.Lower}}InstancesMu.Unlock()
+	return {{$class.Lower}}Instances[uintptr(handle)]
 }
 
-// lookup{{.Class}}ByEngine resolves an engine ObjectPtr (the value Godot
-// passes through Variant OBJECT slots) to the *{{.Class}} we registered
-// at Construct time. Returns nil for foreign instances — i.e., {{.Class}}
-// pointers Godot got from another extension or constructed without
-// going through our hook. Codegen short-circuits on nil per the
-// foreign-instance policy (CallErrorInvalidArgument in Call mode; bail
-// without invoking the user method in PtrCall).
-func lookup{{.Class}}ByEngine(p gdextension.ObjectPtr) *{{.Class}} {
-	{{.Lower}}InstancesMu.Lock()
-	defer {{.Lower}}InstancesMu.Unlock()
-	return {{.Lower}}ByEngine[uintptr(p)]
+// lookup{{$class.Class}}ByEngine resolves an engine ObjectPtr to the
+// *{{$class.Class}} we registered at Construct time. Returns nil for
+// foreign instances — see the foreign-instance policy in
+// docs/reference.md.
+func lookup{{$class.Class}}ByEngine(p gdextension.ObjectPtr) *{{$class.Class}} {
+	{{$class.Lower}}InstancesMu.Lock()
+	defer {{$class.Lower}}InstancesMu.Unlock()
+	return {{$class.Lower}}ByEngine[uintptr(p)]
 }
 
-func release{{.Class}}Instance(handle unsafe.Pointer) {
-	{{.Lower}}InstancesMu.Lock()
-	defer {{.Lower}}InstancesMu.Unlock()
-	n, ok := {{.Lower}}Instances[uintptr(handle)]
+func release{{$class.Class}}Instance(handle unsafe.Pointer) {
+	{{$class.Lower}}InstancesMu.Lock()
+	defer {{$class.Lower}}InstancesMu.Unlock()
+	n, ok := {{$class.Lower}}Instances[uintptr(handle)]
 	if !ok {
 		return
 	}
-	delete({{.Lower}}Instances, uintptr(handle))
-	delete({{.Lower}}ByEngine, uintptr(n.Ptr()))
+	delete({{$class.Lower}}Instances, uintptr(handle))
+	delete({{$class.Lower}}ByEngine, uintptr(n.Ptr()))
 }
 {{range .Accessors}}
 {{if .IsSetter -}}
-func (n *{{$.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
+func (n *{{$class.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
 {{else -}}
-func (n *{{$.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
+func (n *{{$class.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
 {{end -}}
 {{end}}
 {{range .Signals}}
 // {{.GoName}} emits the {{.GodotName}} signal on this instance. Synthesized
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.
-func (n *{{$.Class}}) {{.GoName}}({{range $i, $a := .PerArg}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}) {
+func (n *{{$class.Class}}) {{.GoName}}({{range $i, $a := .PerArg}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}) {
 	{{- range .PerArg}}
 	{{.BuildVar}}
 	defer arg{{.Index}}.Destroy()
@@ -994,33 +1050,33 @@ func (n *{{$.Class}}) {{.GoName}}({{range $i, $a := .PerArg}}{{if $i}}, {{end}}{
 	{{- end}}
 }
 {{end}}
-func register{{.Class}}() {
+func register{{$class.Class}}() {
 	gdextension.RegisterClass(gdextension.ClassDef{
-		Name:      "{{.Class}}",
-		Parent:    "{{.Parent}}",
+		Name:      "{{$class.Class}}",
+		Parent:    "{{$class.Parent}}",
 		IsExposed: true,
-{{- if .IsAbstract}}
+{{- if $class.IsAbstract}}
 		IsAbstract: true,
 {{- end}}
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
-			n := &{{.Class}}{}
-			parent := gdextension.ConstructObject(gdextension.InternStringName("{{.Parent}}"))
+			n := &{{$class.Class}}{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.Parent}}"))
 			n.BindPtr(parent)
-			return parent, register{{.Class}}Instance(n, parent)
+			return parent, register{{$class.Class}}Instance(n, parent)
 		},
 
 		Free: func(instance unsafe.Pointer) {
-			release{{.Class}}Instance(instance)
+			release{{$class.Class}}Instance(instance)
 		},
 	})
 {{range .Methods}}
 	{{- if .IsVirtual}}
 	gdextension.RegisterClassVirtual(gdextension.ClassVirtualDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Name:  "{{.GodotName}}",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			self := lookup{{$.Class}}Instance(instance)
+			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
@@ -1036,7 +1092,7 @@ func register{{.Class}}() {
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			self := lookup{{$.Class}}Instance(instance)
+			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
 				return
 			}
@@ -1083,14 +1139,14 @@ func register{{.Class}}() {
 	})
 	{{- else}}
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Name:  "{{.GodotName}}",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			{{- if .IsStatic}}
 			_ = instance
-			var self {{$.Class}}
+			var self {{$class.Class}}
 			{{- else}}
-			self := lookup{{$.Class}}Instance(instance)
+			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
 				return gdextension.CallErrorInstanceIsNull
 			}
@@ -1109,9 +1165,9 @@ func register{{.Class}}() {
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			{{- if .IsStatic}}
 			_ = instance
-			var self {{$.Class}}
+			var self {{$class.Class}}
 			{{- else}}
-			self := lookup{{$.Class}}Instance(instance)
+			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
 				return
 			}
@@ -1185,7 +1241,7 @@ func register{{.Class}}() {
 {{- range .Properties}}
 	{{- if .BeginGroup}}
 	gdextension.RegisterClassPropertyGroup(gdextension.ClassPropertyGroupDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Name:  "{{.BeginGroup}}",
 	})
 	{{- else if and (eq .BeginGroup "") (ne .BeginSubgroup "")}}
@@ -1194,12 +1250,12 @@ func register{{.Class}}() {
 	{{- end}}
 	{{- if .BeginSubgroup}}
 	gdextension.RegisterClassPropertySubgroup(gdextension.ClassPropertyGroupDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Name:  "{{.BeginSubgroup}}",
 	})
 	{{- end}}
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
-		Class:  "{{$.Class}}",
+		Class:  "{{$class.Class}}",
 		Name:   "{{.GodotName}}",
 		Type:   gdextension.{{.Type}},
 		{{- if .ClassName}}
@@ -1219,7 +1275,7 @@ func register{{.Class}}() {
 {{end}}
 {{- range .Signals}}
 	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Name:  "{{.GodotName}}",
 		{{- if .ArgTypes}}
 		ArgTypes: []gdextension.VariantType{
@@ -1250,7 +1306,7 @@ func register{{.Class}}() {
 	{{- $isBitfield := .IsBitfield}}
 	{{- range .Values}}
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "{{$.Class}}",
+		Class: "{{$class.Class}}",
 		Enum:  "{{$enumName}}",
 		Name:  "{{.GodotName}}",
 		Value: {{.Value}},
@@ -1260,21 +1316,24 @@ func register{{.Class}}() {
 	})
 	{{- end}}
 {{end}}
-{{- if .DocXML}}
-	gdextension.LoadEditorDocXML({{.Lower}}DocXML)
+{{- if $class.DocXML}}
+	gdextension.LoadEditorDocXML({{$class.Lower}}DocXML)
 {{- end}}
 }
-{{if .DocXML}}
-// {{.Lower}}DocXML is the rendered <class> document for {{.Class}}.
+{{if $class.DocXML}}
+// {{$class.Lower}}DocXML is the rendered <class> document for {{$class.Class}}.
 // Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
 // editor-only entry point — game-mode runtimes resolve the symbol to
 // nil and the load call is a no-op).
-const {{.Lower}}DocXML = {{.DocXML | godotGoBacktick}}
+const {{$class.Lower}}DocXML = {{$class.DocXML | godotGoBacktick}}
+{{end}}
 {{end}}
 func init() {
+{{- range .Classes}}
 	gdextension.RegisterInitCallback(gdextension.{{.InitLevel}}, register{{.Class}})
 	gdextension.RegisterDeinitCallback(gdextension.{{.InitLevel}}, func() {
 		gdextension.UnregisterClass("{{.Class}}")
 	})
+{{- end}}
 }
 `))

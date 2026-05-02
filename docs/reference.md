@@ -386,7 +386,7 @@ classes, methods, properties, signals, enum types, and enum values.
 | `@see "ref"` | inline text | class, method, property, signal, enum type, enum value | Appends a "See also: ref" line to the description. `ref` passes through verbatim — Godot's BBCode parser resolves cross-references like `[ClassName]`, `[method foo]`, `[member bar]`. |
 
 The class XML for a registered class is baked into the generated
-`<file>_bindings.go` as a `const` string and pushed to Godot at
+`bindings.gen.go` as a `const` string and pushed to Godot at
 SCENE init via `editor_help_load_xml_from_utf8_chars_and_len` (4.3+,
 editor-only — game-mode runtimes resolve the symbol to nil and the
 load is a no-op). No separate XML files in the user's project tree.
@@ -434,7 +434,12 @@ that hooks it into `INIT_LEVEL_SCENE` (or `INIT_LEVEL_EDITOR` if
 `@editor` is set). One file = one registered class; additional Go
 structs in the same file are plain Go types.
 
-The synthesized `<file>_bindings.go` contains:
+The codegen produces a single `bindings.gen.go` at the package root,
+covering every `@class` file in the package — one `//go:generate
+godot-go` per package (placed in a dedicated `generate.go` by
+convention) is enough. Each file in the package may declare at most
+one `@class` struct; the codegen aggregates them into one output
+file. The synthesized `bindings.gen.go` contains:
 
 - A per-class side table (`map[uintptr]*Class`) — Godot hands back
   a small integer handle as `void*`, not a Go pointer (cgo rules
