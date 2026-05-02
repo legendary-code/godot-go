@@ -73,22 +73,31 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		needsVariant = true
 	}
 
+	enumHelpers := buildEnumSliceHelpers(d.Enums, ci.Name)
+	if len(enumHelpers) > 0 {
+		// Helpers reference bindings.Array / bindings.MakeArrayOfInts —
+		// force the import even on classes whose primitives sweep
+		// otherwise wouldn't have set NeedsVariant.
+		needsVariant = true
+	}
+
 	data := emitData{
-		PackageName:    d.PackageName,
-		SourceFile:     filepath.Base(d.FilePath),
-		InitLevel:      initLevel,
-		Class:          ci.Name,
-		Parent:         ci.Parent,
-		Lower:          lowerFirst(ci.Name),
-		IsAbstract:     ci.IsAbstract,
-		Methods:        supported,
-		Accessors:      accessors,
-		Properties:     properties,
-		Signals:        signals,
-		Enums:          buildEmitEnums(d.Enums),
-		NeedsVariant:   needsVariant,
-		BindingsImport: bindingsImport,
-		BindingsAlias:  bindingsAlias,
+		PackageName:      d.PackageName,
+		SourceFile:       filepath.Base(d.FilePath),
+		InitLevel:        initLevel,
+		Class:            ci.Name,
+		Parent:           ci.Parent,
+		Lower:            lowerFirst(ci.Name),
+		IsAbstract:       ci.IsAbstract,
+		Methods:          supported,
+		Accessors:        accessors,
+		Properties:       properties,
+		Signals:          signals,
+		Enums:            buildEmitEnums(d.Enums),
+		EnumSliceHelpers: enumHelpers,
+		NeedsVariant:     needsVariant,
+		BindingsImport:   bindingsImport,
+		BindingsAlias:    bindingsAlias,
 	}
 
 	// Render the class XML now that the per-class data is populated.
@@ -130,6 +139,13 @@ type emitData struct {
 	Properties []emitProperty // RegisterClassProperty calls (one per @property, both forms)
 	Signals    []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
 	Enums      []emitEnum     // @enum / @bitfield-tagged user enums registered as class-scoped integer constants
+
+	// EnumSliceHelpers carries one entry per @enum / @bitfield user
+	// enum. The template emits `MakeArrayOf<X>s(values ...<X>) Array` and
+	// `<X>sFromArray(a Array) []<X>` per entry — these wrap Phase 3's
+	// MakeArrayOfInts / Array.ToInt64Slice with the enum's class_name
+	// pre-baked so the editor sees Array[<X>] rather than untyped Array.
+	EnumSliceHelpers []emitEnumSliceHelper
 	// DocXML is the rendered <class>…</class> document baked into the
 	// bindings as a const string. Empty when the class has no doc-able
 	// content (no description, no docs on any declaration); the
@@ -146,6 +162,16 @@ type emitData struct {
 	// the alias.
 	BindingsImport string
 	BindingsAlias  string
+}
+
+// emitEnumSliceHelper is the per-enum payload for the slice-of-enum
+// support added in Phase 5 of the array work. The template renders one
+// constructor + one extractor per helper, both reaching into Phase 3's
+// generic typed-Array primitives.
+type emitEnumSliceHelper struct {
+	GoName    string // bare enum identifier ("Language")
+	Plural    string // appended-s plural for the helper names ("Languages")
+	ClassName string // qualified <MainClass>.<EnumName> for typed-Array class_name
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -317,6 +343,14 @@ type emitMethod struct {
 	// (not RegisterClassMethod) and prepends an `_` to GodotName unless
 	// the user already supplied one via @name.
 	IsVirtual bool
+
+	// IsVariadic is true when the source method's last parameter is
+	// declared with Go's `...T` ellipsis syntax. The wire boundary still
+	// passes a single Packed<X>Array / Array[T] arg — Godot has no
+	// vararg concept on extension methods — but the dispatch site spreads
+	// the slice with `argN...` so the user method receives the variadic
+	// it expects.
+	IsVariadic bool
 }
 
 // classifyForEmit walks the discovered methods and returns:
@@ -362,12 +396,22 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 
 	// Args: every parameter spec can declare multiple names sharing one
 	// type (Go's `func f(a, b int)` shape), so flatten to one logical
-	// arg per name.
+	// arg per name. A variadic param (`...T`) — only valid as the last
+	// param — looks like a single slot at the wire boundary; the
+	// dispatch site spreads it back into the call with `argN...`.
 	idx := 0
-	for _, field := range fieldsOf(m.Decl.Type.Params) {
+	paramFields := fieldsOf(m.Decl.Type.Params)
+	for fIdx, field := range paramFields {
 		info, err := resolveType(field.Type, enums)
 		if err != nil {
 			return em, fmt.Errorf("arg %d: %w", idx, err)
+		}
+		_, isVariadic := field.Type.(*ast.Ellipsis)
+		if isVariadic {
+			if fIdx != len(paramFields)-1 {
+				return em, fmt.Errorf("variadic parameter must be last (Go enforces this at parse time, but the codegen guards against AST oddities)")
+			}
+			em.IsVariadic = true
 		}
 		count := len(field.Names)
 		if count == 0 {
@@ -397,11 +441,16 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 	}
 	em.HasArgs = idx > 0
 
-	// Dispatch arg list: arg0, arg1, ...
+	// Dispatch arg list: arg0, arg1, ... — the last arg gets a `...`
+	// suffix when the source method is variadic so Go's call-site
+	// spread reaches the user method correctly.
 	if em.HasArgs {
 		names := make([]string, idx)
 		for i := 0; i < idx; i++ {
 			names[i] = fmt.Sprintf("arg%d", i)
+		}
+		if em.IsVariadic {
+			names[idx-1] += "..."
 		}
 		em.DispatchArgs = strings.Join(names, ", ")
 	}
@@ -511,6 +560,44 @@ func godotEnumValueName(enumType, valueName string) string {
 		v = v[len(enumType):]
 	}
 	return strings.ToUpper(naming.PascalToSnake(v))
+}
+
+// buildEnumSliceHelpers builds the per-enum slice-helper payload for
+// every @enum / @bitfield user enum. Untagged user int aliases don't
+// get a helper since their slice form rides on PackedInt64Array (no
+// enum identity to preserve). The class_name is the same
+// "<MainClass>.<EnumName>" form the scalar-enum registration uses,
+// pre-baked so the editor renders Array[<EnumName>] correctly.
+func buildEnumSliceHelpers(enums []*enumInfo, mainClass string) []emitEnumSliceHelper {
+	if len(enums) == 0 {
+		return nil
+	}
+	out := make([]emitEnumSliceHelper, 0, len(enums))
+	for _, e := range enums {
+		if !e.IsExposed {
+			continue
+		}
+		out = append(out, emitEnumSliceHelper{
+			GoName:    e.Name,
+			Plural:    pluralizeEnum(e.Name),
+			ClassName: mainClass + "." + e.Name,
+		})
+	}
+	return out
+}
+
+// pluralizeEnum applies a minimal English plural rule to the enum's Go
+// identifier so the synthesized helper names read naturally. The only
+// special case we bother with is names already ending in "s" (e.g.
+// `AbilityFlags`) — appending another "s" yields the ugly `AbilityFlagss`.
+// Any further linguistic nuance (Category → Categories, Box → Boxes, etc.)
+// stays out of scope; users with awkward identifiers can rename or accept
+// the simple form.
+func pluralizeEnum(name string) string {
+	if strings.HasSuffix(name, "s") {
+		return name
+	}
+	return name + "s"
 }
 
 // buildEmitEnums filters discovered user-int types down to those tagged
@@ -847,6 +934,36 @@ func (n *{{$.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
 {{else -}}
 func (n *{{$.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
 {{end -}}
+{{end}}
+{{range .EnumSliceHelpers}}
+// MakeArrayOf{{.Plural}} constructs Array[{{.GoName}}] (TypedArray of int
+// with the {{.GoName}} class_name set, so the editor renders the typed-element
+// identity). Caller owns the result; release with (*{{$.BindingsAlias}}.Array).Destroy()
+// when done.
+func MakeArrayOf{{.Plural}}(values ...{{.GoName}}) {{$.BindingsAlias}}.Array {
+	i64 := make([]int64, len(values))
+	for i, v := range values {
+		i64[i] = int64(v)
+	}
+	return {{$.BindingsAlias}}.MakeArrayOfInts({{printf "%q" .ClassName}}, i64...)
+}
+
+// {{.Plural}}FromArray copies the typed-int contents of a into a fresh
+// []{{.GoName}}. Returns nil for empty. Behavior is undefined if a holds
+// elements of any other type.
+func {{.Plural}}FromArray(a {{$.BindingsAlias}}.Array) []{{.GoName}} {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]{{.GoName}}, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = {{.GoName}}(v.AsInt())
+		v.Destroy()
+	}
+	return out
+}
 {{end}}
 {{range .Signals}}
 // {{.GoName}} emits the {{.GodotName}} signal on this instance. Synthesized

@@ -71,6 +71,64 @@ func (n *MyNode) GetNotes() string { return n.Notes }
 
 func (n *MyNode) SetNotes(v string) { n.Notes = v }
 
+// MakeArrayOfStances constructs Array[Stance] (TypedArray of int
+// with the Stance class_name set, so the editor renders the typed-element
+// identity). Caller owns the result; release with (*godot.Array).Destroy()
+// when done.
+func MakeArrayOfStances(values ...Stance) godot.Array {
+	i64 := make([]int64, len(values))
+	for i, v := range values {
+		i64[i] = int64(v)
+	}
+	return godot.MakeArrayOfInts("MyNode.Stance", i64...)
+}
+
+// StancesFromArray copies the typed-int contents of a into a fresh
+// []Stance. Returns nil for empty. Behavior is undefined if a holds
+// elements of any other type.
+func StancesFromArray(a godot.Array) []Stance {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]Stance, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = Stance(v.AsInt())
+		v.Destroy()
+	}
+	return out
+}
+
+// MakeArrayOfAbilityFlags constructs Array[AbilityFlags] (TypedArray of int
+// with the AbilityFlags class_name set, so the editor renders the typed-element
+// identity). Caller owns the result; release with (*godot.Array).Destroy()
+// when done.
+func MakeArrayOfAbilityFlags(values ...AbilityFlags) godot.Array {
+	i64 := make([]int64, len(values))
+	for i, v := range values {
+		i64[i] = int64(v)
+	}
+	return godot.MakeArrayOfInts("MyNode.AbilityFlags", i64...)
+}
+
+// AbilityFlagsFromArray copies the typed-int contents of a into a fresh
+// []AbilityFlags. Returns nil for empty. Behavior is undefined if a holds
+// elements of any other type.
+func AbilityFlagsFromArray(a godot.Array) []AbilityFlags {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]AbilityFlags, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = AbilityFlags(v.AsInt())
+		v.Destroy()
+	}
+	return out
+}
+
 // Damaged emits the damaged signal on this instance. Synthesized
 // from a @signals interface declaration; per-arg Variants are constructed
 // from the typed parameters and dispatched via Object::emit_signal.

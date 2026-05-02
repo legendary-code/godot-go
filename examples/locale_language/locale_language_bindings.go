@@ -41,6 +41,35 @@ func releaseLocaleLanguageInstance(handle unsafe.Pointer) {
 	delete(localeLanguageInstances, uintptr(handle))
 }
 
+// MakeArrayOfLanguages constructs Array[Language] (TypedArray of int
+// with the Language class_name set, so the editor renders the typed-element
+// identity). Caller owns the result; release with (*godot.Array).Destroy()
+// when done.
+func MakeArrayOfLanguages(values ...Language) godot.Array {
+	i64 := make([]int64, len(values))
+	for i, v := range values {
+		i64[i] = int64(v)
+	}
+	return godot.MakeArrayOfInts("LocaleLanguage.Language", i64...)
+}
+
+// LanguagesFromArray copies the typed-int contents of a into a fresh
+// []Language. Returns nil for empty. Behavior is undefined if a holds
+// elements of any other type.
+func LanguagesFromArray(a godot.Array) []Language {
+	n := a.Size()
+	if n == 0 {
+		return nil
+	}
+	out := make([]Language, n)
+	for i := int64(0); i < n; i++ {
+		v := a.Get(i)
+		out[i] = Language(v.AsInt())
+		v.Destroy()
+	}
+	return out
+}
+
 func registerLocaleLanguage() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:       "LocaleLanguage",
@@ -78,10 +107,11 @@ func registerLocaleLanguage() {
 			result := self.Parse(arg0)
 			*(*int64)(ret) = int64(result)
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeInt,
-		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeInt,
+		ReturnMetadata:  gdextension.ArgMetaIntIsInt64,
+		ReturnClassName: "LocaleLanguage.Language",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeString,
 		},
@@ -228,6 +258,141 @@ func registerLocaleLanguage() {
 		ReturnMetadata: gdextension.ArgMetaNone,
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
+		Name:  "languages",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self LocaleLanguage
+			result := self.Languages()
+			result_arr := MakeArrayOfLanguages(result...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self LocaleLanguage
+			result := self.Languages()
+			result_arr := MakeArrayOfLanguages(result...)
+			*(*godot.Array)(ret) = result_arr
+		},
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeArray,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "LocaleLanguage.Language",
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
+		Name:  "filter_languages",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := godot.VariantAsArray(args[0])
+			defer arg0_arr.Destroy()
+			arg0 := LanguagesFromArray(arg0_arr)
+			result := self.FilterLanguages(arg0...)
+			result_arr := MakeArrayOfLanguages(result...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := *(*godot.Array)(gdextension.PtrCallArg(args, 0))
+			arg0 := LanguagesFromArray(arg0_arr)
+			result := self.FilterLanguages(arg0...)
+			result_arr := MakeArrayOfLanguages(result...)
+			*(*godot.Array)(ret) = result_arr
+		},
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeArray,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "LocaleLanguage.Language",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeArray,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"values",
+		},
+		ArgClassNames: []string{
+			"LocaleLanguage.Language",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
+		Name:  "concat_names",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := godot.VariantAsPackedStringArray(args[0])
+			defer arg0_arr.Destroy()
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]string, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.ConcatNames(arg0...)
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := *(*godot.PackedStringArray)(gdextension.PtrCallArg(args, 0))
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]string, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.ConcatNames(arg0...)
+			godot.PtrCallStoreString(ret, result)
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypePackedStringArray,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"parts",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "LocaleLanguage",
+		Enum:  "Language",
+		Name:  "UNKNOWN",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "LocaleLanguage",
+		Enum:  "Language",
+		Name:  "ENGLISH",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "LocaleLanguage",
+		Enum:  "Language",
+		Name:  "GERMAN",
+		Value: 2,
+	})
+
 	gdextension.LoadEditorDocXML(localeLanguageDocXML)
 }
 
@@ -241,7 +406,7 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <description>here overrides the</description>
     <methods>
         <method name="parse" qualifiers="static">
-            <return type="int"></return>
+            <return type="int" enum="LocaleLanguage.Language"></return>
             <param index="0" name="value" type="String"></param>
             <description>Is registered as a class-level static via the ` + "`" + `@static` + "`" + `&#xA;doctag — Godot exposes it as ` + "`" + `LocaleLanguage.parse(value)` + "`" + ` with&#xA;no instance lookup. The receiver stays unnamed since the body&#xA;doesn&#39;t need one.</description>
         </method>
@@ -261,7 +426,26 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type="PackedStringArray"></return>
             <description>Demonstrates a slice return at the @class boundary. The&#xA;codegen builds a PackedStringArray from the returned []string before&#xA;handing the value back to Godot.</description>
         </method>
+        <method name="languages" qualifiers="static">
+            <return type="Array" enum="LocaleLanguage.Language"></return>
+            <description>Demonstrates a slice-of-typed-enum return at the @class&#xA;boundary. The wire form is Array[Language] (TypedArray); Godot sees&#xA;each element as a typed Language value, not a bare int.</description>
+        </method>
+        <method name="filter_languages" qualifiers="static">
+            <return type="Array" enum="LocaleLanguage.Language"></return>
+            <param index="0" name="values" type="Array" enum="LocaleLanguage.Language"></param>
+            <description>Demonstrates two boundary features at once: a&#xA;variadic typed-enum parameter (Go&#39;s ` + "`" + `...Language` + "`" + ` is identical to&#xA;` + "`" + `[]Language` + "`" + ` at the wire boundary, just nicer at the call site) and&#xA;a typed-enum slice return. Returns the subset matching the given&#xA;known set.</description>
+        </method>
+        <method name="concat_names" qualifiers="static">
+            <return type="String"></return>
+            <param index="0" name="parts" type="PackedStringArray"></param>
+            <description>Demonstrates a primitive variadic at the @class boundary&#xA;— ` + "`" + `...string` + "`" + ` becomes a single PackedStringArray arg on the wire,&#xA;spread back into the user method via Go&#39;s call-site ` + "`" + `parts...` + "`" + ` form.</description>
+        </method>
     </methods>
+    <constants>
+        <constant name="UNKNOWN" value="0" enum="Language"></constant>
+        <constant name="ENGLISH" value="1" enum="Language"></constant>
+        <constant name="GERMAN" value="2" enum="Language"></constant>
+    </constants>
 </class>`
 
 func init() {

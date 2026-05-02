@@ -377,6 +377,67 @@ func (n *MyNode) Names() []string { return nil }
 	}
 }
 
+func TestDiscoverVariadicArg(t *testing.T) {
+	// Variadic params are Go-side syntactic sugar over a slice — the
+	// codegen treats them identically at the wire boundary.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Sum(values ...int64) int64 { return 0 }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 || d.MainClass.Methods[0].GoName != "Sum" {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestDiscoverEnumSliceArg(t *testing.T) {
+	// `[]Mode` where Mode is a tagged @enum should route through the
+	// TypedArray path (class_name preserved for editor identity).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+// @enum
+type Mode int
+const (
+	ModeIdle Mode = iota
+	ModeRun
+)
+func (n *MyNode) Filter(modes []Mode) []Mode { return nil }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestDiscoverUntaggedUserIntSliceArg(t *testing.T) {
+	// `[]Counter` where Counter is an untagged user int alias should
+	// route through PackedInt64Array (no enum identity to preserve).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+type Counter int
+func (n *MyNode) Tally(counters []Counter) {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
 func TestEmitNestedSliceRejected(t *testing.T) {
 	// Discovery accepts any AST shape; rejection happens at emit time
 	// via resolveType. Drive the codegen explicitly to surface the

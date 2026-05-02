@@ -33,10 +33,17 @@ type LocaleLanguage struct {
 	godot.Node
 }
 
-// Language defines an enum type, which will automatically be part of LocaleLanguage, since that's our main type being
-// exported here.  In order to be detected as an enum type, you must use a typedef to an int.  In Godot, the name will
-// be transformed to SCREAMING_SNAKE_CASE without the "Language" prefix, so, "UNKNOWN", "ENGLISH" and "GERMAN" in this
-// case.
+// Language defines an enum type that becomes part of LocaleLanguage's
+// class-scoped registration. The `@enum` doctag is what surfaces the
+// type to Godot — values register as integer constants under
+// `LocaleLanguage.Language`, and method args / returns / slice element
+// slots referencing `Language` carry the typed-enum class_name so the
+// editor renders typed-enum autocomplete instead of plain int. Each
+// const value's identifier gets transformed to SCREAMING_SNAKE_CASE
+// with the "Language" prefix stripped — so "UNKNOWN", "ENGLISH",
+// "GERMAN" appear under `LocaleLanguage.Language` in GDScript.
+//
+// @enum
 type Language int
 
 const (
@@ -100,4 +107,46 @@ func (LocaleLanguage) Sum(values []int64) int64 {
 // @static
 func (LocaleLanguage) Names() []string {
 	return []string{"unknown", "english", "german"}
+}
+
+// Languages demonstrates a slice-of-typed-enum return at the @class
+// boundary. The wire form is Array[Language] (TypedArray); Godot sees
+// each element as a typed Language value, not a bare int.
+//
+// @static
+func (LocaleLanguage) Languages() []Language {
+	return []Language{LanguageUnknown, LanguageEnglish, LanguageGerman}
+}
+
+// FilterLanguages demonstrates two boundary features at once: a
+// variadic typed-enum parameter (Go's `...Language` is identical to
+// `[]Language` at the wire boundary, just nicer at the call site) and
+// a typed-enum slice return. Returns the subset matching the given
+// known set.
+//
+// @static
+func (LocaleLanguage) FilterLanguages(values ...Language) []Language {
+	out := make([]Language, 0, len(values))
+	for _, v := range values {
+		if v == LanguageEnglish || v == LanguageGerman {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// ConcatNames demonstrates a primitive variadic at the @class boundary
+// — `...string` becomes a single PackedStringArray arg on the wire,
+// spread back into the user method via Go's call-site `parts...` form.
+//
+// @static
+func (LocaleLanguage) ConcatNames(parts ...string) string {
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += ","
+		}
+		out += p
+	}
+	return out
 }
