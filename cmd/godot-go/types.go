@@ -197,22 +197,214 @@ var typeTable = map[string]*typeInfo{
 // returned typeInfo when the enum was declared with @enum or @bitfield
 // so the caller knows to qualify it. Untagged user int aliases come
 // back with EnumName = "" and register as plain int.
+//
+// Slice types `[]T` are supported when T is a primitive in the slice
+// table (sliceCategories below). The codegen path for slices uses
+// inline loops with explicit casts at the boundary, calling into the
+// bindings' Variant<->Packed<X>Array adapters and per-type
+// PushBack / Get methods.
 func resolveType(expr ast.Expr, enums map[string]*enumInfo) (*typeInfo, error) {
-	id, ok := expr.(*ast.Ident)
-	if !ok {
-		return nil, fmt.Errorf("unsupported type %T (only primitive and user-enum types are supported)", expr)
-	}
-	if info, ok := typeTable[id.Name]; ok {
-		return info, nil
-	}
-	if e, ok := enums[id.Name]; ok {
-		exposedName := ""
-		if e.IsExposed {
-			exposedName = e.Name
+	switch t := expr.(type) {
+	case *ast.Ident:
+		if info, ok := typeTable[t.Name]; ok {
+			return info, nil
 		}
-		return enumTypeInfo(id.Name, exposedName), nil
+		if e, ok := enums[t.Name]; ok {
+			exposedName := ""
+			if e.IsExposed {
+				exposedName = e.Name
+			}
+			return enumTypeInfo(t.Name, exposedName), nil
+		}
+		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", t.Name)
+	case *ast.ArrayType:
+		if t.Len != nil {
+			return nil, fmt.Errorf("fixed-size arrays unsupported (only Go slices `[]T` cross the @class boundary)")
+		}
+		elem, err := resolveType(t.Elt, enums)
+		if err != nil {
+			return nil, fmt.Errorf("slice element: %w", err)
+		}
+		return sliceTypeInfo(elem)
+	default:
+		return nil, fmt.Errorf("unsupported type %T (only primitive, user-enum, and slice types are supported)", expr)
 	}
-	return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", id.Name)
+}
+
+// sliceCategory describes how to marshal a `[]T` boundary. The codegen
+// inlines the per-element loop using these fragments rather than calling
+// the user-facing Make<X>Array / ToSlice helpers from arrayruntime.gen.go,
+// because those helpers are strict on the wire-element type — and
+// integer/byte slices need explicit narrowing/widening at the boundary.
+type sliceCategory struct {
+	// PackedTypeName is the bindings type the slice marshals through.
+	// "Array" for []bool (TypedArray, no PackedBoolArray exists);
+	// "Packed<X>Array" for the rest.
+	PackedTypeName string
+	// VariantType is the bare gdextension.VariantType const name —
+	// "VariantTypeArray" for []bool, "VariantTypePacked<X>Array" otherwise.
+	VariantType string
+	// UseTypedArray is true for []bool only — codegen routes through
+	// MakeArrayOfBools / ToBoolSlice on the bindings' Array type rather
+	// than a Packed<X>Array per-element pump.
+	UseTypedArray bool
+	// CastTo wraps an expression of the user-facing element Go type and
+	// returns the wire element expression that PushBack expects. Empty
+	// string means no cast needed (identity).
+	CastTo string
+	// CastFrom wraps an expression of the wire element type and returns
+	// the user-facing element expression. Empty string means identity.
+	CastFrom string
+}
+
+// sliceCategories indexes the slice marshaling metadata by Go element
+// type identifier. Float64 is omitted in this phase — under single-
+// precision bindings (the framework default), `Packed<X>Array.PushBack`
+// takes float32 for both float Packed types, so `[]float64` would
+// require a lossy narrowing cast. Tracked as a follow-up to add a
+// precision-aware path (see ARRAYS.md).
+var sliceCategories = map[string]sliceCategory{
+	"bool":    {PackedTypeName: "Array", VariantType: "VariantTypeArray", UseTypedArray: true},
+	"byte":    {PackedTypeName: "PackedByteArray", VariantType: "VariantTypePackedByteArray", CastTo: "int64", CastFrom: "byte"},
+	"int32":   {PackedTypeName: "PackedInt32Array", VariantType: "VariantTypePackedInt32Array", CastTo: "int64", CastFrom: "int32"},
+	"int":     {PackedTypeName: "PackedInt64Array", VariantType: "VariantTypePackedInt64Array", CastTo: "int64", CastFrom: "int"},
+	"int64":   {PackedTypeName: "PackedInt64Array", VariantType: "VariantTypePackedInt64Array"},
+	"float32": {PackedTypeName: "PackedFloat32Array", VariantType: "VariantTypePackedFloat32Array"},
+	"string":  {PackedTypeName: "PackedStringArray", VariantType: "VariantTypePackedStringArray"},
+}
+
+// sliceTypeInfo synthesizes the typeInfo for `[]<elem>` from the element
+// scalar's typeInfo. The fragments are multi-line: codegen emits a
+// per-arg/per-return inline loop into the trampoline body. format.Source
+// reformats the rendered source after template execution, so the
+// hand-rolled multi-line strings come out gofmt-clean.
+func sliceTypeInfo(elem *typeInfo) (*typeInfo, error) {
+	cat, ok := sliceCategories[elem.GoType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported slice element type %q (supported: bool, byte, int, int32, int64, float32, string)", elem.GoType)
+	}
+	goType := "[]" + elem.GoType
+	if cat.UseTypedArray {
+		return sliceBoolTypeInfo(goType), nil
+	}
+	return slicePackedTypeInfo(goType, elem.GoType, cat), nil
+}
+
+// sliceBoolTypeInfo builds the marshaling fragments for []bool, which
+// rides on Array[bool] (a TypedArray) since Godot has no PackedBoolArray.
+// Construction goes through Phase 3's MakeArrayOfBools / ToBoolSlice.
+func sliceBoolTypeInfo(goType string) *typeInfo {
+	return &typeInfo{
+		GoType:      goType,
+		VariantType: "VariantTypeArray",
+		ArgMeta:     "ArgMetaNone",
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := %s.VariantAsArray(args[%d])
+defer arg%d_arr.Destroy()
+arg%d := arg%d_arr.ToBoolSlice()`, idx, b, idx, idx, idx, idx)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_arr := %s.MakeArrayOfBools(%s...)
+%s.VariantSetArray(ret, result_arr)
+result_arr.Destroy()`, b, expr, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := *(*%s.Array)(gdextension.PtrCallArg(args, %d))
+arg%d := arg%d_arr.ToBoolSlice()`, idx, b, idx, idx, idx)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_arr := %s.MakeArrayOfBools(%s...)
+*(*%s.Array)(ret) = result_arr`, b, expr, b)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`arg%d_arr := %s.MakeArrayOfBools(%s...)
+arg%d := %s.NewVariantArray(arg%d_arr)
+arg%d_arr.Destroy()`, idx, b, srcExpr, idx, b, idx, idx)
+		},
+	}
+}
+
+// slicePackedTypeInfo builds the marshaling fragments for []<primitive>
+// types that ride on a Packed<X>Array. The codegen inlines a per-element
+// loop with optional casts at the boundary so user-facing types like
+// `[]int32` / `[]byte` round-trip cleanly through the int64-on-the-wire
+// Packed Get/Set methods.
+func slicePackedTypeInfo(goType, elemType string, cat sliceCategory) *typeInfo {
+	return &typeInfo{
+		GoType:      goType,
+		VariantType: cat.VariantType,
+		ArgMeta:     "ArgMetaNone",
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := %s.VariantAs%s(args[%d])
+defer arg%d_arr.Destroy()
+arg%d_n := arg%d_arr.Size()
+arg%d := make([]%s, arg%d_n)
+for i := int64(0); i < arg%d_n; i++ {
+	arg%d[i] = %s
+}`, idx, b, cat.PackedTypeName, idx,
+				idx,
+				idx, idx,
+				idx, elemType, idx,
+				idx,
+				idx, sliceCastExpr(cat.CastFrom, fmt.Sprintf("arg%d_arr.Get(i)", idx)))
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_arr := %s.New%s()
+defer result_arr.Destroy()
+for _, v := range %s {
+	result_arr.PushBack(%s)
+}
+%s.VariantSet%s(ret, result_arr)`,
+				b, cat.PackedTypeName,
+				expr,
+				sliceCastExpr(cat.CastTo, "v"),
+				b, cat.PackedTypeName)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := *(*%s.%s)(gdextension.PtrCallArg(args, %d))
+arg%d_n := arg%d_arr.Size()
+arg%d := make([]%s, arg%d_n)
+for i := int64(0); i < arg%d_n; i++ {
+	arg%d[i] = %s
+}`, idx, b, cat.PackedTypeName, idx,
+				idx, idx,
+				idx, elemType, idx,
+				idx,
+				idx, sliceCastExpr(cat.CastFrom, fmt.Sprintf("arg%d_arr.Get(i)", idx)))
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_arr := %s.New%s()
+for _, v := range %s {
+	result_arr.PushBack(%s)
+}
+*(*%s.%s)(ret) = result_arr`,
+				b, cat.PackedTypeName,
+				expr,
+				sliceCastExpr(cat.CastTo, "v"),
+				b, cat.PackedTypeName)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`arg%d_arr := %s.New%s()
+for _, v := range %s {
+	arg%d_arr.PushBack(%s)
+}
+arg%d := %s.NewVariant%s(arg%d_arr)
+arg%d_arr.Destroy()`, idx, b, cat.PackedTypeName,
+				srcExpr,
+				idx, sliceCastExpr(cat.CastTo, "v"),
+				idx, b, cat.PackedTypeName, idx,
+				idx)
+		},
+	}
+}
+
+// sliceCastExpr applies a narrowing/widening cast wrapper to expr if
+// cast is non-empty; otherwise returns expr unchanged.
+func sliceCastExpr(cast, expr string) string {
+	if cast == "" {
+		return expr
+	}
+	return cast + "(" + expr + ")"
 }
 
 // enumTypeInfo builds the marshalling helpers for a user int enum. The

@@ -210,6 +210,11 @@ func (n *N) Mix(b bool, i int32, f float32, s string) string { return s }
 }
 
 func TestEmitRejectsUnsupportedType(t *testing.T) {
+	// `complex64` isn't in the type table — neither as a scalar nor as
+	// a slice element. resolveType surfaces "unsupported type" with
+	// file:line context for the boundary. (`[]int` was the original
+	// fixture but slices are now supported as of Phase 4 of the array
+	// support work.)
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -217,13 +222,13 @@ type N struct {
 	// @extends
 	core.Node
 }
-func (n *N) Foo(xs []int) {}
+func (n *N) Foo(c complex64) {}
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf bytes.Buffer
 	err := emit(&buf, fset, d)
 	if err == nil {
-		t.Fatalf("expected emit to reject slice arg")
+		t.Fatalf("expected emit to reject complex64 arg")
 	}
 	if !strings.Contains(err.Error(), "unsupported type") {
 		t.Errorf("unexpected error: %v", err)

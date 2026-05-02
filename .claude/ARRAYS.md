@@ -278,6 +278,27 @@ end-to-end, full CI matrix green.
 
 ---
 
+## Phase 4 deferral: `[]float64`
+
+Phase 4 ships seven slice element types: `bool`, `byte`, `int32`,
+`int`, `int64`, `float32`, `string`. `[]float64` is deferred because
+it requires a precision-aware codegen path:
+
+- Under single-precision bindings (the framework default),
+  `Packed<X>Array.PushBack` takes `float32` for both float Packed types.
+  A `[]float64` boundary would require a lossy narrowing cast in the
+  generated code (`PushBack(float32(v))`).
+- Under double-precision bindings, the same hardcoded narrow would
+  produce a type mismatch — the cast direction depends on the build
+  config.
+
+Cleanest fix is to expose a `RealT` type alias from the bindings
+(set to `float32` under single-precision, `float64` under double) and
+have the codegen use `bindings.RealT(v)` for the float boundary cast.
+Tracked as a follow-up; current Phase 4 code rejects `[]float64` with
+an "unsupported slice element" error pointing the user at the
+limitation.
+
 ## Build-config / precision notes
 
 Godot's GDExtension API has four build configurations distinguished by

@@ -52,6 +52,27 @@ func _initialize() -> void:
 	ok = _check("class_call_static('LocaleLanguage', 'parse', '??') = UNKNOWN(0)",
 			got_unknown, 0) and ok
 
+	# Slice arg round-trip: PackedInt64Array → []int64 → int64 sum.
+	# Phase 4 codegen marshals the typed array into a Go slice and back
+	# through the int64 return path.
+	var values := PackedInt64Array([1, 2, 3, 4, 5])
+	var got_sum: int = ClassDB.class_call_static("LocaleLanguage", "sum", values)
+	ok = _check("class_call_static('LocaleLanguage', 'sum', [1..5]) = 15",
+			got_sum, 15) and ok
+
+	# Slice return round-trip: []string → PackedStringArray. The Go-side
+	# Names() returns three known entries; verify the array's length and
+	# membership at the GDScript boundary.
+	var got_names: PackedStringArray = ClassDB.class_call_static("LocaleLanguage", "names")
+	ok = _check("class_call_static('LocaleLanguage', 'names').size() = 3",
+			got_names.size(), 3) and ok
+	ok = _check("class_call_static('LocaleLanguage', 'names').has('english')",
+			got_names.has("english"), true) and ok
+	ok = _check("class_call_static('LocaleLanguage', 'names').has('german')",
+			got_names.has("german"), true) and ok
+	ok = _check("class_call_static('LocaleLanguage', 'names').has('unknown')",
+			got_names.has("unknown"), true) and ok
+
 	if ok:
 		print("test_locale_language: ALL CHECKS PASSED")
 		quit(0)

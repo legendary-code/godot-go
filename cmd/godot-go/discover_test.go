@@ -339,6 +339,90 @@ type Lonely struct {
 	mustFailDiscover(t, src, "must be an embedded package-qualified type")
 }
 
+func TestDiscoverSliceArg(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Sum(values []int64) int64 { return 0 }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+	// Discovery captures the AST verbatim; type resolution happens in
+	// the emitter. Here we just verify discovery accepts the slice arg
+	// shape — emit_test would assert the marshal fragments separately.
+	if d.MainClass.Methods[0].GoName != "Sum" {
+		t.Errorf("Methods[0] = %q, want Sum", d.MainClass.Methods[0].GoName)
+	}
+}
+
+func TestDiscoverSliceReturn(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Names() []string { return nil }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 || d.MainClass.Methods[0].GoName != "Names" {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestEmitNestedSliceRejected(t *testing.T) {
+	// Discovery accepts any AST shape; rejection happens at emit time
+	// via resolveType. Drive the codegen explicitly to surface the
+	// `slice element` error path with file:line context.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(values [][]int64) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil {
+		t.Fatalf("expected emit error for nested slice, got nil; output: %s", buf.String())
+	}
+	if !strings.Contains(err.Error(), "slice element") {
+		t.Fatalf("error %q does not mention slice element", err.Error())
+	}
+}
+
+func TestEmitUnsupportedSliceElementRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Bad(values []float64) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, d)
+	if err == nil {
+		t.Fatalf("expected emit error for []float64, got nil; output: %s", buf.String())
+	}
+	// Phase 4 ships seven element types; float64 is deferred.
+	if !strings.Contains(err.Error(), "unsupported slice element") {
+		t.Fatalf("error %q does not mention unsupported slice element", err.Error())
+	}
+}
+
 func TestDiscoverEnum(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"

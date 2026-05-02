@@ -78,3 +78,26 @@ func (l *LocaleLanguage) DoSomething() {
 func (l *LocaleLanguage) Process(_ float32) {
 
 }
+
+// Sum demonstrates a slice argument at the @class boundary. Godot
+// passes a PackedInt64Array; the codegen marshals it through to a Go
+// `[]int64` for the user method and the result rides back through the
+// scalar int64 return path.
+//
+// @static
+func (LocaleLanguage) Sum(values []int64) int64 {
+	var total int64
+	for _, v := range values {
+		total += v
+	}
+	return total
+}
+
+// Names demonstrates a slice return at the @class boundary. The
+// codegen builds a PackedStringArray from the returned []string before
+// handing the value back to Godot.
+//
+// @static
+func (LocaleLanguage) Names() []string {
+	return []string{"unknown", "english", "german"}
+}

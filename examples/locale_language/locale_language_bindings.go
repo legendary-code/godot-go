@@ -150,6 +150,84 @@ func registerLocaleLanguage() {
 		},
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
+		Name:  "sum",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := godot.VariantAsPackedInt64Array(args[0])
+			defer arg0_arr.Destroy()
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]int64, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.Sum(arg0)
+			godot.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self LocaleLanguage
+			arg0_arr := *(*godot.PackedInt64Array)(gdextension.PtrCallArg(args, 0))
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]int64, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.Sum(arg0)
+			*(*int64)(ret) = result
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypePackedInt64Array,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"values",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
+		Name:  "names",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self LocaleLanguage
+			result := self.Names()
+			result_arr := godot.NewPackedStringArray()
+			defer result_arr.Destroy()
+			for _, v := range result {
+				result_arr.PushBack(v)
+			}
+			godot.VariantSetPackedStringArray(ret, result_arr)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self LocaleLanguage
+			result := self.Names()
+			result_arr := godot.NewPackedStringArray()
+			for _, v := range result {
+				result_arr.PushBack(v)
+			}
+			*(*godot.PackedStringArray)(ret) = result_arr
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypePackedStringArray,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
 	gdextension.LoadEditorDocXML(localeLanguageDocXML)
 }
 
@@ -173,6 +251,15 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="_process">
             <param index="0" name="" type="float"></param>
             <description>Here demonstrates implementing virtual methods that exist on the parent class — in this case,&#xA;overriding Node._process. The ` + "`" + `@override` + "`" + ` doctag opts into virtual binding; codegen routes through&#xA;RegisterClassVirtual and prepends the leading underscore Godot expects on engine virtuals.</description>
+        </method>
+        <method name="sum" qualifiers="static">
+            <return type="int"></return>
+            <param index="0" name="values" type="PackedInt64Array"></param>
+            <description>Demonstrates a slice argument at the @class boundary. Godot&#xA;passes a PackedInt64Array; the codegen marshals it through to a Go&#xA;` + "`" + `[]int64` + "`" + ` for the user method and the result rides back through the&#xA;scalar int64 return path.</description>
+        </method>
+        <method name="names" qualifiers="static">
+            <return type="PackedStringArray"></return>
+            <description>Demonstrates a slice return at the @class boundary. The&#xA;codegen builds a PackedStringArray from the returned []string before&#xA;handing the value back to Godot.</description>
         </method>
     </methods>
 </class>`
