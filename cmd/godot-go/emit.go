@@ -95,12 +95,22 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		emitClasses = append(emitClasses, ec)
 	}
 
+	hasDocXML := false
+	for _, ec := range emitClasses {
+		if ec.DocXML != "" {
+			hasDocXML = true
+			break
+		}
+	}
+
 	data := emitData{
 		PackageName:    classes[0].PackageName,
 		Classes:        emitClasses,
 		NeedsVariant:   needsVariant,
+		HasAnyDocXML:   hasDocXML,
 		BindingsImport: bindingsImport,
 		BindingsAlias:  bindingsAlias,
+		RuntimeImport:  bindingsImport + "/runtime",
 	}
 
 	var buf bytes.Buffer
@@ -190,6 +200,11 @@ type emitData struct {
 	Classes []emitClass
 
 	NeedsVariant bool // any class's method touches a primitive (gates the bindings-package import)
+	// HasAnyDocXML is true when at least one class has a non-empty
+	// DocXML string. Gates the runtime sub-package import — no need
+	// to pull `<bindings>/runtime` in for a class that won't call
+	// runtime.LoadEditorDocXML.
+	HasAnyDocXML bool
 
 	// BindingsImport / BindingsAlias identify the user's bindings
 	// package — the import path and the local name the source uses for
@@ -199,6 +214,14 @@ type emitData struct {
 	// the alias.
 	BindingsImport string
 	BindingsAlias  string
+
+	// RuntimeImport is BindingsImport + "/runtime"; aliased to
+	// godotruntime in the emitted source to avoid clashing with Go's
+	// stdlib `runtime` package. Used for runtime.LoadEditorDocXML —
+	// gated wrapper around gdextension.LoadEditorDocXML that
+	// suppresses the engine's "editor_help_load_xml_buffer is null"
+	// noise in headless / deployed-game runs.
+	RuntimeImport string
 }
 
 // emitClass is the per-@class payload. The bindings template ranges
@@ -986,6 +1009,7 @@ import (
 
 	"github.com/legendary-code/godot-go/gdextension"
 {{if .NeedsVariant}}	{{.BindingsAlias}} "{{.BindingsImport}}"
+{{end}}{{if .HasAnyDocXML}}	godotruntime "{{.RuntimeImport}}"
 {{end}})
 
 {{range .Classes}}{{$class := .}}
@@ -1336,7 +1360,7 @@ func register{{$class.Class}}() {
 	{{- end}}
 {{end}}
 {{- if $class.DocXML}}
-	gdextension.LoadEditorDocXML({{$class.Lower}}DocXML)
+	godotruntime.LoadEditorDocXML({{$class.Lower}}DocXML)
 {{- end}}
 }
 {{if $class.DocXML}}

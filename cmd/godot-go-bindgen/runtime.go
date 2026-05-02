@@ -516,4 +516,21 @@ func RunOnMain(f func()) { gdextension.RunOnMain(f) }
 // DrainMain executes every func currently queued via RunOnMain. Must be
 // called from the main thread.
 func DrainMain() { gdextension.DrainMain() }
+
+// LoadEditorDocXML loads class-XML docs into the editor's help DB,
+// gated on IsEditorHint. Godot's GDExtensionEditorHelp::load_xml_buffer
+// (the underlying interface entry point) is editor-only — its
+// internal callback pointer is null in headless / deployed-game
+// runtimes, and calling it logs a noisy "editor_help_load_xml_buffer
+// is null" error from the engine. Skipping the call when not in the
+// editor avoids that noise; the docs aren't useful at runtime anyway.
+//
+// Codegen emits register<Class>() calls into this wrapper so users
+// don't have to think about the gating themselves.
+func LoadEditorDocXML(xml string) {
+	if !IsEditorHint() {
+		return
+	}
+	gdextension.LoadEditorDocXML(xml)
+}
 `))

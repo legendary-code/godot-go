@@ -8,6 +8,7 @@ import (
 
 	"github.com/legendary-code/godot-go/gdextension"
 	godot "github.com/legendary-code/godot-go/godot"
+	godotruntime "github.com/legendary-code/godot-go/godot/runtime"
 )
 
 // === Mover (mover.go) ===
@@ -314,7 +315,7 @@ func registerMover() {
 		},
 	})
 
-	gdextension.LoadEditorDocXML(moverDocXML)
+	godotruntime.LoadEditorDocXML(moverDocXML)
 }
 
 // moverDocXML is the rendered <class> document for Mover.

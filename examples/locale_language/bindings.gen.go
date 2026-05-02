@@ -8,6 +8,7 @@ import (
 
 	"github.com/legendary-code/godot-go/gdextension"
 	godot "github.com/legendary-code/godot-go/godot"
+	godotruntime "github.com/legendary-code/godot-go/godot/runtime"
 )
 
 // === Greeter (greeter.go) ===
@@ -117,7 +118,7 @@ func registerGreeter() {
 		},
 	})
 
-	gdextension.LoadEditorDocXML(greeterDocXML)
+	godotruntime.LoadEditorDocXML(greeterDocXML)
 }
 
 // greeterDocXML is the rendered <class> document for Greeter.
@@ -549,7 +550,7 @@ func registerLocaleLanguage() {
 		Value: 2,
 	})
 
-	gdextension.LoadEditorDocXML(localeLanguageDocXML)
+	godotruntime.LoadEditorDocXML(localeLanguageDocXML)
 }
 
 // localeLanguageDocXML is the rendered <class> document for LocaleLanguage.

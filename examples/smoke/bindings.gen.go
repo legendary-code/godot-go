@@ -8,6 +8,7 @@ import (
 
 	"github.com/legendary-code/godot-go/gdextension"
 	godot "github.com/legendary-code/godot-go/godot"
+	godotruntime "github.com/legendary-code/godot-go/godot/runtime"
 )
 
 // === MyNode (mynode.go) ===
@@ -1320,7 +1321,7 @@ func registerMyNode() {
 		IsBitfield: true,
 	})
 
-	gdextension.LoadEditorDocXML(myNodeDocXML)
+	godotruntime.LoadEditorDocXML(myNodeDocXML)
 }
 
 // myNodeDocXML is the rendered <class> document for MyNode.
