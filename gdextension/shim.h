@@ -200,11 +200,15 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               GDExtensionBool has_return,
                                               uint32_t return_type,
                                               uint32_t return_metadata,
+                                              uint32_t return_hint,
+                                              GDExtensionConstStringPtr return_hint_string,
                                               uint32_t arg_count,
                                               const uint32_t *arg_types,
                                               const uint32_t *arg_metadata,
                                               const GDExtensionConstStringNamePtr *arg_names,
                                               const GDExtensionConstStringNamePtr *arg_class_names,
+                                              const uint32_t *arg_hints,
+                                              const GDExtensionConstStringPtr *arg_hint_strings,
                                               GDExtensionConstStringNamePtr return_class_name);
 
 /* Property registration. Mirrors classdb_register_extension_class_property —

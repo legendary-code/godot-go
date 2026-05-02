@@ -179,6 +179,17 @@ const (
 	PropertyHintDir             PropertyHint = 14
 	PropertyHintMultilineText   PropertyHint = 18
 	PropertyHintPlaceholderText PropertyHint = 20
+	// PropertyHintTypeString is Godot's catch-all for "this Variant slot
+	// has a typed structure that doesn't fit the simpler hint values."
+	// Used for typed Arrays / Dictionaries with element type and an
+	// optional inner hint. Hint string format for an Array of int with
+	// an enum hint:
+	//   "<elem_variant_type>/<elem_property_hint>:<comma_names>"
+	// e.g. "2/2:UNKNOWN,ENGLISH,GERMAN" — element type Variant::INT (2),
+	// PROPERTY_HINT_ENUM (2), values UNKNOWN, ENGLISH, GERMAN. The
+	// editor reads this to render the typed-array element identity in
+	// docs panel and (sometimes) autocomplete.
+	PropertyHintTypeString PropertyHint = 23
 )
 
 // Opaque pointer aliases. They carry no compile-time type safety on the C side

@@ -278,10 +278,12 @@ func registerLocaleLanguage() {
 			}
 			*(*godot.PackedInt64Array)(ret) = result_arr
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypePackedInt64Array,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypePackedInt64Array,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintTypeString,
+		ReturnHintString: "2/2:UNKNOWN,ENGLISH,GERMAN",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -322,10 +324,12 @@ func registerLocaleLanguage() {
 			}
 			*(*godot.PackedInt64Array)(ret) = result_arr
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypePackedInt64Array,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypePackedInt64Array,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintTypeString,
+		ReturnHintString: "2/2:UNKNOWN,ENGLISH,GERMAN",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypePackedInt64Array,
 		},
@@ -337,6 +341,12 @@ func registerLocaleLanguage() {
 		},
 		ArgClassNames: []string{
 			"",
+		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintTypeString,
+		},
+		ArgHintStrings: []string{
+			"2/2:UNKNOWN,ENGLISH,GERMAN",
 		},
 	})
 

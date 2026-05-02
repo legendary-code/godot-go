@@ -126,6 +126,24 @@ type ClassMethodDef struct {
 	// does for arguments. Empty (default) registers as untyped — fine for
 	// primitives. Set to "<Class>.<EnumName>" for typed-enum returns.
 	ReturnClassName string
+
+	// ArgHints / ArgHintStrings carry per-arg PropertyInfo hint metadata
+	// (parallel to ArgTypes). The pair is what `@export_*` annotations
+	// produce for properties; on method args, hints surface in editor
+	// docs and (depending on the hint kind) autocomplete. Both default
+	// to PropertyHintNone / empty when not supplied — same effect as
+	// not setting them. If non-nil, must be the same length as ArgTypes.
+	ArgHints       []PropertyHint
+	ArgHintStrings []string
+
+	// ReturnHint / ReturnHintString carry the return value's hint
+	// metadata — currently used for typed-array element-identity
+	// (PropertyHintTypeString with the encoded "elem_type/elem_hint:names"
+	// payload) on slice-of-enum returns where the wire form is
+	// PackedInt64Array but the element identity matters for editor
+	// rendering. PropertyHintNone / empty default to "no hint."
+	ReturnHint       PropertyHint
+	ReturnHintString string
 }
 
 type registeredClass struct {
@@ -280,6 +298,14 @@ func RegisterClassMethod(def ClassMethodDef) {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgClassNames (len %d) must match ArgTypes (len %d) when supplied",
 			len(def.ArgClassNames), len(def.ArgTypes)))
 	}
+	if def.ArgHints != nil && len(def.ArgHints) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgHints (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgHints), len(def.ArgTypes)))
+	}
+	if def.ArgHintStrings != nil && len(def.ArgHintStrings) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassMethod: ArgHintStrings (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgHintStrings), len(def.ArgTypes)))
+	}
 	if len(def.ArgTypes) > maxMethodArgs {
 		panic(fmt.Sprintf("gdextension.RegisterClassMethod: too many args (%d > %d)",
 			len(def.ArgTypes), maxMethodArgs))
@@ -306,8 +332,9 @@ func RegisterClassMethod(def ClassMethodDef) {
 	// arrays contain only integer tags (no Go pointers), so cgo's pointer
 	// rule allows us to take their address as a direct call argument.
 	argCount := len(def.ArgTypes)
-	var argTypesPtr, argMetaPtr *C.uint32_t
+	var argTypesPtr, argMetaPtr, argHintsPtr *C.uint32_t
 	var argNamesPtr, argClassNamesPtr *C.GDExtensionConstStringNamePtr
+	var argHintStringsPtr *C.GDExtensionConstStringPtr
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
 	if argCount > 0 {
@@ -315,6 +342,8 @@ func RegisterClassMethod(def ClassMethodDef) {
 		argMeta := make([]C.uint32_t, argCount)
 		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
 		argClassNames := make([]C.GDExtensionConstStringNamePtr, argCount)
+		argHints := make([]C.uint32_t, argCount)
+		argHintStrings := make([]C.GDExtensionConstStringPtr, argCount)
 		for i := range def.ArgTypes {
 			argTypes[i] = C.uint32_t(def.ArgTypes[i])
 			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
@@ -336,11 +365,21 @@ func RegisterClassMethod(def ClassMethodDef) {
 				pinner.Pin(cls)
 				argClassNames[i] = C.GDExtensionConstStringNamePtr(cls)
 			}
+			if i < len(def.ArgHints) {
+				argHints[i] = C.uint32_t(def.ArgHints[i])
+			}
+			if i < len(def.ArgHintStrings) && def.ArgHintStrings[i] != "" {
+				hs := InternString(def.ArgHintStrings[i])
+				pinner.Pin(hs)
+				argHintStrings[i] = C.GDExtensionConstStringPtr(hs)
+			}
 		}
 		argTypesPtr = &argTypes[0]
 		argMetaPtr = &argMeta[0]
 		argNamesPtr = &argNames[0]
 		argClassNamesPtr = &argClassNames[0]
+		argHintsPtr = &argHints[0]
+		argHintStringsPtr = &argHintStrings[0]
 	}
 
 	var returnClassName C.GDExtensionConstStringNamePtr
@@ -348,6 +387,13 @@ func RegisterClassMethod(def ClassMethodDef) {
 		rc := InternStringName(def.ReturnClassName)
 		pinner.Pin(rc)
 		returnClassName = C.GDExtensionConstStringNamePtr(rc)
+	}
+
+	var returnHintStr C.GDExtensionConstStringPtr
+	if def.HasReturn && def.ReturnHintString != "" {
+		rhs := InternString(def.ReturnHintString)
+		pinner.Pin(rhs)
+		returnHintStr = C.GDExtensionConstStringPtr(rhs)
 	}
 
 	C.godot_go_register_extension_class_method(iface.classdbRegisterExtensionClassMethod,
@@ -361,11 +407,15 @@ func RegisterClassMethod(def ClassMethodDef) {
 		boolToGD(def.HasReturn),
 		C.uint32_t(def.ReturnType),
 		C.uint32_t(def.ReturnMetadata),
+		C.uint32_t(def.ReturnHint),
+		returnHintStr,
 		C.uint32_t(argCount),
 		argTypesPtr,
 		argMetaPtr,
 		argNamesPtr,
 		argClassNamesPtr,
+		argHintsPtr,
+		argHintStringsPtr,
 		returnClassName)
 }
 

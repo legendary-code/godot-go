@@ -318,6 +318,23 @@ type emitMethod struct {
 	// the user already supplied one via @name.
 	IsVirtual bool
 
+	// ArgHints / ArgHintStrings carry per-arg PropertyHint + payload
+	// (parallel to ArgTypes). Currently populated for slice-of-tagged-
+	// enum args via PROPERTY_HINT_TYPE_STRING — element-level enum
+	// identity that can't ride on class_name (Godot rejects class_name
+	// on non-OBJECT slots). Empty entries register as no-hint.
+	ArgHints       []string // bare PropertyHint const names ("PropertyHintTypeString" etc.)
+	ArgHintStrings []string
+
+	// ReturnHint / ReturnHintString carry the return value's hint
+	// metadata — see ArgHints for the typed-array element identity
+	// use case.
+	ReturnHint       string
+	ReturnHintString string
+
+	// IsVariadic flag — see below. (HasAnyArgHint method follows the
+	// struct definition.)
+	//
 	// IsVariadic is true when the source method's last parameter is
 	// declared with Go's `...T` ellipsis syntax. The wire boundary still
 	// passes a single Packed<X>Array / Array[T] arg — Godot has no
@@ -325,6 +342,20 @@ type emitMethod struct {
 	// the slice with `argN...` so the user method receives the variadic
 	// it expects.
 	IsVariadic bool
+}
+
+// HasAnyArgHint reports whether at least one positional arg has a
+// non-empty PropertyHint constant set. Used by the bindings template
+// to decide whether to render the ArgHints / ArgHintStrings slices —
+// most methods don't carry per-arg hints, and emitting empty slices
+// every time would clutter the registration call.
+func (m emitMethod) HasAnyArgHint() bool {
+	for _, h := range m.ArgHints {
+		if h != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // classifyForEmit walks the discovered methods and returns:
@@ -410,6 +441,9 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 			}
 			em.ArgNames = append(em.ArgNames, argName)
 			em.ArgClassNames = append(em.ArgClassNames, classIdentity(mainClass, info))
+			argHint, argHintStr := hintForTypeInfo(info, enums)
+			em.ArgHints = append(em.ArgHints, argHint)
+			em.ArgHintStrings = append(em.ArgHintStrings, argHintStr)
 			idx++
 		}
 	}
@@ -449,6 +483,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		em.ReturnMeta = info.ArgMeta
 		em.ReturnGodotType = godotXMLType(info.VariantType)
 		em.ReturnClassName = classIdentity(mainClass, info)
+		em.ReturnHint, em.ReturnHintString = hintForTypeInfo(info, enums)
 		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
 		em.CallReturn = info.CallWriteReturn(bindings, "result")
 	default:
@@ -482,6 +517,36 @@ func classIdentity(mainClass string, info *typeInfo) string {
 		return info.ClassName
 	}
 	return qualifyEnum(mainClass, info.EnumName)
+}
+
+// hintForTypeInfo computes the PropertyHint const name and hint string
+// for a typeInfo. Currently this fires only for slice-of-tagged-enum
+// boundaries (typeInfo.HintEnum != "") — the element identity rides on
+// PROPERTY_HINT_TYPE_STRING with an "<elem_type>/<elem_hint>:names"
+// payload. Returns empty pair for typeInfos that don't need hint
+// metadata.
+//
+// The hint string format mirrors Godot's `ADD_PROPERTY` convention for
+// typed-int arrays:
+//
+//	"<Variant::INT>/<PROPERTY_HINT_ENUM>:<comma-joined-value-names>"
+//
+// Numeric values are baked at codegen time so the framework doesn't
+// have to import gdextension for these constants — they're stable
+// across Godot 4.x. INT = 2, PROPERTY_HINT_ENUM = 2.
+func hintForTypeInfo(info *typeInfo, enums map[string]*enumInfo) (hint, hintString string) {
+	if info.HintEnum == "" {
+		return "", ""
+	}
+	e, ok := enums[info.HintEnum]
+	if !ok || !e.IsExposed {
+		return "", ""
+	}
+	names := make([]string, 0, len(e.Values))
+	for _, v := range e.Values {
+		names = append(names, godotEnumValueName(e.Name, v.Name))
+	}
+	return "PropertyHintTypeString", "2/2:" + strings.Join(names, ",")
 }
 
 // emitHasDocSurface reports whether the class has anything worth
@@ -1071,6 +1136,10 @@ func register{{.Class}}() {
 		{{- if .ReturnClassName}}
 		ReturnClassName: {{printf "%q" .ReturnClassName}},
 		{{- end}}
+		{{- if .ReturnHint}}
+		ReturnHint:       gdextension.{{.ReturnHint}},
+		ReturnHintString: {{printf "%q" .ReturnHintString}},
+		{{- end}}
 		{{- end}}
 		{{- if .HasArgs}}
 		ArgTypes: []gdextension.VariantType{
@@ -1093,6 +1162,22 @@ func register{{.Class}}() {
 			{{printf "%q" .}},
 			{{- end}}
 		},
+		{{- if .HasAnyArgHint}}
+		ArgHints: []gdextension.PropertyHint{
+			{{- range .ArgHints}}
+			{{- if .}}
+			gdextension.{{.}},
+			{{- else}}
+			gdextension.PropertyHintNone,
+			{{- end}}
+			{{- end}}
+		},
+		ArgHintStrings: []string{
+			{{- range .ArgHintStrings}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
+		{{- end}}
 		{{- end}}
 	})
 	{{- end}}
