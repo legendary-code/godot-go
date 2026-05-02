@@ -78,6 +78,18 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		}
 	}
 
+	// Package-level user-class set: every @class declared in this
+	// package's bindings.gen.go is a candidate target for `*<Class>`
+	// references at the @class boundary. resolveType uses this set
+	// to recognize cross-file user classes — same package means the
+	// side-table lookup function `lookup<Class>ByEngine` exists in
+	// the same generated file, so the same marshalling path that
+	// handles self-references works without modification.
+	packageClasses := map[string]bool{}
+	for _, d := range classes {
+		packageClasses[d.MainClass.Name] = true
+	}
+
 	// Build per-class emit payloads. Each @class file's enums scope to
 	// its own MainClass — they're isolated per-file in the discover
 	// result, so each class's enumSet is built from its own discovered
@@ -85,7 +97,7 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 	emitClasses := make([]emitClass, 0, len(classes))
 	needsVariant := false
 	for _, d := range classes {
-		ec, classNeedsVariant, err := buildEmitClass(fset, d, packageEnums, bindingsAlias)
+		ec, classNeedsVariant, err := buildEmitClass(fset, d, packageEnums, packageClasses, bindingsAlias)
 		if err != nil {
 			return err
 		}
@@ -131,12 +143,12 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 // class has any doc surface.
 //
 // packageEnums is the package-wide enum map (every @class file's
-// enums aggregated, with OwningClass populated). resolveType reads
-// it to handle cross-file enum references — a method on this class
-// referencing an enum declared in a sibling @class file resolves to
-// the correct "<OwningClass>.<EnumName>" qualifier instead of using
-// this file's mainClass.
-func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]*enumInfo, bindingsAlias string) (emitClass, bool, error) {
+// enums aggregated, with OwningClass populated). packageClasses is
+// the set of @class names declared in the package — both feed into
+// resolveType so cross-file enum and user-class references at this
+// class's @class boundary resolve to the correct registration
+// metadata and the side-table lookup of the right sibling class.
+func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]*enumInfo, packageClasses map[string]bool, bindingsAlias string) (emitClass, bool, error) {
 	ci := d.MainClass
 
 	initLevel := "InitLevelScene"
@@ -144,12 +156,12 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		initLevel = "InitLevelEditor"
 	}
 
-	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, packageEnums, bindingsAlias, ci.Name)
+	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, packageEnums, packageClasses, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
 
-	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, packageEnums, bindingsAlias, ci.Name)
+	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, packageEnums, packageClasses, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -158,7 +170,7 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		needsVariant = true
 	}
 
-	signals, err := buildEmitSignals(ci.Signals, packageEnums, bindingsAlias, ci.Name)
+	signals, err := buildEmitSignals(ci.Signals, packageEnums, packageClasses, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -477,11 +489,11 @@ func (m emitMethod) HasAnyArgHint() bool {
 // types declared in the same file. `bindings` is the local alias the
 // user's source uses for the bindings package; it qualifies every
 // VariantAs* / VariantSet* call in the rendered fragments.
-func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]*enumInfo, bindings, mainClass string) ([]emitMethod, bool, error) {
+func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitMethod, bool, error) {
 	var out []emitMethod
 	needsVariant := false
 	for _, m := range methods {
-		em, err := buildEmitMethod(m, enums, bindings, mainClass)
+		em, err := buildEmitMethod(m, enums, userClasses, bindings, mainClass)
 		if err != nil {
 			return nil, false, fmt.Errorf("%s: %s: %w", posStr(fset, m.Pos), m.GoName, err)
 		}
@@ -496,7 +508,7 @@ func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[strin
 // buildEmitMethod resolves arg / return types via the type table and
 // pre-renders the marshalling fragments. The caller is responsible for
 // rejecting non-instance method kinds before calling.
-func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainClass string) (emitMethod, error) {
+func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) (emitMethod, error) {
 	em := emitMethod{
 		docInfo:   m.docInfo,
 		GoName:    m.GoName,
@@ -513,7 +525,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 	idx := 0
 	paramFields := fieldsOf(m.Decl.Type.Params)
 	for fIdx, field := range paramFields {
-		info, err := resolveType(field.Type, enums, mainClass, bindings)
+		info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("arg %d: %w", idx, err)
 		}
@@ -580,7 +592,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, bindings, mainCl
 		if len(ret.Names) > 1 {
 			return em, fmt.Errorf("multi-name return field unsupported")
 		}
-		info, err := resolveType(ret.Type, enums, mainClass, bindings)
+		info, err := resolveType(ret.Type, enums, userClasses, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("return: %w", err)
 		}
@@ -776,7 +788,7 @@ func localNameFor(imports map[string]string, path string) string {
 // Method-form properties contribute a property entry only — the user's
 // Get/Set methods already live in the source file and were classified by
 // classifyForEmit upstream.
-func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bindings, mainClass string) (
+func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) (
 	accessors []emitAccessor,
 	methods []emitMethod,
 	out []emitProperty,
@@ -791,7 +803,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 	curGroup := ""
 	curSubgroup := ""
 	for _, p := range props {
-		info, terr := resolveType(p.GoType, enums, mainClass, bindings)
+		info, terr := resolveType(p.GoType, enums, userClasses, mainClass, bindings)
 		if terr != nil {
 			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
 		}
@@ -873,7 +885,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, bind
 // methods. We do NOT register it with ClassDB; GDScript callers use the
 // standard `emit_signal("name", args...)` to trigger emission from
 // outside the class, matching Godot's idiomatic model.
-func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, bindings, mainClass string) ([]emitSignal, error) {
+func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitSignal, error) {
 	if len(signals) == 0 {
 		return nil, nil
 	}
@@ -886,7 +898,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, binding
 		}
 		idx := 0
 		for _, field := range s.Args {
-			info, err := resolveType(field.Type, enums, mainClass, bindings)
+			info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
 			if err != nil {
 				return nil, fmt.Errorf("@signals %s arg %d: %w", s.Name, idx, err)
 			}

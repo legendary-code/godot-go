@@ -229,13 +229,20 @@ var typeTable = map[string]*typeInfo{
 // bindings' Variant<->Packed<X>Array adapters and per-type
 // PushBack / Get methods.
 //
-// Pointer types `*T` are supported only when T names the file's @class
-// — i.e., a same-class self-reference like `func (n *MyNode) Echo(other
-// *MyNode) *MyNode`. The marshaling routes through a per-class engine-
-// pointer side table (lookup<MainClass>ByEngine) which the emitter
-// synthesizes alongside the trampolines. Cross-file user classes and
-// engine class pointers are deferred to later phases.
-func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings string) (*typeInfo, error) {
+// Pointer types `*T` are supported in two same-package shapes:
+//
+//   - T names the file's @class — a self-reference like `func (n
+//     *MyNode) Echo(other *MyNode) *MyNode`.
+//   - T names another @class declared in a sibling file in the same
+//     package — a cross-file user-class reference, e.g. `func (n
+//     *Words) SampleLetter(rng *Rand)`.
+//
+// Both route through the per-class engine-pointer side table
+// (`lookup<Class>ByEngine`) the emitter synthesizes for every @class
+// in the package. Cross-package user classes are still out of scope
+// (the side table only exists in the file each class is generated
+// alongside, which today is the same package's bindings.gen.go).
+func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[string]bool, mainClass, bindings string) (*typeInfo, error) {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		if info, ok := typeTable[t.Name]; ok {
@@ -263,8 +270,9 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this package)", t.Name)
 	case *ast.StarExpr:
 		// `*T` — three cases:
-		//   - *ast.Ident matching the file's @class: user-class self-
-		//     reference (Phase 6a).
+		//   - *ast.Ident naming the file's @class or any @class declared
+		//     in a sibling file of the same package: user-class
+		//     pointer. Routes through that class's side table.
 		//   - *ast.SelectorExpr where the package alias matches the
 		//     bindings import: engine-class pointer (Phase 6c). Codegen
 		//     wraps borrowed-view-style — no refcount handling. RefCounted-
@@ -272,10 +280,10 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		//   - Anything else: rejected.
 		switch x := t.X.(type) {
 		case *ast.Ident:
-			if mainClass == "" || x.Name != mainClass {
-				return nil, fmt.Errorf("unsupported pointer type %q (only `*%s` self-references are supported for same-package user classes; cross-file user classes are deferred)", x.Name, mainClass)
+			if x.Name == mainClass || userClasses[x.Name] {
+				return userClassTypeInfo(x.Name), nil
 			}
-			return userClassTypeInfo(x.Name), nil
+			return nil, fmt.Errorf("unsupported pointer type %q (only @class structs from this package are recognized as user-class pointers; cross-package user classes go through the bindings package alias as `*<bindings>.<Class>`)", x.Name)
 		case *ast.SelectorExpr:
 			pkg, ok := x.X.(*ast.Ident)
 			if !ok {
@@ -295,7 +303,7 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		if _, nested := t.Elt.(*ast.ArrayType); nested {
 			return nil, fmt.Errorf("nested slices `[][]T` are not supported at the @class boundary")
 		}
-		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
+		elem, err := resolveType(t.Elt, enums, userClasses, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("slice element: %w", err)
 		}
@@ -309,7 +317,7 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 		if _, nested := t.Elt.(*ast.ArrayType); nested {
 			return nil, fmt.Errorf("nested slices `...[]T` are not supported at the @class boundary")
 		}
-		elem, err := resolveType(t.Elt, enums, mainClass, bindings)
+		elem, err := resolveType(t.Elt, enums, userClasses, mainClass, bindings)
 		if err != nil {
 			return nil, fmt.Errorf("variadic element: %w", err)
 		}

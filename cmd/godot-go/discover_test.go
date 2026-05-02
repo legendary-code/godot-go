@@ -731,9 +731,10 @@ func (n *MyNode) Echo(other *pkg.Thing) *pkg.Thing { return other }
 }
 
 func TestEmitForeignClassPointerRejected(t *testing.T) {
-	// `*<OtherClass>` is rejected — Phase 6a only supports same-class
-	// self-references. Cross-file user classes and engine class pointers
-	// are deferred to later phases.
+	// `*<OtherClass>` where OtherClass is NOT a @class in the package
+	// is rejected — only @class structs are recognized as user-class
+	// pointers. Cross-package user classes need to come through the
+	// bindings package alias.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -750,8 +751,62 @@ func (n *MyNode) Echo(other *OtherClass) *OtherClass { return other }
 	if err == nil {
 		t.Fatalf("expected emit error for *OtherClass, got nil; output: %s", buf.String())
 	}
-	if !strings.Contains(err.Error(), "self-reference") {
-		t.Fatalf("error %q does not mention self-reference", err.Error())
+	if !strings.Contains(err.Error(), "@class structs from this package") {
+		t.Fatalf("error %q does not mention @class structs", err.Error())
+	}
+}
+
+func TestEmitCrossFileUserClassPointer(t *testing.T) {
+	// `*<OtherClass>` where OtherClass IS a @class in a sibling file
+	// of the same package now resolves correctly. The emitter routes
+	// the marshalling through the sibling's `lookup<Other>ByEngine`
+	// side-table function, which gets generated in the same
+	// bindings.gen.go.
+	srcA := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func (w *Words) SampleWith(r *Rand) *Rand { return r }
+`
+	srcB := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Rand struct {
+	// @extends
+	core.RefCounted
+}
+`
+	fset := token.NewFileSet()
+	fileA, err := parser.ParseFile(fset, "words.go", srcA, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse A: %v", err)
+	}
+	fileB, err := parser.ParseFile(fset, "rand.go", srcB, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse B: %v", err)
+	}
+	dA, err := discover(fset, fileA, "x")
+	if err != nil {
+		t.Fatalf("discover A: %v", err)
+	}
+	dB, err := discover(fset, fileB, "x")
+	if err != nil {
+		t.Fatalf("discover B: %v", err)
+	}
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{dA, dB}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "lookupRandByEngine") {
+		t.Errorf("expected SampleWith to route through lookupRandByEngine; got:\n%s", out)
+	}
+	// Registration metadata should carry the cross-file class identity.
+	if !strings.Contains(out, `ArgClassNames: []string{`) || !strings.Contains(out, `"Rand"`) {
+		t.Errorf("expected ArgClassNames to carry \"Rand\"; got:\n%s", out)
 	}
 }
 
