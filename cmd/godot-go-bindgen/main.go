@@ -80,32 +80,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	emitted := make([]string, 0, len(api.BuiltinClasses))
-	for i := range api.BuiltinClasses {
-		bc := &api.BuiltinClasses[i]
-		if goNativePrimitives[bc.Name] {
-			continue
-		}
-		if err := emitBuiltinClass(api, *buildConfig, bc, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit %s: %v\n", bc.Name, err)
-			os.Exit(1)
-		}
-		emitted = append(emitted, bc.Name)
+	emitted, err := emitBuiltinClasses(api, *buildConfig, cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit builtins: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Engine-class sweep. Register class names first so cross-class
-	// references resolve (a method on Node returning Node3D needs
-	// Node3D to be a known class).
-	registerEngineClasses(api)
-	classCount := 0
-	for i := range api.Classes {
-		c := &api.Classes[i]
-		if err := emitEngineClass(api, c, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit class %s: %v\n", c.Name, err)
-			os.Exit(1)
-		}
-		classCount++
+	// Engine-class sweep. Register class names inside emitEngineClasses
+	// so cross-class references resolve (a method on Node returning
+	// Node3D needs Node3D to be a known class).
+	if err := emitEngineClasses(api, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit engine classes: %v\n", err)
+		os.Exit(1)
 	}
+	classCount := len(api.Classes)
 
 	if err := emitUtilityFunctions(api, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "godot-go-bindgen: emit utility: %v\n", err)
