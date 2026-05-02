@@ -308,60 +308,24 @@ func sliceTypeInfo(elem *typeInfo) (*typeInfo, error) {
 	}
 	if elem.VariantType == "VariantTypeInt" {
 		// User int alias — `int` / `int32` / `int64` were caught above.
-		// Tagged enums take the TypedArray path so the enum's class_name
-		// reaches the editor; untagged user ints route through Packed.
-		if elem.EnumName != "" {
-			return enumSliceTypeInfo(elem), nil
-		}
+		// Both tagged enums (@enum / @bitfield) and untagged user int
+		// aliases route through PackedInt64Array. Godot's runtime
+		// has no concept of an enum-typed Array — `Array[<EnumName>]`
+		// in GDScript is compile-time sugar over `Array[int]`, and
+		// `set_typed(TYPE_INT, class_name, ...)` is rejected by Godot
+		// ("Class names can only be set for type OBJECT"). Packed is
+		// strictly better: typed at the variant level, contiguous
+		// storage, and matches how Godot conventionally exposes int
+		// slices.
 		return userIntSliceTypeInfo(elem), nil
 	}
 	return nil, fmt.Errorf("unsupported slice element type %q (supported: bool, byte, int, int32, int64, float32, string, or a user int / @enum / @bitfield type declared in this file)", elem.GoType)
 }
 
-// enumSliceTypeInfo builds the marshal fragments for `[]<TaggedEnum>`.
-// Calls into per-enum helpers (`MakeArrayOf<X>s` / `<X>sFromArray`) that
-// the emitter synthesizes in the user's `_bindings.go` alongside this
-// typeInfo. Helper names derive from the enum's GoType + "s" — simple
-// pluralization, predictable across enum names.
-func enumSliceTypeInfo(elem *typeInfo) *typeInfo {
-	plural := pluralizeEnum(elem.GoType)
-	makeName := "MakeArrayOf" + plural
-	fromName := plural + "FromArray"
-	goType := "[]" + elem.GoType
-	return &typeInfo{
-		GoType:      goType,
-		VariantType: "VariantTypeArray",
-		ArgMeta:     "ArgMetaNone",
-		EnumName:    elem.EnumName,
-		CallReadArg: func(b string, idx int) string {
-			return fmt.Sprintf(`arg%d_arr := %s.VariantAsArray(args[%d])
-defer arg%d_arr.Destroy()
-arg%d := %s(arg%d_arr)`, idx, b, idx, idx, idx, fromName, idx)
-		},
-		CallWriteReturn: func(b, expr string) string {
-			return fmt.Sprintf(`result_arr := %s(%s...)
-%s.VariantSetArray(ret, result_arr)
-result_arr.Destroy()`, makeName, expr, b)
-		},
-		PtrCallReadArg: func(b string, idx int) string {
-			return fmt.Sprintf(`arg%d_arr := *(*%s.Array)(gdextension.PtrCallArg(args, %d))
-arg%d := %s(arg%d_arr)`, idx, b, idx, idx, fromName, idx)
-		},
-		PtrCallWriteReturn: func(b, expr string) string {
-			return fmt.Sprintf(`result_arr := %s(%s...)
-*(*%s.Array)(ret) = result_arr`, makeName, expr, b)
-		},
-		BuildVariant: func(b string, idx int, srcExpr string) string {
-			return fmt.Sprintf(`arg%d_arr := %s(%s...)
-arg%d := %s.NewVariantArray(arg%d_arr)
-arg%d_arr.Destroy()`, idx, makeName, srcExpr, idx, b, idx, idx)
-		},
-	}
-}
-
-// userIntSliceTypeInfo builds the marshal fragments for slices of an
-// untagged `type X int` alias. Wire form is PackedInt64Array; the
-// boundary cast bridges the user's named type and int64.
+// userIntSliceTypeInfo builds the marshal fragments for slices of any
+// user `type X int` alias — tagged or untagged. Wire form is
+// PackedInt64Array; the boundary cast bridges the user's named type
+// and int64.
 func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
 	cat := sliceCategory{
 		PackedTypeName: "PackedInt64Array",

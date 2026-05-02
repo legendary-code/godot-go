@@ -255,12 +255,19 @@ func (a *Array) ToBoolSlice() []bool {
 	return out
 }
 
-// MakeArrayOfInts constructs Array[int] (TypedArray of int64). className
-// carries the typed-enum class identity for []<UserEnum> use cases and
-// should be empty for plain typed-int arrays. Caller owns the result;
-// release with (*Array).Destroy().
-func MakeArrayOfInts(className string, values ...int64) Array {
-	a := makeTypedArray(gdextension.VariantTypeInt, className)
+// MakeArrayOfInts constructs Array[int] (TypedArray of int64). Caller
+// owns the result; release with (*Array).Destroy(). Most users want
+// PackedInt64Array (Phase 2's MakePackedInt64Array) instead — it's
+// contiguous and faster — but Array[int] is here for callers who need
+// the variant-typed form.
+//
+// Note: Godot rejects setting a class_name on non-OBJECT typed arrays,
+// so this helper deliberately does not accept a class_name parameter.
+// User enum slices route through PackedInt64Array as well — the
+// runtime has no enum-typed Array concept; only Array[Object] with
+// a class_name carries an identity (handled by MakeArrayOfObjects).
+func MakeArrayOfInts(values ...int64) Array {
+	a := makeTypedArray(gdextension.VariantTypeInt, "")
 	for _, v := range values {
 		variant := NewVariantInt(v)
 		a.PushBack(variant)

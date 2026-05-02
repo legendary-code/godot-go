@@ -73,18 +73,16 @@ func _initialize() -> void:
 	ok = _check("class_call_static('LocaleLanguage', 'names').has('unknown')",
 			got_names.has("unknown"), true) and ok
 
-	# Phase 5 — typed-enum slice return. Languages() returns
-	# []Language on the Go side; the wire form is Array[Language]
-	# (TypedArray with class_name = "LocaleLanguage.Language"). Verify
-	# both the values AND the typed-element identity Godot's editor
-	# uses for autocomplete.
-	var got_langs: Array = ClassDB.class_call_static("LocaleLanguage", "languages")
+	# Phase 5 — user-enum slice return. Languages() returns
+	# []Language on the Go side; the wire form is PackedInt64Array.
+	# (Godot has no enum-typed Array at runtime — `Array[<Enum>]` in
+	# GDScript is compile-time sugar over `Array[int]` — so Packed is
+	# the right wire form, and the editor still treats individual
+	# values as Language thanks to the @enum class_name on the
+	# Languages() method's return registration.)
+	var got_langs: PackedInt64Array = ClassDB.class_call_static("LocaleLanguage", "languages")
 	ok = _check("class_call_static('LocaleLanguage', 'languages').size() = 3",
 			got_langs.size(), 3) and ok
-	ok = _check("class_call_static('LocaleLanguage', 'languages').is_typed()",
-			got_langs.is_typed(), true) and ok
-	ok = _check("class_call_static('LocaleLanguage', 'languages').get_typed_class_name() = 'LocaleLanguage.Language'",
-			got_langs.get_typed_class_name(), &"LocaleLanguage.Language") and ok
 	ok = _check("class_call_static('LocaleLanguage', 'languages')[0] = UNKNOWN(0)",
 			got_langs[0], 0) and ok
 	ok = _check("class_call_static('LocaleLanguage', 'languages')[1] = ENGLISH(1)",
@@ -92,16 +90,15 @@ func _initialize() -> void:
 	ok = _check("class_call_static('LocaleLanguage', 'languages')[2] = GERMAN(2)",
 			got_langs[2], 2) and ok
 
-	# Phase 5 — typed-enum slice arg + variadic. FilterLanguages takes
+	# Phase 5 — user-enum slice arg + variadic. FilterLanguages takes
 	# ...Language (variadic) and returns []Language; Godot sees a single
-	# Array[Language] arg either way. Pass an Array[Language] containing
-	# all three, expect only ENGLISH and GERMAN back (UNKNOWN drops out).
-	var input_langs: Array = Array([0, 1, 2], TYPE_INT, &"LocaleLanguage.Language", null)
-	var filtered: Array = ClassDB.class_call_static("LocaleLanguage", "filter_languages", input_langs)
+	# PackedInt64Array arg either way. Pass a PackedInt64Array
+	# containing all three, expect only ENGLISH and GERMAN back
+	# (UNKNOWN drops out).
+	var input_langs := PackedInt64Array([0, 1, 2])
+	var filtered: PackedInt64Array = ClassDB.class_call_static("LocaleLanguage", "filter_languages", input_langs)
 	ok = _check("filter_languages([UNKNOWN, ENGLISH, GERMAN]).size() = 2",
 			filtered.size(), 2) and ok
-	ok = _check("filter_languages(...) is typed Array[Language]",
-			filtered.get_typed_class_name(), &"LocaleLanguage.Language") and ok
 	ok = _check("filter_languages(...)[0] = ENGLISH(1)",
 			filtered[0], 1) and ok
 	ok = _check("filter_languages(...)[1] = GERMAN(2)",

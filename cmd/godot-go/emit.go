@@ -73,31 +73,22 @@ func emit(w io.Writer, fset *token.FileSet, d *discovered) error {
 		needsVariant = true
 	}
 
-	enumHelpers := buildEnumSliceHelpers(d.Enums, ci.Name)
-	if len(enumHelpers) > 0 {
-		// Helpers reference bindings.Array / bindings.MakeArrayOfInts —
-		// force the import even on classes whose primitives sweep
-		// otherwise wouldn't have set NeedsVariant.
-		needsVariant = true
-	}
-
 	data := emitData{
-		PackageName:      d.PackageName,
-		SourceFile:       filepath.Base(d.FilePath),
-		InitLevel:        initLevel,
-		Class:            ci.Name,
-		Parent:           ci.Parent,
-		Lower:            lowerFirst(ci.Name),
-		IsAbstract:       ci.IsAbstract,
-		Methods:          supported,
-		Accessors:        accessors,
-		Properties:       properties,
-		Signals:          signals,
-		Enums:            buildEmitEnums(d.Enums),
-		EnumSliceHelpers: enumHelpers,
-		NeedsVariant:     needsVariant,
-		BindingsImport:   bindingsImport,
-		BindingsAlias:    bindingsAlias,
+		PackageName:    d.PackageName,
+		SourceFile:     filepath.Base(d.FilePath),
+		InitLevel:      initLevel,
+		Class:          ci.Name,
+		Parent:         ci.Parent,
+		Lower:          lowerFirst(ci.Name),
+		IsAbstract:     ci.IsAbstract,
+		Methods:        supported,
+		Accessors:      accessors,
+		Properties:     properties,
+		Signals:        signals,
+		Enums:          buildEmitEnums(d.Enums),
+		NeedsVariant:   needsVariant,
+		BindingsImport: bindingsImport,
+		BindingsAlias:  bindingsAlias,
 	}
 
 	// Render the class XML now that the per-class data is populated.
@@ -139,13 +130,6 @@ type emitData struct {
 	Properties []emitProperty // RegisterClassProperty calls (one per @property, both forms)
 	Signals    []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
 	Enums      []emitEnum     // @enum / @bitfield-tagged user enums registered as class-scoped integer constants
-
-	// EnumSliceHelpers carries one entry per @enum / @bitfield user
-	// enum. The template emits `MakeArrayOf<X>s(values ...<X>) Array` and
-	// `<X>sFromArray(a Array) []<X>` per entry — these wrap Phase 3's
-	// MakeArrayOfInts / Array.ToInt64Slice with the enum's class_name
-	// pre-baked so the editor sees Array[<X>] rather than untyped Array.
-	EnumSliceHelpers []emitEnumSliceHelper
 	// DocXML is the rendered <class>…</class> document baked into the
 	// bindings as a const string. Empty when the class has no doc-able
 	// content (no description, no docs on any declaration); the
@@ -162,16 +146,6 @@ type emitData struct {
 	// the alias.
 	BindingsImport string
 	BindingsAlias  string
-}
-
-// emitEnumSliceHelper is the per-enum payload for the slice-of-enum
-// support added in Phase 5 of the array work. The template renders one
-// constructor + one extractor per helper, both reaching into Phase 3's
-// generic typed-Array primitives.
-type emitEnumSliceHelper struct {
-	GoName    string // bare enum identifier ("Language")
-	Plural    string // appended-s plural for the helper names ("Languages")
-	ClassName string // qualified <MainClass>.<EnumName> for typed-Array class_name
 }
 
 // emitSignal is one signal declared on a `@signals` interface. The emitter
@@ -562,44 +536,6 @@ func godotEnumValueName(enumType, valueName string) string {
 	return strings.ToUpper(naming.PascalToSnake(v))
 }
 
-// buildEnumSliceHelpers builds the per-enum slice-helper payload for
-// every @enum / @bitfield user enum. Untagged user int aliases don't
-// get a helper since their slice form rides on PackedInt64Array (no
-// enum identity to preserve). The class_name is the same
-// "<MainClass>.<EnumName>" form the scalar-enum registration uses,
-// pre-baked so the editor renders Array[<EnumName>] correctly.
-func buildEnumSliceHelpers(enums []*enumInfo, mainClass string) []emitEnumSliceHelper {
-	if len(enums) == 0 {
-		return nil
-	}
-	out := make([]emitEnumSliceHelper, 0, len(enums))
-	for _, e := range enums {
-		if !e.IsExposed {
-			continue
-		}
-		out = append(out, emitEnumSliceHelper{
-			GoName:    e.Name,
-			Plural:    pluralizeEnum(e.Name),
-			ClassName: mainClass + "." + e.Name,
-		})
-	}
-	return out
-}
-
-// pluralizeEnum applies a minimal English plural rule to the enum's Go
-// identifier so the synthesized helper names read naturally. The only
-// special case we bother with is names already ending in "s" (e.g.
-// `AbilityFlags`) — appending another "s" yields the ugly `AbilityFlagss`.
-// Any further linguistic nuance (Category → Categories, Box → Boxes, etc.)
-// stays out of scope; users with awkward identifiers can rename or accept
-// the simple form.
-func pluralizeEnum(name string) string {
-	if strings.HasSuffix(name, "s") {
-		return name
-	}
-	return name + "s"
-}
-
 // buildEmitEnums filters discovered user-int types down to those tagged
 // @enum or @bitfield, converts each value's Go identifier to the
 // SCREAMING_SNAKE form Godot expects (with type-prefix stripping), and
@@ -934,36 +870,6 @@ func (n *{{$.Class}}) {{.Name}}(v {{.GoType}}) { n.{{.Field}} = v }
 {{else -}}
 func (n *{{$.Class}}) {{.Name}}() {{.GoType}} { return n.{{.Field}} }
 {{end -}}
-{{end}}
-{{range .EnumSliceHelpers}}
-// MakeArrayOf{{.Plural}} constructs Array[{{.GoName}}] (TypedArray of int
-// with the {{.GoName}} class_name set, so the editor renders the typed-element
-// identity). Caller owns the result; release with (*{{$.BindingsAlias}}.Array).Destroy()
-// when done.
-func MakeArrayOf{{.Plural}}(values ...{{.GoName}}) {{$.BindingsAlias}}.Array {
-	i64 := make([]int64, len(values))
-	for i, v := range values {
-		i64[i] = int64(v)
-	}
-	return {{$.BindingsAlias}}.MakeArrayOfInts({{printf "%q" .ClassName}}, i64...)
-}
-
-// {{.Plural}}FromArray copies the typed-int contents of a into a fresh
-// []{{.GoName}}. Returns nil for empty. Behavior is undefined if a holds
-// elements of any other type.
-func {{.Plural}}FromArray(a {{$.BindingsAlias}}.Array) []{{.GoName}} {
-	n := a.Size()
-	if n == 0 {
-		return nil
-	}
-	out := make([]{{.GoName}}, n)
-	for i := int64(0); i < n; i++ {
-		v := a.Get(i)
-		out[i] = {{.GoName}}(v.AsInt())
-		v.Destroy()
-	}
-	return out
-}
 {{end}}
 {{range .Signals}}
 // {{.GoName}} emits the {{.GodotName}} signal on this instance. Synthesized

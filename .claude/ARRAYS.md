@@ -45,7 +45,7 @@ batch — commit + green CI before starting the next.
 | `[]float64`         | `PackedFloat64Array`   | packed float64                   |
 | `[]string`          | `PackedStringArray`    | packed String                    |
 | `[]bool`            | `Array[bool]`          | TypedArray (no PackedBoolArray)  |
-| `[]<UserEnum>`      | `Array[<UserEnum>]`    | TypedArray, int64 elements, enum class_name |
+| `[]<UserEnum>`      | `PackedInt64Array`     | Godot has no enum-typed Array at runtime — `Array[<EnumName>]` is GDScript compile-time sugar. Packed is the right wire form. |
 | `[]*<UserClass>`    | `Array[<UserClass>]`   | TypedArray, Object elements, user class_name |
 | `[]*<EngineClass>`  | `Array[<EngineClass>]` | TypedArray, Object elements, engine class_name |
 
