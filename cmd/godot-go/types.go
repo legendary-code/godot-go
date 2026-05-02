@@ -325,7 +325,11 @@ func sliceTypeInfo(elem *typeInfo) (*typeInfo, error) {
 // userIntSliceTypeInfo builds the marshal fragments for slices of any
 // user `type X int` alias — tagged or untagged. Wire form is
 // PackedInt64Array; the boundary cast bridges the user's named type
-// and int64.
+// and int64. Propagates the element's EnumName onto the returned
+// typeInfo so the registration's ArgClassNames / ReturnClassName
+// carries "<MainClass>.<EnumName>" — the editor's docs panel renders
+// the enum identity on the Packed-array param/return even though the
+// runtime wire form has no element-level typing of its own.
 func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
 	cat := sliceCategory{
 		PackedTypeName: "PackedInt64Array",
@@ -333,7 +337,9 @@ func userIntSliceTypeInfo(elem *typeInfo) *typeInfo {
 		CastTo:         "int64",      // user-type → wire
 		CastFrom:       elem.GoType,  // wire → user-type
 	}
-	return slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
+	info := slicePackedTypeInfo("[]"+elem.GoType, elem.GoType, cat)
+	info.EnumName = elem.EnumName
+	return info
 }
 
 // sliceBoolTypeInfo builds the marshaling fragments for []bool, which
