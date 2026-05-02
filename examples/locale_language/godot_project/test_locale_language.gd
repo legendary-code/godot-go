@@ -110,6 +110,27 @@ func _initialize() -> void:
 	ok = _check("concat_names(['en','de','fr']) = 'en,de,fr'",
 			concat, "en,de,fr") and ok
 
+	# Cross-file enum reference: Greeter (declared in greeter.go) takes a
+	# Language arg (declared in locale_language.go alongside the
+	# LocaleLanguage @class). The codegen aggregates enums across files
+	# in the package, so Greeter.greet_in resolves Language to the
+	# owning class's qualifier — registration carries
+	# "LocaleLanguage.Language" as the arg's class_name.
+	ok = _check("ClassDB.class_exists('Greeter')",
+			ClassDB.class_exists("Greeter"), true) and ok
+	var greet_en: String = ClassDB.class_call_static("Greeter", "greet_in", 1)
+	ok = _check("Greeter.greet_in(ENGLISH) = 'hello'",
+			greet_en, "hello") and ok
+	var greet_de: String = ClassDB.class_call_static("Greeter", "greet_in", 2)
+	ok = _check("Greeter.greet_in(GERMAN) = 'hallo'",
+			greet_de, "hallo") and ok
+	# The arg's class_name on the registration carries the owning class
+	# (LocaleLanguage), not the consuming class (Greeter).
+	var greet_meta: Dictionary = ClassDB.class_get_method_list("Greeter") \
+		.filter(func(m: Dictionary) -> bool: return m["name"] == "greet_in")[0]
+	ok = _check("Greeter.greet_in arg[0].class_name = LocaleLanguage.Language",
+			greet_meta["args"][0]["class_name"], &"LocaleLanguage.Language") and ok
+
 	if ok:
 		print("test_locale_language: ALL CHECKS PASSED")
 		quit(0)

@@ -232,6 +232,16 @@ type enumInfo struct {
 	// values via bitwise OR rather than treating them as exclusive.
 	// Mutually exclusive with the plain @enum form.
 	IsBitfield bool
+
+	// OwningClass names the @class struct this enum was declared
+	// alongside — i.e., the file's MainClass at discovery time.
+	// Populated when discovery hits the file's @class struct so
+	// cross-file enum references in other @class files in the same
+	// package can resolve the correct "<OwningClass>.<EnumName>"
+	// qualifier for ArgClassNames / ReturnClassName at registration
+	// time. Empty for enums in files that don't declare an @class
+	// (those don't get registered with Godot anyway).
+	OwningClass string
 }
 
 type enumValue struct {
@@ -496,6 +506,14 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	}
 	for _, ei := range intTypes {
 		if len(ei.Values) > 0 {
+			// Stamp the file's @class as the owner. Cross-file enum
+			// references in sibling @class files will read this field
+			// to qualify the registration's ArgClassNames /
+			// ReturnClassName as "<OwningClass>.<EnumName>" rather
+			// than the consuming class's name.
+			if d.MainClass != nil {
+				ei.OwningClass = d.MainClass.Name
+			}
 			d.Enums = append(d.Enums, ei)
 		}
 	}

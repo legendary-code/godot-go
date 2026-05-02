@@ -246,9 +246,21 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, mainClass, bindings 
 			if e.IsExposed {
 				exposedName = e.Name
 			}
-			return enumTypeInfo(t.Name, exposedName), nil
+			info := enumTypeInfo(t.Name, exposedName)
+			// Cross-file enum: the owning @class isn't this file's
+			// mainClass. Pre-qualify ClassName so classIdentity uses
+			// the right "<OwningClass>.<EnumName>" qualifier rather
+			// than the current file's class. For same-file refs
+			// (OwningClass == mainClass or empty) the existing
+			// qualifyEnum path produces the same string, so leaving
+			// ClassName empty is fine.
+			if exposedName != "" && e.OwningClass != "" && e.OwningClass != mainClass {
+				info.ClassName = e.OwningClass + "." + e.Name
+				info.EnumName = "" // already encoded in ClassName; don't double-qualify
+			}
+			return info, nil
 		}
-		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this file)", t.Name)
+		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this package)", t.Name)
 	case *ast.StarExpr:
 		// `*T` — three cases:
 		//   - *ast.Ident matching the file's @class: user-class self-

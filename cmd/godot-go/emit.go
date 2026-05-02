@@ -61,6 +61,23 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		seen[d.MainClass.Name] = d.FilePath
 	}
 
+	// Package-level enum map: aggregate every @class file's enums into
+	// one lookup so cross-file enum references resolve correctly. Each
+	// entry's OwningClass field already carries the qualifier; here we
+	// just check for collisions across files.
+	packageEnums := map[string]*enumInfo{}
+	enumOrigin := map[string]string{}
+	for _, d := range classes {
+		for _, e := range d.Enums {
+			if prev, ok := enumOrigin[e.Name]; ok {
+				return fmt.Errorf("duplicate enum name %q (declared in %s and %s) — package-level enum names must be unique",
+					e.Name, prev, d.FilePath)
+			}
+			packageEnums[e.Name] = e
+			enumOrigin[e.Name] = d.FilePath
+		}
+	}
+
 	// Build per-class emit payloads. Each @class file's enums scope to
 	// its own MainClass — they're isolated per-file in the discover
 	// result, so each class's enumSet is built from its own discovered
@@ -68,7 +85,7 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 	emitClasses := make([]emitClass, 0, len(classes))
 	needsVariant := false
 	for _, d := range classes {
-		ec, classNeedsVariant, err := buildEmitClass(fset, d, bindingsAlias)
+		ec, classNeedsVariant, err := buildEmitClass(fset, d, packageEnums, bindingsAlias)
 		if err != nil {
 			return err
 		}
@@ -102,25 +119,27 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 // builds the methods / properties / signals / enums lists with their
 // rendered marshal fragments, plus the class-XML doc string when the
 // class has any doc surface.
-func buildEmitClass(fset *token.FileSet, d *discovered, bindingsAlias string) (emitClass, bool, error) {
+//
+// packageEnums is the package-wide enum map (every @class file's
+// enums aggregated, with OwningClass populated). resolveType reads
+// it to handle cross-file enum references — a method on this class
+// referencing an enum declared in a sibling @class file resolves to
+// the correct "<OwningClass>.<EnumName>" qualifier instead of using
+// this file's mainClass.
+func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]*enumInfo, bindingsAlias string) (emitClass, bool, error) {
 	ci := d.MainClass
-
-	enumSet := map[string]*enumInfo{}
-	for _, e := range d.Enums {
-		enumSet[e.Name] = e
-	}
 
 	initLevel := "InitLevelScene"
 	if ci.IsEditor {
 		initLevel = "InitLevelEditor"
 	}
 
-	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, enumSet, bindingsAlias, ci.Name)
+	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, packageEnums, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
 
-	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, enumSet, bindingsAlias, ci.Name)
+	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, packageEnums, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -129,7 +148,7 @@ func buildEmitClass(fset *token.FileSet, d *discovered, bindingsAlias string) (e
 		needsVariant = true
 	}
 
-	signals, err := buildEmitSignals(ci.Signals, enumSet, bindingsAlias, ci.Name)
+	signals, err := buildEmitSignals(ci.Signals, packageEnums, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}

@@ -10,6 +10,133 @@ import (
 	godot "github.com/legendary-code/godot-go/godot"
 )
 
+// === Greeter (greeter.go) ===
+
+// Per-instance side tables for Greeter. The void* value the host
+// hands back to us as p_instance is the small integer id we returned from
+// Construct, not a Go pointer (cgo forbids storing Go pointers in
+// C-visible memory). The parallel <X>ByEngine map is keyed by the engine
+// ObjectPtr Godot uses for object identity — populated by Construct so
+// methods that take *Greeter args can recover the Go wrapper
+// from the ObjectPtr Godot passes through Variant arg slots.
+var (
+	greeterInstancesMu sync.Mutex
+	greeterInstances   = map[uintptr]*Greeter{}
+	greeterByEngine    = map[uintptr]*Greeter{}
+	greeterNextID      uintptr
+)
+
+func registerGreeterInstance(n *Greeter, parent gdextension.ObjectPtr) unsafe.Pointer {
+	greeterInstancesMu.Lock()
+	greeterNextID++
+	id := greeterNextID
+	greeterInstances[id] = n
+	greeterByEngine[uintptr(parent)] = n
+	greeterInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupGreeterInstance(handle unsafe.Pointer) *Greeter {
+	greeterInstancesMu.Lock()
+	defer greeterInstancesMu.Unlock()
+	return greeterInstances[uintptr(handle)]
+}
+
+// lookupGreeterByEngine resolves an engine ObjectPtr to the
+// *Greeter we registered at Construct time. Returns nil for
+// foreign instances — see the foreign-instance policy in
+// docs/reference.md.
+func lookupGreeterByEngine(p gdextension.ObjectPtr) *Greeter {
+	greeterInstancesMu.Lock()
+	defer greeterInstancesMu.Unlock()
+	return greeterByEngine[uintptr(p)]
+}
+
+func releaseGreeterInstance(handle unsafe.Pointer) {
+	greeterInstancesMu.Lock()
+	defer greeterInstancesMu.Unlock()
+	n, ok := greeterInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
+	delete(greeterInstances, uintptr(handle))
+	delete(greeterByEngine, uintptr(n.Ptr()))
+}
+
+func registerGreeter() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:      "Greeter",
+		Parent:    "Object",
+		IsExposed: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &Greeter{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("Object"))
+			n.BindPtr(parent)
+			return parent, registerGreeterInstance(n, parent)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseGreeterInstance(instance)
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
+		Name:  "greet_in",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self Greeter
+			arg0 := Language(godot.VariantAsInt64(args[0]))
+			result := self.GreetIn(arg0)
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self Greeter
+			arg0 := Language(*(*int64)(gdextension.PtrCallArg(args, 0)))
+			result := self.GreetIn(arg0)
+			godot.PtrCallStoreString(ret, result)
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"lang",
+		},
+		ArgClassNames: []string{
+			"LocaleLanguage.Language",
+		},
+	})
+
+	gdextension.LoadEditorDocXML(greeterDocXML)
+}
+
+// greeterDocXML is the rendered <class> document for Greeter.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="Greeter" inherits="Object" version="4.4">
+    <brief_description>Exercises cross-file enum references.</brief_description>
+    <description>Exercises cross-file enum references. It lives in a separate&#xA;file from LocaleLanguage but takes a Language enum value (declared&#xA;alongside LocaleLanguage) as its arg. Without cross-file enum&#xA;resolution, the codegen would fail to find Language in this file&#39;s&#xA;scope; with it, the registration&#39;s ArgClassNames carries&#xA;&#34;LocaleLanguage.Language&#34; — the owning class&#39;s qualifier — so the&#xA;editor renders the typed-enum identity correctly.</description>
+    <methods>
+        <method name="greet_in" qualifiers="static">
+            <return type="String"></return>
+            <param index="0" name="lang" type="int" enum="LocaleLanguage.Language"></param>
+            <description>Returns a localized greeting string for the given Language.&#xA;Demonstrates cross-file enum resolution at the @class boundary —&#xA;Language is declared alongside LocaleLanguage but used here.</description>
+        </method>
+    </methods>
+</class>`
+
 // === LocaleLanguage (locale_language.go) ===
 
 // Per-instance side tables for LocaleLanguage. The void* value the host
@@ -478,6 +605,10 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
 </class>`
 
 func init() {
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerGreeter)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("Greeter")
+	})
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerLocaleLanguage)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
 		gdextension.UnregisterClass("LocaleLanguage")

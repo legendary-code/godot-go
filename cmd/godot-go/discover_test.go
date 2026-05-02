@@ -724,6 +724,110 @@ func (n *MyNode) Bad(values []float64) {}
 	}
 }
 
+func TestEmitCrossFileEnumResolution(t *testing.T) {
+	// File 1 declares LocaleLanguage with a tagged Language enum;
+	// file 2 declares Greeter (a separate @class) whose method
+	// references Language. The codegen should resolve Language via
+	// the package-level enum map and qualify ArgClassNames as
+	// "LocaleLanguage.Language" — the owning class — not
+	// "Greeter.Language".
+	file1 := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type LocaleLanguage struct {
+	// @extends
+	core.Node
+}
+// @enum
+type Language int
+const (
+	LanguageUnknown Language = iota
+	LanguageEnglish
+	LanguageGerman
+)
+`
+	file2 := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Greeter struct {
+	// @extends
+	core.Node
+}
+func (g *Greeter) GreetIn(lang Language) string { return "" }
+`
+	fset := token.NewFileSet()
+	f1, err := parser.ParseFile(fset, "lang.go", file1, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse file1: %v", err)
+	}
+	f2, err := parser.ParseFile(fset, "greeter.go", file2, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse file2: %v", err)
+	}
+	d1, err := discover(fset, f1, "x")
+	if err != nil {
+		t.Fatalf("discover file1: %v", err)
+	}
+	d2, err := discover(fset, f2, "x")
+	if err != nil {
+		t.Fatalf("discover file2: %v", err)
+	}
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d1, d2}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	// Greeter.greet_in's ArgClassNames slot should carry the owning
+	// class's qualifier — "LocaleLanguage.Language", NOT
+	// "Greeter.Language".
+	if !strings.Contains(out, `"LocaleLanguage.Language"`) {
+		t.Errorf("expected %q in output but didn't find it", "LocaleLanguage.Language")
+	}
+	if strings.Contains(out, `"Greeter.Language"`) {
+		t.Errorf("found %q — cross-file enum was qualified with the consuming class instead of the owning class", "Greeter.Language")
+	}
+}
+
+func TestEmitDuplicateEnumNameRejected(t *testing.T) {
+	// Two @class files declaring an enum with the same name should
+	// surface a clear error at emit time.
+	file1 := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type A struct {
+	// @extends
+	core.Node
+}
+// @enum
+type Mode int
+const ( ModeOne Mode = iota )
+`
+	file2 := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type B struct {
+	// @extends
+	core.Node
+}
+// @enum
+type Mode int
+const ( ModeTwo Mode = iota )
+`
+	fset := token.NewFileSet()
+	f1, _ := parser.ParseFile(fset, "a.go", file1, parser.ParseComments)
+	f2, _ := parser.ParseFile(fset, "b.go", file2, parser.ParseComments)
+	d1, _ := discover(fset, f1, "x")
+	d2, _ := discover(fset, f2, "x")
+	var buf strings.Builder
+	err := emit(&buf, fset, []*discovered{d1, d2})
+	if err == nil {
+		t.Fatalf("expected duplicate-enum error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate enum name") {
+		t.Fatalf("error %q does not mention duplicate enum name", err.Error())
+	}
+}
+
 func TestDiscoverEnum(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
