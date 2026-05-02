@@ -197,6 +197,21 @@ func _initialize() -> void:
 		.filter(func(m: Dictionary) -> bool: return m["name"] == "echo")[0]
 	_check("echo: arg[0].class_name", echo_meta["args"][0]["class_name"], &"MyNode")
 	_check("echo: return.class_name", echo_meta["return"]["class_name"], &"MyNode")
+
+	# Phase 6b — []*<MainClass> arg + return marshaling. EchoMany takes a
+	# slice of MyNode, returns the same slice. Wire form is
+	# Array[MyNode] (TypedArray of OBJECT with class_name = "MyNode") —
+	# the one shape Godot's set_typed actually accepts at runtime.
+	var third: MyNode = MyNode.new()
+	var input_array: Array[MyNode] = [other, third]
+	var output_array: Array[MyNode] = n.echo_many(input_array)
+	_check("echo_many: returned size", output_array.size(), 2) and ok
+	_check("echo_many: element 0 identity", output_array[0], other)
+	_check("echo_many: element 1 identity", output_array[1], third)
+	_check("echo_many: typed at runtime", output_array.is_typed(), true)
+	_check("echo_many: typed-class identity", output_array.get_typed_class_name(), &"MyNode")
+
+	third.free()
 	other.free()
 
 	n.free()

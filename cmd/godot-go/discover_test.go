@@ -457,6 +457,47 @@ func (n *MyNode) Echo(other *MyNode) *MyNode { return other }
 	}
 }
 
+func TestDiscoverSelfClassSlice(t *testing.T) {
+	// `[]*<MainClass>` slice — Phase 6b. Wire form is Array[MyNode]
+	// (TypedArray of OBJECT with the user class name as class_name).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) EchoMany(others []*MyNode) []*MyNode { return others }
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 || d.MainClass.Methods[0].GoName != "EchoMany" {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
+func TestDiscoverSelfClassVariadic(t *testing.T) {
+	// Variadic `...*<MainClass>` should route through the same slice
+	// typeInfo — wire form is Array[MyNode].
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+func (n *MyNode) Combine(others ...*MyNode) *MyNode {
+	if len(others) > 0 {
+		return others[0]
+	}
+	return n
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+}
+
 func TestEmitForeignClassPointerRejected(t *testing.T) {
 	// `*<OtherClass>` is rejected — Phase 6a only supports same-class
 	// self-references. Cross-file user classes and engine class pointers

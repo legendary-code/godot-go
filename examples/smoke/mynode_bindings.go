@@ -304,6 +304,78 @@ func registerMyNode() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
+		Name:  "echo_many",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0_arr := godot.VariantAsArray(args[0])
+			defer arg0_arr.Destroy()
+			arg0_ptrs := arg0_arr.ToObjectSlice()
+			arg0 := make([]*MyNode, len(arg0_ptrs))
+			for i, p := range arg0_ptrs {
+				arg0[i] = lookupMyNodeByEngine(p)
+				if arg0[i] == nil {
+					return gdextension.CallErrorInvalidArgument
+				}
+			}
+			result := self.EchoMany(arg0)
+			result_ptrs := make([]gdextension.ObjectPtr, len(result))
+			for i, v := range result {
+				if v != nil {
+					result_ptrs[i] = v.Ptr()
+				}
+			}
+			result_arr := godot.MakeArrayOfObjects("MyNode", result_ptrs...)
+			godot.VariantSetArray(ret, result_arr)
+			result_arr.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0_arr := *(*godot.Array)(gdextension.PtrCallArg(args, 0))
+			arg0_ptrs := arg0_arr.ToObjectSlice()
+			arg0 := make([]*MyNode, len(arg0_ptrs))
+			for i, p := range arg0_ptrs {
+				arg0[i] = lookupMyNodeByEngine(p)
+				if arg0[i] == nil {
+					return
+				}
+			}
+			result := self.EchoMany(arg0)
+			result_ptrs := make([]gdextension.ObjectPtr, len(result))
+			for i, v := range result {
+				if v != nil {
+					result_ptrs[i] = v.Ptr()
+				}
+			}
+			result_arr := godot.MakeArrayOfObjects("MyNode", result_ptrs...)
+			*(*godot.Array)(ret) = result_arr
+		},
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeArray,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "MyNode",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeArray,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"others",
+		},
+		ArgClassNames: []string{
+			"MyNode",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
 		Name:  "origin",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
@@ -1153,6 +1225,11 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type="Object" enum="MyNode"></return>
             <param index="0" name="other" type="Object" enum="MyNode"></param>
             <description>Exercises Phase 6a *&lt;MainClass&gt; arg + return marshalling. Godot&#xA;passes other as the engine ObjectPtr for the MyNode instance the&#xA;caller constructed; the codegen looks it up in our parallel side&#xA;table and hands back the *MyNode wrapper. Returning other lets the&#xA;GDScript driver verify object identity round-tripped.&#xA;&#xA;Foreign-instance behavior (decision B from .claude/ARRAYS.md): if&#xA;the caller passes a *MyNode instance not registered with this&#xA;extension, the lookup returns nil and codegen returns&#xA;CallErrorInvalidArgument. The user method body never sees a nil&#xA;arg.</description>
+        </method>
+        <method name="echo_many">
+            <return type="Array" enum="MyNode"></return>
+            <param index="0" name="others" type="Array" enum="MyNode"></param>
+            <description>Exercises Phase 6b []*&lt;MainClass&gt; arg + return marshalling.&#xA;Godot passes an Array[MyNode] (TypedArray of OBJECT with class_name&#xA;= &#34;MyNode&#34;); the codegen unpacks it into a Go slice via per-element&#xA;engine-pointer lookup, then re-packs the return value into a fresh&#xA;Array[MyNode]. Per-element foreign-instance handling matches Echo&#39;s:&#xA;any nil lookup short-circuits the call.</description>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
             <return type="int"></return>

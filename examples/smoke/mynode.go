@@ -168,6 +168,16 @@ func (n *MyNode) Echo(other *MyNode) *MyNode {
 	return other
 }
 
+// EchoMany exercises Phase 6b []*<MainClass> arg + return marshalling.
+// Godot passes an Array[MyNode] (TypedArray of OBJECT with class_name
+// = "MyNode"); the codegen unpacks it into a Go slice via per-element
+// engine-pointer lookup, then re-packs the return value into a fresh
+// Array[MyNode]. Per-element foreign-instance handling matches Echo's:
+// any nil lookup short-circuits the call.
+func (n *MyNode) EchoMany(others []*MyNode) []*MyNode {
+	return others
+}
+
 // Origin is a class-level method — `@static` registers it with
 // MethodFlagStatic so GDScript callers reach it as `MyNode.origin()`
 // without an instance.

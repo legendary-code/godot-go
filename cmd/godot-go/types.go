@@ -403,7 +403,88 @@ func sliceTypeInfo(elem *typeInfo) (*typeInfo, error) {
 		// slices.
 		return userIntSliceTypeInfo(elem), nil
 	}
-	return nil, fmt.Errorf("unsupported slice element type %q (supported: bool, byte, int, int32, int64, float32, string, or a user int / @enum / @bitfield type declared in this file)", elem.GoType)
+	if elem.VariantType == "VariantTypeObject" && elem.ClassName != "" {
+		// `[]*<MainClass>` — Phase 6b. Wire form is Array[<MainClass>]
+		// (TypedArray with class_name = "<MainClass>"). Godot does
+		// support set_typed for OBJECT-typed arrays with a class_name,
+		// so per-element identity actually round-trips at runtime.
+		return userClassSliceTypeInfo(elem), nil
+	}
+	return nil, fmt.Errorf("unsupported slice element type %q (supported: bool, byte, int, int32, int64, float32, string, *<MainClass>, or a user int / @enum / @bitfield type declared in this file)", elem.GoType)
+}
+
+// userClassSliceTypeInfo builds the marshal fragments for slices of the
+// file's @class — `[]*<MainClass>`. Wire form is Array[<MainClass>]
+// (TypedArray, OBJECT type with the user class name as the class_name
+// filter). Per-element foreign-instance handling matches Phase 6a:
+// the lookup against our engine-pointer side table returns nil for
+// instances Godot didn't get from our Construct hook, and codegen
+// short-circuits per decision (B).
+func userClassSliceTypeInfo(elem *typeInfo) *typeInfo {
+	className := elem.ClassName
+	lookupName := "lookup" + className + "ByEngine"
+	goType := "[]*" + className
+	return &typeInfo{
+		GoType:      goType,
+		VariantType: "VariantTypeArray",
+		ArgMeta:     "ArgMetaNone",
+		ClassName:   className, // editor surfaces the typed-element identity through ArgClassNames / XML enum=
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := %s.VariantAsArray(args[%d])
+defer arg%d_arr.Destroy()
+arg%d_ptrs := arg%d_arr.ToObjectSlice()
+arg%d := make([]*%s, len(arg%d_ptrs))
+for i, p := range arg%d_ptrs {
+	arg%d[i] = %s(p)
+	if arg%d[i] == nil {
+		return gdextension.CallErrorInvalidArgument
+	}
+}`, idx, b, idx, idx, idx, idx, idx, className, idx, idx, idx, lookupName, idx)
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		result_ptrs[i] = v.Ptr()
+	}
+}
+result_arr := %s.MakeArrayOfObjects(%q, result_ptrs...)
+%s.VariantSetArray(ret, result_arr)
+result_arr.Destroy()`, expr, expr, b, className, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_arr := *(*%s.Array)(gdextension.PtrCallArg(args, %d))
+arg%d_ptrs := arg%d_arr.ToObjectSlice()
+arg%d := make([]*%s, len(arg%d_ptrs))
+for i, p := range arg%d_ptrs {
+	arg%d[i] = %s(p)
+	if arg%d[i] == nil {
+		return
+	}
+}`, idx, b, idx, idx, idx, idx, className, idx, idx, idx, lookupName, idx)
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return fmt.Sprintf(`result_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		result_ptrs[i] = v.Ptr()
+	}
+}
+result_arr := %s.MakeArrayOfObjects(%q, result_ptrs...)
+*(*%s.Array)(ret) = result_arr`, expr, expr, b, className, b)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			return fmt.Sprintf(`arg%d_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for i, v := range %s {
+	if v != nil {
+		arg%d_ptrs[i] = v.Ptr()
+	}
+}
+arg%d_arr := %s.MakeArrayOfObjects(%q, arg%d_ptrs...)
+arg%d := %s.NewVariantArray(arg%d_arr)
+arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b, idx, idx)
+		},
+	}
 }
 
 // userIntSliceTypeInfo builds the marshal fragments for slices of any
