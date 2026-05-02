@@ -431,8 +431,16 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		}
 		// Skip Go-private methods that aren't explicit overrides or
 		// statics — they belong to the user's package, not to Godot's
-		// ClassDB.
-		if !hasStatic && !hasOverride && isLowerFirst(fn.Name.Name) {
+		// ClassDB. An explicit `@name` overrides the skip: the user is
+		// supplying the Godot-side name verbatim, which is the
+		// declarative way to opt a lowercase-first method into
+		// registration (handy for engine constructor `_init` methods
+		// that need plain-method registration, since registering
+		// _init through the @override virtual path bakes in
+		// MethodFlagVirtual and GDScript's `Class.new(args...)` parser
+		// treats the signature as fixed-zero).
+		_, hasName := doctag.Find(tags, "name")
+		if !hasStatic && !hasOverride && !hasName && isLowerFirst(fn.Name.Name) {
 			continue
 		}
 		mi := &methodInfo{

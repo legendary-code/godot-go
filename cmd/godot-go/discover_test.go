@@ -241,6 +241,36 @@ func (n *MyNode) Tick(delta float64) {}
 	}
 }
 
+func TestDiscoverLowercaseWithNameRegistered(t *testing.T) {
+	// Explicit @name overrides the lowercase-first skip — the user is
+	// supplying the Godot-side name verbatim, which is the declarative
+	// opt-in for registering a lowercase-first method. Lets users wire
+	// `_init(args...)` through the regular method dispatch (rather than
+	// the @override virtual path that bakes in MethodFlagVirtual and
+	// breaks GDScript's `Class.new(args...)` arity check).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Rand struct {
+	// @extends
+	core.RefCounted
+}
+// @name _init
+func (r *Rand) initRand(seed int64) {}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("methods = %+v", d.MainClass.Methods)
+	}
+	m := d.MainClass.Methods[0]
+	if m.Kind != methodInstance {
+		t.Errorf("Kind = %v, want instance (no @override)", m.Kind)
+	}
+	if m.GodotName != "_init" {
+		t.Errorf("GodotName = %q, want _init (verbatim from @name)", m.GodotName)
+	}
+}
+
 func TestDiscoverNameOverride(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
