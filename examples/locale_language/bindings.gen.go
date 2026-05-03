@@ -203,7 +203,7 @@ func registerGreeter() {
 		ReturnType:       gdextension.VariantTypeDictionary,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintDictionaryType,
-		ReturnHintString: "4/0:;2/0:",
+		ReturnHintString: "String;int",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypePackedStringArray,
 		},
@@ -287,7 +287,7 @@ func registerGreeter() {
 		ReturnType:       gdextension.VariantTypeDictionary,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintDictionaryType,
-		ReturnHintString: "4/0:;2/0:",
+		ReturnHintString: "String;int",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeDictionary,
 		},
@@ -304,7 +304,7 @@ func registerGreeter() {
 			gdextension.PropertyHintDictionaryType,
 		},
 		ArgHintStrings: []string{
-			"4/0:;2/0:",
+			"String;int",
 		},
 	})
 
@@ -346,7 +346,7 @@ func registerGreeter() {
 		ReturnType:       gdextension.VariantTypeDictionary,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintDictionaryType,
-		ReturnHintString: "4/0:;2/0:",
+		ReturnHintString: "String;LocaleLanguage.Language",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -397,7 +397,7 @@ func registerGreeter() {
 		ReturnType:       gdextension.VariantTypeDictionary,
 		ReturnMetadata:   gdextension.ArgMetaNone,
 		ReturnHint:       gdextension.PropertyHintDictionaryType,
-		ReturnHintString: "4/0:;34/0:",
+		ReturnHintString: "String;PackedStringArray",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{

@@ -926,7 +926,7 @@ func (w *W) ByMode(in map[string]Mode) map[string]Mode { return in }
 	out := buf.String()
 	for _, want := range []string{
 		"gdextension.PropertyHintDictionaryType",
-		`"4/0:;2/2:IDLE,RUN"`, // K=String/none; V=Int/HINT_ENUM:names
+		`"String;W.Mode"`, // bare K-name ; bare qualified V-name (Godot's TypedDictionary format)
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing fragment %q in output:\n%s", want, out)

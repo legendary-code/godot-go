@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"strings"
 )
 
 // typeInfo describes how a Go primitive maps onto Godot's GDExtension ABI
@@ -406,7 +405,7 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[stri
 		if err != nil {
 			return nil, fmt.Errorf("map value: %w", err)
 		}
-		return mapTypeInfo(key, value, enums)
+		return mapTypeInfo(key, value, enums, mainClass)
 	case *ast.FuncType:
 		return nil, fmt.Errorf("function types are not supported at the @class boundary (use @signals for callback contracts)")
 	case *ast.ChanType:
@@ -1187,89 +1186,40 @@ for %s_i := int64(0); %s_i < %s_n; %s_i++ {
 	}
 }
 
-// variantTypeIntFor maps a bare gdextension.VariantType const name
-// to the integer value Godot's PropertyHintDictionaryType hint string
-// expects. Only covers the type identifiers that mapTypeInfo can
-// surface (primitive K/V, slice values, object slots) — adding more
-// over time is a one-line entry per type.
-func variantTypeIntFor(vt string) string {
-	switch vt {
-	case "VariantTypeBool":
-		return "1"
-	case "VariantTypeInt":
-		return "2"
-	case "VariantTypeFloat":
-		return "3"
-	case "VariantTypeString":
-		return "4"
-	case "VariantTypeObject":
-		return "24"
-	case "VariantTypeArray":
-		return "28"
-	case "VariantTypePackedByteArray":
-		return "29"
-	case "VariantTypePackedInt32Array":
-		return "30"
-	case "VariantTypePackedInt64Array":
-		return "31"
-	case "VariantTypePackedFloat32Array":
-		return "32"
-	case "VariantTypePackedFloat64Array":
-		return "33"
-	case "VariantTypePackedStringArray":
-		return "34"
-	case "VariantTypePackedVector2Array":
-		return "35"
-	case "VariantTypePackedVector3Array":
-		return "36"
-	case "VariantTypePackedColorArray":
-		return "37"
-	case "VariantTypePackedVector4Array":
-		return "38"
-	case "VariantTypeDictionary":
-		return "27"
-	}
-	return "0"
-}
-
-// dictSideHint encodes one side (key or value) of a typed-Dictionary
-// hint string. Format follows the typed-array convention:
-//   "<variant_int>/<hint_int>:<payload>"
-// where variant_int / hint_int are integer Variant::Type and
-// PropertyHint values, and payload is the class name (for OBJECT),
-// comma-joined enum value names (for INT+HINT_ENUM), or empty
-// (primitives).
+// dictSideHint produces the type-name string for one side (key or
+// value) of a typed-Dictionary hint. Format is the bare type name as
+// the Godot editor expects:
 //
-// enums lets the encoder look up tagged-enum value lists when the
-// side carries an EnumName / HintEnum.
-func dictSideHint(t *typeInfo, enums map[string]*enumInfo) string {
-	v := variantTypeIntFor(t.VariantType)
-
-	// Tagged enum (scalar `Mode` arg/return — EnumName is set when
-	// the enum is @enum / @bitfield-tagged): encode as INT + HINT_ENUM
-	// + comma-joined SCREAMING_SNAKE value names.
+//	"<KeyTypeName>;<ValueTypeName>"
+//
+// The editor's docs panel literally does
+// `"Dictionary[" + hint_string.replace(";", ", ") + "]"`, so each side
+// must be a plain identifier (e.g. "String", "float", "Resource",
+// "MyClass.Mode") — NOT the typed-array `"<int>/<int>:<str>"`
+// encoding. Confirmed against Godot 4.x source (core/variant/type_info.h
+// `TypedDictionary<K,V>::get_class_info`, core/doc_data.cpp consumer).
+//
+// Enum caveat (Godot issue #111311): typed-Dictionary doesn't have a
+// first-class enum encoding. Passing "MyClass.Mode" makes the docs
+// panel render correctly, but GDScript won't treat the value slot as
+// a typed-int enum at runtime — that's a Godot limitation, not
+// something a binding can work around.
+func dictSideHint(t *typeInfo, enums map[string]*enumInfo, mainClass string) string {
+	if t.ClassName != "" {
+		// Two cases collapse here:
+		//   - Object slot (user class or engine class): ClassName is
+		//     the bare class identity ("Words", "Node", "Resource").
+		//   - Cross-file enum: ClassName is already the qualified
+		//     "OwningClass.Enum" form set up by resolveType.
+		// Both are display-ready.
+		return t.ClassName
+	}
 	if t.EnumName != "" {
-		if e, ok := enums[t.EnumName]; ok && e.IsExposed {
-			names := make([]string, 0, len(e.Values))
-			for _, val := range e.Values {
-				names = append(names, godotEnumValueName(e.Name, val.Name))
-			}
-			return v + "/2:" + strings.Join(names, ",")
-		}
+		// Same-file tagged enum — qualify with the file's @class struct
+		// so the editor renders "MainClass.EnumName".
+		return mainClass + "." + t.EnumName
 	}
-
-	// Object slot — user class or engine class. ClassName carries the
-	// bare class identity; encode as OBJECT + HINT_NODE_TYPE (34) +
-	// class name. HINT_NODE_TYPE is the typed-array convention; the
-	// editor reads the class string to render the slot's identity.
-	if t.ClassName != "" && t.VariantType == "VariantTypeObject" {
-		return v + "/34:" + t.ClassName
-	}
-
-	// Slice value — recurse into the element identity. The Packed
-	// arrays have their own variant type so the outer "<elem_variant>/0:"
-	// is enough.
-	return v + "/0:"
+	return godotXMLType(t.VariantType)
 }
 
 // mapTypeInfo builds the marshal fragments for `map[K]V` at the
@@ -1293,7 +1243,7 @@ func dictSideHint(t *typeInfo, enums map[string]*enumInfo) string {
 // stack-local zero-value Variant rather than allocating, since every
 // key we iterate came from Dictionary.Keys() and is guaranteed
 // present.
-func mapTypeInfo(key, value *typeInfo, enums map[string]*enumInfo) (*typeInfo, error) {
+func mapTypeInfo(key, value *typeInfo, enums map[string]*enumInfo, mainClass string) (*typeInfo, error) {
 	if key.WrapVariant == nil || key.UnwrapVariant == nil {
 		return nil, fmt.Errorf("map key type %q is not supported (only primitive types are supported as map keys today: bool, int, int32, int64, float32, float64, string)", key.GoType)
 	}
@@ -1304,12 +1254,10 @@ func mapTypeInfo(key, value *typeInfo, enums map[string]*enumInfo) (*typeInfo, e
 	goType := "map[" + key.GoType + "]" + value.GoType
 
 	// Typed-Dictionary registration metadata. Always emit so the editor
-	// surfaces both K and V identities — primitive sides degrade
-	// gracefully ("4/0:" = STRING with no inner hint), so the hint is
-	// only redundant rather than wrong when neither side carries a
-	// rich identity. Phase 2b best-effort: editor support for
-	// typed-Dictionary varies across Godot 4.x minors.
-	dictHint := dictSideHint(key, enums) + ";" + dictSideHint(value, enums)
+	// renders Dictionary[K, V] in the docs panel. Format is the bare
+	// type-name pair joined with ";"; the editor literally does
+	// `"Dictionary[" + hint.replace(";", ", ") + "]"`.
+	dictHint := dictSideHint(key, enums, mainClass) + ";" + dictSideHint(value, enums, mainClass)
 
 	readBody := func(b string, idx int) string {
 		kvName := fmt.Sprintf("arg%d_kv", idx)
