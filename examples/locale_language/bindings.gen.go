@@ -198,10 +198,12 @@ func registerGreeter() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "4/0:;2/0:",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypePackedStringArray,
 		},
@@ -280,10 +282,12 @@ func registerGreeter() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "4/0:;2/0:",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeDictionary,
 		},
@@ -295,6 +299,12 @@ func registerGreeter() {
 		},
 		ArgClassNames: []string{
 			"",
+		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintDictionaryType,
+		},
+		ArgHintStrings: []string{
+			"4/0:;2/0:",
 		},
 	})
 
@@ -331,10 +341,12 @@ func registerGreeter() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "4/0:;2/0:",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -380,10 +392,12 @@ func registerGreeter() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "4/0:;34/0:",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{

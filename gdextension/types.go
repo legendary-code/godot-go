@@ -190,6 +190,18 @@ const (
 	// editor reads this to render the typed-array element identity in
 	// docs panel and (sometimes) autocomplete.
 	PropertyHintTypeString PropertyHint = 23
+
+	// PropertyHintDictionaryType is Godot 4.4+'s typed-Dictionary
+	// metadata hint. Hint string format:
+	//   "<K_variant>/<K_hint>:<K_string>;<V_variant>/<V_hint>:<V_string>"
+	// where each side mirrors the typed-array encoding —
+	// K/V variant types are integer Variant::Type values, K/V hints are
+	// integer PropertyHint values, K/V strings carry the per-side
+	// identity payload (class name for OBJECT, comma-joined value names
+	// for INT+HINT_ENUM, empty for primitives). Best-effort
+	// implementation; the editor's surface for typed-dictionary
+	// rendering is less stable than typed arrays.
+	PropertyHintDictionaryType PropertyHint = 38
 )
 
 // Opaque pointer aliases. They carry no compile-time type safety on the C side

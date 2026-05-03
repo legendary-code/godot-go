@@ -897,6 +897,43 @@ func (w *W) Bad(m map[string]map[string]int64) {}
 	}
 }
 
+func TestEmitMapTypedDictHint(t *testing.T) {
+	// Phase 2b: typed-Dictionary registration metadata. The map's
+	// arg/return registration carries PropertyHintDictionaryType + the
+	// encoded "K_section;V_section" hint string so the editor can
+	// surface Dictionary[K, V] identity. Best-effort: 4.4+ semantics
+	// for typed dictionaries vary across minor versions.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type W struct {
+	// @extends
+	core.RefCounted
+}
+// @enum
+type Mode int
+const (
+	ModeIdle Mode = iota
+	ModeRun
+)
+func (w *W) ByMode(in map[string]Mode) map[string]Mode { return in }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"gdextension.PropertyHintDictionaryType",
+		`"4/0:;2/2:IDLE,RUN"`, // K=String/none; V=Int/HINT_ENUM:names
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q in output:\n%s", want, out)
+		}
+	}
+}
+
 func TestEmitMapEnumValue(t *testing.T) {
 	// `map[string]<UserEnum>` exercises the enumTypeInfo Wrap/Unwrap
 	// path. Both wrap (NewVariantInt with int64 cast) and unwrap

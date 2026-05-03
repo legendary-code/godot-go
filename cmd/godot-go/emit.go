@@ -638,21 +638,27 @@ func classIdentity(mainClass string, info *typeInfo) string {
 }
 
 // hintForTypeInfo computes the PropertyHint const name and hint string
-// for a typeInfo. Currently this fires only for slice-of-tagged-enum
-// boundaries (typeInfo.HintEnum != "") — the element identity rides on
-// PROPERTY_HINT_TYPE_STRING with an "<elem_type>/<elem_hint>:names"
-// payload. Returns empty pair for typeInfos that don't need hint
-// metadata.
+// for a typeInfo. Two paths:
 //
-// The hint string format mirrors Godot's `ADD_PROPERTY` convention for
-// typed-int arrays:
+//   - Slice-of-tagged-enum (HintEnum != ""): element identity rides on
+//     PROPERTY_HINT_TYPE_STRING with an "<elem_type>/<elem_hint>:names"
+//     payload — this is Godot's mechanism for `Array[<Enum>]` rendering.
 //
-//	"<Variant::INT>/<PROPERTY_HINT_ENUM>:<comma-joined-value-names>"
+//   - Typed Dictionary (DictHintString != ""): K/V identity rides on
+//     PROPERTY_HINT_DICTIONARY_TYPE with the precomputed
+//     "<K_var>/<K_hint>:<K_str>;<V_var>/<V_hint>:<V_str>" payload built
+//     by mapTypeInfo. Best-effort — Godot 4.4+'s typed-Dictionary
+//     editor surface is less stable than typed arrays.
+//
+// Returns empty pair for typeInfos that don't need hint metadata.
 //
 // Numeric values are baked at codegen time so the framework doesn't
 // have to import gdextension for these constants — they're stable
 // across Godot 4.x. INT = 2, PROPERTY_HINT_ENUM = 2.
 func hintForTypeInfo(info *typeInfo, enums map[string]*enumInfo) (hint, hintString string) {
+	if info.DictHintString != "" {
+		return "PropertyHintDictionaryType", info.DictHintString
+	}
 	if info.HintEnum == "" {
 		return "", ""
 	}

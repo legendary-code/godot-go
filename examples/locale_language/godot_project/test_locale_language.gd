@@ -169,6 +169,16 @@ func _initialize() -> void:
 	ok = _check("Greeter.lang_codes()['en'] = 1 (ENGLISH)", lang_codes["en"], 1) and ok
 	ok = _check("Greeter.lang_codes()['de'] = 2 (GERMAN)", lang_codes["de"], 2) and ok
 
+	# Phase 2b: typed-Dictionary registration metadata. The lang_codes
+	# return registration carries PROPERTY_HINT_DICTIONARY_TYPE (38)
+	# with an encoded "K_section;V_section" hint string. Editor surface
+	# varies across Godot 4.x minors; we just assert the hint flag is
+	# set so the registration roundtrips through ClassDB cleanly.
+	var lang_codes_meta: Dictionary = ClassDB.class_get_method_list("Greeter") \
+		.filter(func(m: Dictionary) -> bool: return m["name"] == "lang_codes")[0]
+	ok = _check("Greeter.lang_codes return.hint = HINT_DICTIONARY_TYPE",
+			lang_codes_meta["return"]["hint"], 38) and ok
+
 	# Phase 2a: slice value in a Dictionary. Each entry's value is
 	# built as a fresh PackedStringArray inline by the codegen.
 	var chars_by_lang: Dictionary = ClassDB.class_call_static("Greeter", "chars_by_lang")
