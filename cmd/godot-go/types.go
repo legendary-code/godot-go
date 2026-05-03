@@ -63,6 +63,23 @@ type typeInfo struct {
 	CallReadArg        func(bindings string, idx int) string
 	CallWriteReturn    func(bindings, expr string) string
 	BuildVariant       func(bindings string, idx int, srcExpr string) string
+
+	// WrapVariant returns an *expression* (no statement, no leading
+	// `name :=`) that constructs a fresh `<bindings>.Variant` from
+	// srcExpr (already the user-facing Go-side type). Used by map
+	// codegen to wrap each map key and value into a Variant before
+	// handing them to Dictionary.Set. Caller owns the resulting Variant
+	// and must call .Destroy() once done.
+	WrapVariant func(bindings, srcExpr string) string
+
+	// UnwrapVariant returns an expression that converts varExpr (a
+	// local *value* of type `<bindings>.Variant`) into the user-facing
+	// Go-side type. Used by map codegen to extract the typed value from
+	// a Variant returned by Array.Get / Dictionary.Get. The expression
+	// references gdextension and unsafe to take the address; callers
+	// must ensure varExpr is a plain identifier (not a complex
+	// expression) so `&varExpr` is valid Go.
+	UnwrapVariant func(bindings, varExpr string) string
 }
 
 // typeTable indexes typeInfo by Go type ident. Keys must match exactly
@@ -88,6 +105,12 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantBool(%s)", idx, b, srcExpr)
 		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantBool(%s)", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("%s.VariantAsBool(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		},
 	},
 	"int": {
 		GoType:      "int",
@@ -107,6 +130,12 @@ var typeTable = map[string]*typeInfo{
 		},
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(int64(%s))", idx, b, srcExpr)
+		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantInt(int64(%s))", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("int(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
 		},
 	},
 	"int32": {
@@ -128,6 +157,12 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(int64(%s))", idx, b, srcExpr)
 		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantInt(int64(%s))", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("int32(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
+		},
 	},
 	"int64": {
 		GoType:      "int64",
@@ -147,6 +182,12 @@ var typeTable = map[string]*typeInfo{
 		},
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(%s)", idx, b, srcExpr)
+		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantInt(%s)", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
 		},
 	},
 	"float32": {
@@ -168,6 +209,12 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantFloat(float64(%s))", idx, b, srcExpr)
 		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantFloat(float64(%s))", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("float32(%s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
+		},
 	},
 	"float64": {
 		GoType:      "float64",
@@ -188,6 +235,12 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantFloat(%s)", idx, b, srcExpr)
 		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantFloat(%s)", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("%s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		},
 	},
 	"string": {
 		GoType:      "string",
@@ -207,6 +260,12 @@ var typeTable = map[string]*typeInfo{
 		},
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantString(%s)", idx, b, srcExpr)
+		},
+		WrapVariant: func(b, expr string) string {
+			return fmt.Sprintf("%s.NewVariantString(%s)", b, expr)
+		},
+		UnwrapVariant: func(b, varExpr string) string {
+			return fmt.Sprintf("%s.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
 		},
 	},
 }
@@ -323,7 +382,15 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[stri
 		}
 		return sliceTypeInfo(elem)
 	case *ast.MapType:
-		return nil, fmt.Errorf("map types are not supported at the @class boundary (Godot has no map ABI — use multiple args or @property fields for keyed data)")
+		key, err := resolveType(t.Key, enums, userClasses, mainClass, bindings)
+		if err != nil {
+			return nil, fmt.Errorf("map key: %w", err)
+		}
+		value, err := resolveType(t.Value, enums, userClasses, mainClass, bindings)
+		if err != nil {
+			return nil, fmt.Errorf("map value: %w", err)
+		}
+		return mapTypeInfo(key, value)
 	case *ast.FuncType:
 		return nil, fmt.Errorf("function types are not supported at the @class boundary (use @signals for callback contracts)")
 	case *ast.ChanType:
@@ -908,6 +975,111 @@ arg%d_arr.Destroy()`, idx, b, cat.PackedTypeName,
 				idx)
 		},
 	}
+}
+
+// mapTypeInfo builds the marshal fragments for `map[K]V` at the
+// @class boundary. Wire form is Godot's untyped Dictionary — typed
+// dictionaries (Dictionary[K, V] in 4.4+) are deferred since they
+// require additional registration metadata. Iteration order is Go's
+// randomized map order on the way out; Dictionary preserves insertion
+// order, but the framework doesn't promise stable ordering at the
+// boundary either way.
+//
+// v1 supports primitive K and V only — keys and values must come from
+// the typeTable (bool, int, int32, int64, float32, float64, string).
+// Slice values, user enums, user-class pointers as K/V are deferred
+// to later phases. The check is "WrapVariant + UnwrapVariant
+// populated" rather than "in typeTable" so Phase 2 work that adds
+// these expression helpers to other typeInfos lights up automatically.
+//
+// Each fragment uses the typeInfo's WrapVariant / UnwrapVariant to
+// box / unbox values across the Variant boundary. Dictionary.Get
+// requires a default Variant for missing keys — we declare a
+// stack-local zero-value Variant rather than allocating, since every
+// key we iterate came from Dictionary.Keys() and is guaranteed
+// present.
+func mapTypeInfo(key, value *typeInfo) (*typeInfo, error) {
+	if key.WrapVariant == nil || key.UnwrapVariant == nil {
+		return nil, fmt.Errorf("map key type %q is not supported (only primitive types are supported as map keys today: bool, int, int32, int64, float32, float64, string)", key.GoType)
+	}
+	if value.WrapVariant == nil || value.UnwrapVariant == nil {
+		return nil, fmt.Errorf("map value type %q is not supported (only primitive types are supported as map values today: bool, int, int32, int64, float32, float64, string)", value.GoType)
+	}
+
+	goType := "map[" + key.GoType + "]" + value.GoType
+
+	readBody := func(b string, idx int) string {
+		return fmt.Sprintf(`arg%d_keys := arg%d_dict.Keys()
+defer arg%d_keys.Destroy()
+arg%d_n := arg%d_keys.Size()
+arg%d := make(%s, arg%d_n)
+var arg%d_def %s.Variant
+for arg%d_i := int64(0); arg%d_i < arg%d_n; arg%d_i++ {
+	arg%d_kv := arg%d_keys.Get(arg%d_i)
+	arg%d_vv := arg%d_dict.Get(arg%d_kv, arg%d_def)
+	arg%d[%s] = %s
+	arg%d_kv.Destroy()
+	arg%d_vv.Destroy()
+}`,
+			idx, idx,
+			idx,
+			idx, idx,
+			idx, goType, idx,
+			idx, b,
+			idx, idx, idx, idx,
+			idx, idx, idx,
+			idx, idx, idx, idx,
+			idx,
+			key.UnwrapVariant(b, fmt.Sprintf("arg%d_kv", idx)),
+			value.UnwrapVariant(b, fmt.Sprintf("arg%d_vv", idx)),
+			idx, idx)
+	}
+
+	writeBody := func(b, expr, dstName string) string {
+		return fmt.Sprintf(`%s := %s.NewDictionary()
+for k_, v_ := range %s {
+	k_v := %s
+	v_v := %s
+	%s.Set(k_v, v_v)
+	k_v.Destroy()
+	v_v.Destroy()
+}`,
+			dstName, b,
+			expr,
+			key.WrapVariant(b, "k_"),
+			value.WrapVariant(b, "v_"),
+			dstName)
+	}
+
+	return &typeInfo{
+		GoType:      goType,
+		VariantType: "VariantTypeDictionary",
+		ArgMeta:     "ArgMetaNone",
+		CallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_dict := %s.VariantAsDictionary(args[%d])
+defer arg%d_dict.Destroy()
+%s`, idx, b, idx, idx, readBody(b, idx))
+		},
+		CallWriteReturn: func(b, expr string) string {
+			return writeBody(b, expr, "result_dict") + fmt.Sprintf(`
+%s.VariantSetDictionary(ret, result_dict)
+result_dict.Destroy()`, b)
+		},
+		PtrCallReadArg: func(b string, idx int) string {
+			return fmt.Sprintf(`arg%d_dict := *(*%s.Dictionary)(gdextension.PtrCallArg(args, %d))
+%s`, idx, b, idx, readBody(b, idx))
+		},
+		PtrCallWriteReturn: func(b, expr string) string {
+			return writeBody(b, expr, "result_dict") + fmt.Sprintf(`
+*(*%s.Dictionary)(ret) = result_dict`, b)
+		},
+		BuildVariant: func(b string, idx int, srcExpr string) string {
+			dst := fmt.Sprintf("arg%d_dict", idx)
+			return writeBody(b, srcExpr, dst) + fmt.Sprintf(`
+arg%d := %s.NewVariantDictionary(%s)
+%s.Destroy()`, idx, b, dst, dst)
+		},
+	}, nil
 }
 
 // sliceCastExpr applies a narrowing/widening cast wrapper to expr if

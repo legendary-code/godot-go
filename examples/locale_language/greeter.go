@@ -63,6 +63,30 @@ func (g *Greeter) Hello() string {
 	return ""
 }
 
+// CountLetters demonstrates a map[K]V at the @class boundary. Wire
+// form is Godot's untyped Dictionary in both directions; the
+// codegen iterates the dictionary's keys, unwraps each k/v Variant
+// pair, and rebuilds a fresh Dictionary on the way out.
+//
+// @static
+func (Greeter) CountLetters(words []string) map[string]int64 {
+	out := map[string]int64{}
+	for _, w := range words {
+		for _, r := range w {
+			out[string(r)]++
+		}
+	}
+	return out
+}
+
+// Echo round-trips a Dictionary unchanged — exercises the Variant →
+// Go map → Variant path with the same shape on both sides.
+//
+// @static
+func (Greeter) Echo(in map[string]int64) map[string]int64 {
+	return in
+}
+
 // GreetIn returns a localized greeting string for the given Language.
 // Demonstrates cross-file enum resolution at the @class boundary —
 // Language is declared alongside LocaleLanguage but used here.

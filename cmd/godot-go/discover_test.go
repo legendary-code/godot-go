@@ -810,6 +810,117 @@ type Rand struct {
 	}
 }
 
+func TestEmitMapStringInt64(t *testing.T) {
+	// Primitive K/V map — registers as VariantTypeDictionary on both
+	// sides. Read fragment iterates Dictionary.Keys(), Set fragment
+	// builds a fresh Dictionary from the Go map.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func (w *Words) Counts(input map[string]int64) map[string]int64 { return input }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"VariantAsDictionary(args[0])",
+		"core.NewDictionary()",
+		"core.VariantSetDictionary(ret",
+		"core.NewVariantString(k_)",
+		"core.NewVariantInt(v_)",
+		"VariantTypeDictionary",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q in output", want)
+		}
+	}
+}
+
+func TestEmitMapInt32String(t *testing.T) {
+	// Asymmetric K/V (numeric K, string V) exercises the WrapVariant /
+	// UnwrapVariant cast paths — int32 needs `int32(...)` widening at
+	// the read boundary, `int64(...)` narrowing at the write.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Words struct {
+	// @extends
+	core.RefCounted
+}
+func (w *Words) Lookup(table map[int32]string) map[int32]string { return table }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"int32(core.VariantAsInt64(",
+		"core.NewVariantInt(int64(k_))",
+		"core.VariantAsString(gdextension.VariantPtr",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q in output", want)
+		}
+	}
+}
+
+func TestEmitMapNestedRejected(t *testing.T) {
+	// `map[string]map[K]V` — the inner map has no WrapVariant /
+	// UnwrapVariant so the nested wrap fails at codegen with a clear
+	// "value type ... is not supported" error.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type W struct {
+	// @extends
+	core.RefCounted
+}
+func (w *W) Bad(m map[string]map[string]int64) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, []*discovered{d})
+	if err == nil {
+		t.Fatalf("expected error for nested map, got nil")
+	}
+	if !strings.Contains(err.Error(), "value type") {
+		t.Errorf("error %q does not mention 'value type'", err.Error())
+	}
+}
+
+func TestEmitMapWithSliceValueRejected(t *testing.T) {
+	// `map[K][]V` is a Phase 2 item — slice value support is deferred
+	// until we add WrapVariant/UnwrapVariant to slice typeInfos. v1
+	// limits both K and V to typeTable primitives.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type W struct {
+	// @extends
+	core.RefCounted
+}
+func (w *W) Bad(m map[string][]int64) {}
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	err := emit(&buf, fset, []*discovered{d})
+	if err == nil {
+		t.Fatalf("expected error for slice-value map, got nil")
+	}
+	if !strings.Contains(err.Error(), "value type") {
+		t.Errorf("error %q does not mention 'value type'", err.Error())
+	}
+}
+
 func TestEmitNestedSliceRejected(t *testing.T) {
 	// Discovery accepts any AST shape; rejection happens at emit time
 	// via resolveType. Phase 7 sharpened the message — instead of
@@ -832,24 +943,6 @@ func (n *MyNode) Bad(values [][]int64) {}
 	}
 	if !strings.Contains(err.Error(), "nested slices") {
 		t.Fatalf("error %q does not mention nested slices", err.Error())
-	}
-}
-
-func TestEmitMapArgRejected(t *testing.T) {
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-type MyNode struct {
-	// @extends
-	core.Node
-}
-func (n *MyNode) Bad(m map[string]int) {}
-`
-	d, fset := mustDiscoverWithFset(t, src)
-	var buf strings.Builder
-	err := emit(&buf, fset, []*discovered{d})
-	if err == nil || !strings.Contains(err.Error(), "map types") {
-		t.Fatalf("expected map-types error, got %v", err)
 	}
 }
 

@@ -154,6 +154,148 @@ func registerGreeter() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "Greeter",
+		Name:  "count_letters",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self Greeter
+			arg0_arr := godot.VariantAsPackedStringArray(args[0])
+			defer arg0_arr.Destroy()
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]string, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.CountLetters(arg0)
+			result_dict := godot.NewDictionary()
+			for k_, v_ := range result {
+				k_v := godot.NewVariantString(k_)
+				v_v := godot.NewVariantInt(v_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			godot.VariantSetDictionary(ret, result_dict)
+			result_dict.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self Greeter
+			arg0_arr := *(*godot.PackedStringArray)(gdextension.PtrCallArg(args, 0))
+			arg0_n := arg0_arr.Size()
+			arg0 := make([]string, arg0_n)
+			for i := int64(0); i < arg0_n; i++ {
+				arg0[i] = arg0_arr.Get(i)
+			}
+			result := self.CountLetters(arg0)
+			result_dict := godot.NewDictionary()
+			for k_, v_ := range result {
+				k_v := godot.NewVariantString(k_)
+				v_v := godot.NewVariantInt(v_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			*(*godot.Dictionary)(ret) = result_dict
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeDictionary,
+		ReturnMetadata: gdextension.ArgMetaNone,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypePackedStringArray,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"words",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
+		Name:  "echo",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self Greeter
+			arg0_dict := godot.VariantAsDictionary(args[0])
+			defer arg0_dict.Destroy()
+			arg0_keys := arg0_dict.Keys()
+			defer arg0_keys.Destroy()
+			arg0_n := arg0_keys.Size()
+			arg0 := make(map[string]int64, arg0_n)
+			var arg0_def godot.Variant
+			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
+				arg0_kv := arg0_keys.Get(arg0_i)
+				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
+				arg0[godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))] = godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0_kv.Destroy()
+				arg0_vv.Destroy()
+			}
+			result := self.Echo(arg0)
+			result_dict := godot.NewDictionary()
+			for k_, v_ := range result {
+				k_v := godot.NewVariantString(k_)
+				v_v := godot.NewVariantInt(v_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			godot.VariantSetDictionary(ret, result_dict)
+			result_dict.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self Greeter
+			arg0_dict := *(*godot.Dictionary)(gdextension.PtrCallArg(args, 0))
+			arg0_keys := arg0_dict.Keys()
+			defer arg0_keys.Destroy()
+			arg0_n := arg0_keys.Size()
+			arg0 := make(map[string]int64, arg0_n)
+			var arg0_def godot.Variant
+			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
+				arg0_kv := arg0_keys.Get(arg0_i)
+				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
+				arg0[godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))] = godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0_kv.Destroy()
+				arg0_vv.Destroy()
+			}
+			result := self.Echo(arg0)
+			result_dict := godot.NewDictionary()
+			for k_, v_ := range result {
+				k_v := godot.NewVariantString(k_)
+				v_v := godot.NewVariantInt(v_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			*(*godot.Dictionary)(ret) = result_dict
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeDictionary,
+		ReturnMetadata: gdextension.ArgMetaNone,
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeDictionary,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"in",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
 		Name:  "greet_in",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
@@ -206,6 +348,16 @@ const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="hello">
             <return type="String"></return>
             <description>Returns the greeting in the instance&#39;s defaultLang —&#xA;exercises the newGreeter() factory&#39;s seeded state reaching a&#xA;regular ClassDB-bound method.</description>
+        </method>
+        <method name="count_letters" qualifiers="static">
+            <return type="Dictionary"></return>
+            <param index="0" name="words" type="PackedStringArray"></param>
+            <description>Demonstrates a map[K]V at the @class boundary. Wire&#xA;form is Godot&#39;s untyped Dictionary in both directions; the&#xA;codegen iterates the dictionary&#39;s keys, unwraps each k/v Variant&#xA;pair, and rebuilds a fresh Dictionary on the way out.</description>
+        </method>
+        <method name="echo" qualifiers="static">
+            <return type="Dictionary"></return>
+            <param index="0" name="in" type="Dictionary"></param>
+            <description>Round-trips a Dictionary unchanged — exercises the Variant →&#xA;Go map → Variant path with the same shape on both sides.</description>
         </method>
         <method name="greet_in" qualifiers="static">
             <return type="String"></return>

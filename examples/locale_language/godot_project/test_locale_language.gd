@@ -141,6 +141,25 @@ func _initialize() -> void:
 	ok = _check("Greeter.new().hello() = 'hello' (newGreeter seeded ENGLISH)",
 			g.hello(), "hello") and ok
 
+	# map[K]V at the @class boundary: Greeter.count_letters returns
+	# a Dictionary built from a Go-side map[string]int64. Letters count.
+	var counts: Dictionary = ClassDB.class_call_static("Greeter", "count_letters", PackedStringArray(["abc", "ab"]))
+	ok = _check("Greeter.count_letters(['abc','ab']).size() = 3",
+			counts.size(), 3) and ok
+	ok = _check("Greeter.count_letters(['abc','ab'])['a'] = 2",
+			counts["a"], 2) and ok
+	ok = _check("Greeter.count_letters(['abc','ab'])['b'] = 2",
+			counts["b"], 2) and ok
+	ok = _check("Greeter.count_letters(['abc','ab'])['c'] = 1",
+			counts["c"], 1) and ok
+
+	# Variant → Go map → Variant round-trip via Greeter.echo.
+	var input_dict: Dictionary = {"x": 1, "y": 2}
+	var echoed: Dictionary = ClassDB.class_call_static("Greeter", "echo", input_dict)
+	ok = _check("Greeter.echo({x:1,y:2}).size() = 2", echoed.size(), 2) and ok
+	ok = _check("Greeter.echo({x:1,y:2})['x'] = 1", echoed["x"], 1) and ok
+	ok = _check("Greeter.echo({x:1,y:2})['y'] = 2", echoed["y"], 2) and ok
+
 	if ok:
 		print("test_locale_language: ALL CHECKS PASSED")
 		quit(0)

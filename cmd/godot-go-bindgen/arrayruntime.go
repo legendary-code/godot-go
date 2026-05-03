@@ -121,6 +121,11 @@ func makePackedSlice(name, sliceElem, wireElem, toWire, fromWire string) arrayRu
 func buildArrayRuntimeTypes(realT string) []arrayRuntimeType {
 	return []arrayRuntimeType{
 		makeVariantOnly("Array"),
+		// Dictionary lives here despite the file's "arrayruntime" name —
+		// the variant-adapter shape is identical (opaque byte struct
+		// converted via the per-type FromType / ToType lookup).
+		// Slice helpers are skipped (Dictionary has no slice form).
+		makeVariantOnly("Dictionary"),
 		makePackedSlice("PackedByteArray", "byte", "int64", "int64(%s)", "byte(%s)"),
 		makePackedSlice("PackedInt32Array", "int32", "int64", "int64(%s)", "int32(%s)"),
 		makePackedSlice("PackedInt64Array", "int64", "int64", "%s", "%s"),
