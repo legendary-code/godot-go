@@ -87,6 +87,32 @@ func (Greeter) Echo(in map[string]int64) map[string]int64 {
 	return in
 }
 
+// LangCodes demonstrates a map with a user-enum value type
+// (Phase 2a) — Godot sees Dictionary; Go sees map[string]Language
+// with the typed enum identity round-tripping through the int64 wire
+// form. The codegen wraps each Language value as Variant::INT and
+// unwraps it via a typed cast.
+//
+// @static
+func (Greeter) LangCodes() map[string]Language {
+	return map[string]Language{
+		"en": LanguageEnglish,
+		"de": LanguageGerman,
+	}
+}
+
+// CharsByLang demonstrates a map with a slice value (Phase 2a) — wire
+// form is Dictionary[string, PackedStringArray], each entry built
+// inline by the codegen.
+//
+// @static
+func (Greeter) CharsByLang() map[string][]string {
+	return map[string][]string{
+		"en": {"a", "b", "c"},
+		"de": {"ä", "ö", "ü"},
+	}
+}
+
 // GreetIn returns a localized greeting string for the given Language.
 // Demonstrates cross-file enum resolution at the @class boundary —
 // Language is declared alongside LocaleLanguage but used here.

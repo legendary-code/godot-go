@@ -167,9 +167,9 @@ func registerGreeter() {
 			}
 			result := self.CountLetters(arg0)
 			result_dict := godot.NewDictionary()
-			for k_, v_ := range result {
-				k_v := godot.NewVariantString(k_)
-				v_v := godot.NewVariantInt(v_)
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
 				result_dict.Set(k_v, v_v)
 				k_v.Destroy()
 				v_v.Destroy()
@@ -189,9 +189,9 @@ func registerGreeter() {
 			}
 			result := self.CountLetters(arg0)
 			result_dict := godot.NewDictionary()
-			for k_, v_ := range result {
-				k_v := godot.NewVariantString(k_)
-				v_v := godot.NewVariantInt(v_)
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
 				result_dict.Set(k_v, v_v)
 				k_v.Destroy()
 				v_v.Destroy()
@@ -232,15 +232,17 @@ func registerGreeter() {
 			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
 				arg0_kv := arg0_keys.Get(arg0_i)
 				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
-				arg0[godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))] = godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				k_ := godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))
+				v_ := godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0[k_] = v_
 				arg0_kv.Destroy()
 				arg0_vv.Destroy()
 			}
 			result := self.Echo(arg0)
 			result_dict := godot.NewDictionary()
-			for k_, v_ := range result {
-				k_v := godot.NewVariantString(k_)
-				v_v := godot.NewVariantInt(v_)
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
 				result_dict.Set(k_v, v_v)
 				k_v.Destroy()
 				v_v.Destroy()
@@ -261,15 +263,17 @@ func registerGreeter() {
 			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
 				arg0_kv := arg0_keys.Get(arg0_i)
 				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
-				arg0[godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))] = godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				k_ := godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))
+				v_ := godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0[k_] = v_
 				arg0_kv.Destroy()
 				arg0_vv.Destroy()
 			}
 			result := self.Echo(arg0)
 			result_dict := godot.NewDictionary()
-			for k_, v_ := range result {
-				k_v := godot.NewVariantString(k_)
-				v_v := godot.NewVariantInt(v_)
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
 				result_dict.Set(k_v, v_v)
 				k_v.Destroy()
 				v_v.Destroy()
@@ -292,6 +296,94 @@ func registerGreeter() {
 		ArgClassNames: []string{
 			"",
 		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
+		Name:  "lang_codes",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self Greeter
+			result := self.LangCodes()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(int64(vIn_))
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			godot.VariantSetDictionary(ret, result_dict)
+			result_dict.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self Greeter
+			result := self.LangCodes()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(int64(vIn_))
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			*(*godot.Dictionary)(ret) = result_dict
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeDictionary,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Greeter",
+		Name:  "chars_by_lang",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self Greeter
+			result := self.CharsByLang()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v_arr := godot.NewPackedStringArray()
+				for _, v_v_e := range vIn_ {
+					v_v_arr.PushBack(v_v_e)
+				}
+				v_v := godot.NewVariantPackedStringArray(v_v_arr)
+				v_v_arr.Destroy()
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			godot.VariantSetDictionary(ret, result_dict)
+			result_dict.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self Greeter
+			result := self.CharsByLang()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v_arr := godot.NewPackedStringArray()
+				for _, v_v_e := range vIn_ {
+					v_v_arr.PushBack(v_v_e)
+				}
+				v_v := godot.NewVariantPackedStringArray(v_v_arr)
+				v_v_arr.Destroy()
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			*(*godot.Dictionary)(ret) = result_dict
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeDictionary,
+		ReturnMetadata: gdextension.ArgMetaNone,
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -358,6 +450,14 @@ const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type="Dictionary"></return>
             <param index="0" name="in" type="Dictionary"></param>
             <description>Round-trips a Dictionary unchanged — exercises the Variant →&#xA;Go map → Variant path with the same shape on both sides.</description>
+        </method>
+        <method name="lang_codes" qualifiers="static">
+            <return type="Dictionary"></return>
+            <description>Demonstrates a map with a user-enum value type&#xA;(Phase 2a) — Godot sees Dictionary; Go sees map[string]Language&#xA;with the typed enum identity round-tripping through the int64 wire&#xA;form. The codegen wraps each Language value as Variant::INT and&#xA;unwraps it via a typed cast.</description>
+        </method>
+        <method name="chars_by_lang" qualifiers="static">
+            <return type="Dictionary"></return>
+            <description>Demonstrates a map with a slice value (Phase 2a) — wire&#xA;form is Dictionary[string, PackedStringArray], each entry built&#xA;inline by the codegen.</description>
         </method>
         <method name="greet_in" qualifiers="static">
             <return type="String"></return>

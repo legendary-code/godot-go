@@ -833,8 +833,8 @@ func (w *Words) Counts(input map[string]int64) map[string]int64 { return input }
 		"VariantAsDictionary(args[0])",
 		"core.NewDictionary()",
 		"core.VariantSetDictionary(ret",
-		"core.NewVariantString(k_)",
-		"core.NewVariantInt(v_)",
+		"core.NewVariantString(kIn_)",
+		"core.NewVariantInt(vIn_)",
 		"VariantTypeDictionary",
 	} {
 		if !strings.Contains(out, want) {
@@ -864,7 +864,7 @@ func (w *Words) Lookup(table map[int32]string) map[int32]string { return table }
 	out := buf.String()
 	for _, want := range []string{
 		"int32(core.VariantAsInt64(",
-		"core.NewVariantInt(int64(k_))",
+		"core.NewVariantInt(int64(kIn_))",
 		"core.VariantAsString(gdextension.VariantPtr",
 	} {
 		if !strings.Contains(out, want) {
@@ -897,10 +897,11 @@ func (w *W) Bad(m map[string]map[string]int64) {}
 	}
 }
 
-func TestEmitMapWithSliceValueRejected(t *testing.T) {
-	// `map[K][]V` is a Phase 2 item — slice value support is deferred
-	// until we add WrapVariant/UnwrapVariant to slice typeInfos. v1
-	// limits both K and V to typeTable primitives.
+func TestEmitMapEnumValue(t *testing.T) {
+	// `map[string]<UserEnum>` exercises the enumTypeInfo Wrap/Unwrap
+	// path. Both wrap (NewVariantInt with int64 cast) and unwrap
+	// (typed cast on VariantAsInt64 result) need to round-trip the
+	// enum identity.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -908,16 +909,140 @@ type W struct {
 	// @extends
 	core.RefCounted
 }
-func (w *W) Bad(m map[string][]int64) {}
+// @enum
+type Mode int
+const (
+	ModeIdle Mode = iota
+	ModeRun
+)
+func (w *W) Modes(in map[string]Mode) map[string]Mode { return in }
 `
 	d, fset := mustDiscoverWithFset(t, src)
 	var buf strings.Builder
-	err := emit(&buf, fset, []*discovered{d})
-	if err == nil {
-		t.Fatalf("expected error for slice-value map, got nil")
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
 	}
-	if !strings.Contains(err.Error(), "value type") {
-		t.Errorf("error %q does not mention 'value type'", err.Error())
+	out := buf.String()
+	for _, want := range []string{
+		"core.NewVariantInt(int64(vIn_))",
+		"Mode(core.VariantAsInt64(",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q", want)
+		}
+	}
+}
+
+func TestEmitMapUserClassValue(t *testing.T) {
+	// `map[string]*<UserClass>` exercises userClassTypeInfo Wrap/Unwrap.
+	// Wrap path nil-checks the source pointer; unwrap routes through
+	// the per-class side-table lookup.
+	srcA := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Owner struct {
+	// @extends
+	core.RefCounted
+}
+func (o *Owner) Children(in map[string]*Child) map[string]*Child { return in }
+`
+	srcB := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type Child struct {
+	// @extends
+	core.RefCounted
+}
+`
+	fset := token.NewFileSet()
+	fa, err := parser.ParseFile(fset, "owner.go", srcA, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse a: %v", err)
+	}
+	fb, err := parser.ParseFile(fset, "child.go", srcB, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse b: %v", err)
+	}
+	dA, err := discover(fset, fa, "x")
+	if err != nil {
+		t.Fatalf("discover a: %v", err)
+	}
+	dB, err := discover(fset, fb, "x")
+	if err != nil {
+		t.Fatalf("discover b: %v", err)
+	}
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{dA, dB}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"core.NewVariantObject(v_v_ptr)",
+		"lookupChildByEngine(core.VariantAsObject(",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q", want)
+		}
+	}
+}
+
+func TestEmitMapEngineClassValue(t *testing.T) {
+	// `map[string]*<bindings>.<EngineClass>` exercises
+	// engineClassTypeInfo Wrap/Unwrap. Unwrap is multi-statement
+	// (BindPtr for the borrowed-view wrap).
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type W struct {
+	// @extends
+	core.RefCounted
+}
+func (w *W) Nodes(in map[string]*core.Node) map[string]*core.Node { return in }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"v_.BindPtr(v__ptr)",
+		"core.NewVariantObject(v_v_ptr)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q", want)
+		}
+	}
+}
+
+func TestEmitMapSliceValue(t *testing.T) {
+	// `map[K][]V` exercises the slice-typeInfo Wrap/Unwrap path. Wrap
+	// builds a fresh Packed<X>Array per entry, wraps in a Variant.
+	// Unwrap reads the Packed array out of the Variant and rebuilds
+	// the Go slice.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type W struct {
+	// @extends
+	core.RefCounted
+}
+func (w *W) Buckets(in map[string][]int64) map[string][]int64 { return in }
+`
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf strings.Builder
+	if err := emit(&buf, fset, []*discovered{d}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"core.NewPackedInt64Array()",
+		"v_v_arr.PushBack(",
+		"v__arr := core.VariantAsPackedInt64Array(",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing fragment %q", want)
+		}
 	}
 }
 

@@ -64,22 +64,29 @@ type typeInfo struct {
 	CallWriteReturn    func(bindings, expr string) string
 	BuildVariant       func(bindings string, idx int, srcExpr string) string
 
-	// WrapVariant returns an *expression* (no statement, no leading
-	// `name :=`) that constructs a fresh `<bindings>.Variant` from
-	// srcExpr (already the user-facing Go-side type). Used by map
-	// codegen to wrap each map key and value into a Variant before
-	// handing them to Dictionary.Set. Caller owns the resulting Variant
-	// and must call .Destroy() once done.
-	WrapVariant func(bindings, srcExpr string) string
+	// WrapVariant emits *statements* that produce a Variant from the
+	// user-facing Go-side value `srcExpr`, with the resulting Variant
+	// bound to the local identifier `dstName`. Multi-statement form
+	// rather than expression form so types whose wrap path is multi-
+	// step (object pointers with nil-checks, slices with per-element
+	// loops) compose cleanly with the call sites.
+	//
+	// Caller owns the resulting Variant and must call <dstName>.Destroy()
+	// once done. The mapTypeInfo fragments do this immediately after
+	// Dictionary.Set within the per-pair loop.
+	WrapVariant func(bindings, dstName, srcExpr string) string
 
-	// UnwrapVariant returns an expression that converts varExpr (a
-	// local *value* of type `<bindings>.Variant`) into the user-facing
-	// Go-side type. Used by map codegen to extract the typed value from
-	// a Variant returned by Array.Get / Dictionary.Get. The expression
-	// references gdextension and unsafe to take the address; callers
-	// must ensure varExpr is a plain identifier (not a complex
-	// expression) so `&varExpr` is valid Go.
-	UnwrapVariant func(bindings, varExpr string) string
+	// UnwrapVariant emits statements that produce a typed Go-side value
+	// from `varExpr` (a local *value* of type `<bindings>.Variant`) and
+	// bind it to the local identifier `dstName`. varExpr must be a plain
+	// identifier so `&varExpr` is a valid Go expression for the
+	// gdextension.VariantPtr cast.
+	//
+	// Multi-statement form lets object-class typeInfos emit the
+	// Variant→ObjectPtr→side-table-lookup sequence (or the borrowed-
+	// view BindPtr sequence for engine classes) without expression-
+	// level contortions.
+	UnwrapVariant func(bindings, dstName, varExpr string) string
 }
 
 // typeTable indexes typeInfo by Go type ident. Keys must match exactly
@@ -105,11 +112,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantBool(%s)", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantBool(%s)", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantBool(%s)", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("%s.VariantAsBool(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s.VariantAsBool(gdextension.VariantPtr(unsafe.Pointer(&%s)))", dst, b, varExpr)
 		},
 	},
 	"int": {
@@ -131,11 +138,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(int64(%s))", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantInt(int64(%s))", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantInt(int64(%s))", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("int(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := int(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", dst, b, varExpr)
 		},
 	},
 	"int32": {
@@ -157,11 +164,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(int64(%s))", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantInt(int64(%s))", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantInt(int64(%s))", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("int32(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := int32(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", dst, b, varExpr)
 		},
 	},
 	"int64": {
@@ -183,11 +190,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(%s)", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantInt(%s)", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantInt(%s)", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", dst, b, varExpr)
 		},
 	},
 	"float32": {
@@ -209,11 +216,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantFloat(float64(%s))", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantFloat(float64(%s))", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantFloat(float64(%s))", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("float32(%s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := float32(%s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", dst, b, varExpr)
 		},
 	},
 	"float64": {
@@ -235,11 +242,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantFloat(%s)", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantFloat(%s)", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantFloat(%s)", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("%s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s.VariantAsFloat64(gdextension.VariantPtr(unsafe.Pointer(&%s)))", dst, b, varExpr)
 		},
 	},
 	"string": {
@@ -261,11 +268,11 @@ var typeTable = map[string]*typeInfo{
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantString(%s)", idx, b, srcExpr)
 		},
-		WrapVariant: func(b, expr string) string {
-			return fmt.Sprintf("%s.NewVariantString(%s)", b, expr)
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantString(%s)", dst, b, src)
 		},
-		UnwrapVariant: func(b, varExpr string) string {
-			return fmt.Sprintf("%s.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&%s)))", b, varExpr)
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&%s)))", dst, b, varExpr)
 		},
 	},
 }
@@ -467,6 +474,25 @@ if %s != nil {
 }
 arg%d := %s.NewVariantObject(arg%d_ptr)`, idx, srcExpr, idx, srcExpr, idx, b, idx)
 		},
+		// WrapVariant for *<UserClass>: handle nil source by passing a
+		// zero ObjectPtr (which yields an OBJECT-typed variant whose
+		// pointer is null — Godot interprets this as a missing object).
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`var %s_ptr gdextension.ObjectPtr
+if %s != nil {
+	%s_ptr = %s.Ptr()
+}
+%s := %s.NewVariantObject(%s_ptr)`, dst, src, dst, src, dst, b, dst)
+		},
+		// UnwrapVariant: VariantAsObject yields the engine ObjectPtr;
+		// the per-class side table maps it to the registered Go
+		// wrapper. Foreign instances (not registered with this
+		// extension) come back as nil — same semantics as the
+		// CallReadArg path, but without the early-return CallError
+		// since map values can legitimately be nil.
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s(%s.VariantAsObject(gdextension.VariantPtr(unsafe.Pointer(&%s))))", dst, lookupName, b, varExpr)
+		},
 	}
 }
 
@@ -620,6 +646,29 @@ if %s != nil {
 }
 arg%d := %s.NewVariantObject(arg%d_ptr)`, idx, srcExpr, idx, srcExpr, idx, b, idx)
 		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`var %s_ptr gdextension.ObjectPtr
+if %s != nil {
+	%s_ptr = %s.Ptr()
+}
+%s := %s.NewVariantObject(%s_ptr)`, dst, src, dst, src, dst, b, dst)
+		},
+		// UnwrapVariant for engine-class pointer: borrowed-view wrap.
+		// Returns a fresh `*<bindings>.<Class>` whose engine pointer is
+		// bound. Nil ObjectPtr produces a nil Go pointer (so map values
+		// can legitimately be nil).
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_ptr := %s.VariantAsObject(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+var %s *%s.%s
+if %s_ptr != nil {
+	%s = &%s.%s{}
+	%s.BindPtr(%s_ptr)
+}`, dst, b, varExpr,
+				dst, b, className,
+				dst,
+				dst, b, className,
+				dst, dst)
+		},
 	}
 }
 
@@ -696,6 +745,42 @@ arg%d_arr := %s.MakeArrayOfObjects(%q, arg%d_ptrs...)
 arg%d := %s.NewVariantArray(arg%d_arr)
 arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b, idx, idx)
 		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`%s_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for %s_j, %s_e := range %s {
+	if %s_e != nil {
+		%s_ptrs[%s_j] = %s_e.Ptr()
+	}
+}
+%s_arr := %s.MakeArrayOfObjects(%q, %s_ptrs...)
+%s := %s.NewVariantArray(%s_arr)
+%s_arr.Destroy()`, dst, src,
+				dst, dst, src,
+				dst,
+				dst, dst, dst,
+				dst, b, className, dst,
+				dst, b, dst,
+				dst)
+		},
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_arr := %s.VariantAsArray(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+%s_ptrs := %s_arr.ToObjectSlice()
+%s := make([]*%s.%s, len(%s_ptrs))
+for %s_i, %s_p := range %s_ptrs {
+	if %s_p != nil {
+		%s[%s_i] = &%s.%s{}
+		%s[%s_i].BindPtr(%s_p)
+	}
+}
+%s_arr.Destroy()`, dst, b, varExpr,
+				dst, dst,
+				dst, b, className, dst,
+				dst, dst, dst,
+				dst,
+				dst, dst, b, className,
+				dst, dst, dst,
+				dst)
+		},
 	}
 }
 
@@ -769,6 +854,43 @@ for i, v := range %s {
 arg%d_arr := %s.MakeArrayOfObjects(%q, arg%d_ptrs...)
 arg%d := %s.NewVariantArray(arg%d_arr)
 arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, className, idx, idx, b, idx, idx)
+		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`%s_ptrs := make([]gdextension.ObjectPtr, len(%s))
+for %s_j, %s_e := range %s {
+	if %s_e != nil {
+		%s_ptrs[%s_j] = %s_e.Ptr()
+	}
+}
+%s_arr := %s.MakeArrayOfObjects(%q, %s_ptrs...)
+%s := %s.NewVariantArray(%s_arr)
+%s_arr.Destroy()`, dst, src,
+				dst, dst, src,
+				dst,
+				dst, dst, dst,
+				dst, b, className, dst,
+				dst, b, dst,
+				dst)
+		},
+		// UnwrapVariant: foreign-instance lookups can return nil. Unlike
+		// the scalar/CallReadArg path, we don't short-circuit the call —
+		// nil entries are kept in the slice so the user can decide how
+		// to handle them (mirrors the foreign-instance contract for
+		// scalar map values; aggregate slot doesn't have a clean
+		// "single bad arg" failure mode).
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_arr := %s.VariantAsArray(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+%s_ptrs := %s_arr.ToObjectSlice()
+%s := make([]*%s, len(%s_ptrs))
+for %s_i, %s_p := range %s_ptrs {
+	%s[%s_i] = %s(%s_p)
+}
+%s_arr.Destroy()`, dst, b, varExpr,
+				dst, dst,
+				dst, className, dst,
+				dst, dst, dst,
+				dst, dst, lookupName, dst,
+				dst)
 		},
 	}
 }
@@ -866,6 +988,38 @@ arg%d_arr := %s.MakeArrayOfInts(arg%d_i64...)
 arg%d := %s.NewVariantArray(arg%d_arr)
 arg%d_arr.Destroy()`, idx, srcExpr, srcExpr, idx, idx, b, idx, idx, b, idx, idx)
 		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`%s_i64 := make([]int64, len(%s))
+for %s_j, %s_e := range %s {
+	%s_i64[%s_j] = int64(%s_e)
+}
+%s_arr := %s.MakeArrayOfInts(%s_i64...)
+%s := %s.NewVariantArray(%s_arr)
+%s_arr.Destroy()`, dst, src,
+				dst, dst, src,
+				dst, dst, dst,
+				dst, b, dst,
+				dst, b, dst,
+				dst)
+		},
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_arr := %s.VariantAsArray(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+%s_n := %s_arr.Size()
+%s := make([]%s, %s_n)
+for %s_i := int64(0); %s_i < %s_n; %s_i++ {
+	%s_v := %s_arr.Get(%s_i)
+	%s[%s_i] = %s(%s_v.AsInt())
+	%s_v.Destroy()
+}
+%s_arr.Destroy()`, dst, b, varExpr,
+				dst, dst,
+				dst, enumGoType, dst,
+				dst, dst, dst, dst,
+				dst, dst, dst,
+				dst, dst, enumGoType, dst,
+				dst,
+				dst)
+		},
 	}
 }
 
@@ -899,6 +1053,18 @@ arg%d := arg%d_arr.ToBoolSlice()`, idx, b, idx, idx, idx)
 			return fmt.Sprintf(`arg%d_arr := %s.MakeArrayOfBools(%s...)
 arg%d := %s.NewVariantArray(arg%d_arr)
 arg%d_arr.Destroy()`, idx, b, srcExpr, idx, b, idx, idx)
+		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`%s_arr := %s.MakeArrayOfBools(%s...)
+%s := %s.NewVariantArray(%s_arr)
+%s_arr.Destroy()`, dst, b, src,
+				dst, b, dst,
+				dst)
+		},
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_arr := %s.VariantAsArray(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+%s := %s_arr.ToBoolSlice()
+%s_arr.Destroy()`, dst, b, varExpr, dst, dst, dst)
 		},
 	}
 }
@@ -974,6 +1140,41 @@ arg%d_arr.Destroy()`, idx, b, cat.PackedTypeName,
 				idx, b, cat.PackedTypeName, idx,
 				idx)
 		},
+		// WrapVariant — slice value at a Dictionary slot. Builds a fresh
+		// Packed<X>Array, pushes elements, wraps in a Variant. Same
+		// shape as BuildVariant but with caller-supplied dst name (so
+		// the per-pair loop in mapTypeInfo can name the intermediate
+		// the way it expects).
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf(`%s_arr := %s.New%s()
+for _, %s_e := range %s {
+	%s_arr.PushBack(%s)
+}
+%s := %s.NewVariant%s(%s_arr)
+%s_arr.Destroy()`,
+				dst, b, cat.PackedTypeName,
+				dst, src,
+				dst, sliceCastExpr(cat.CastTo, dst+"_e"),
+				dst, b, cat.PackedTypeName, dst,
+				dst)
+		},
+		// UnwrapVariant — read a Packed<X>Array out of a Variant slot
+		// and copy elements into a fresh Go slice.
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf(`%s_arr := %s.VariantAs%s(gdextension.VariantPtr(unsafe.Pointer(&%s)))
+%s_n := %s_arr.Size()
+%s := make([]%s, %s_n)
+for %s_i := int64(0); %s_i < %s_n; %s_i++ {
+	%s[%s_i] = %s
+}
+%s_arr.Destroy()`,
+				dst, b, cat.PackedTypeName, varExpr,
+				dst, dst,
+				dst, elemType, dst,
+				dst, dst, dst, dst,
+				dst, dst, sliceCastExpr(cat.CastFrom, fmt.Sprintf("%s_arr.Get(%s_i)", dst, dst)),
+				dst)
+		},
 	}
 }
 
@@ -1009,17 +1210,21 @@ func mapTypeInfo(key, value *typeInfo) (*typeInfo, error) {
 	goType := "map[" + key.GoType + "]" + value.GoType
 
 	readBody := func(b string, idx int) string {
+		kvName := fmt.Sprintf("arg%d_kv", idx)
+		vvName := fmt.Sprintf("arg%d_vv", idx)
 		return fmt.Sprintf(`arg%d_keys := arg%d_dict.Keys()
 defer arg%d_keys.Destroy()
 arg%d_n := arg%d_keys.Size()
 arg%d := make(%s, arg%d_n)
 var arg%d_def %s.Variant
 for arg%d_i := int64(0); arg%d_i < arg%d_n; arg%d_i++ {
-	arg%d_kv := arg%d_keys.Get(arg%d_i)
-	arg%d_vv := arg%d_dict.Get(arg%d_kv, arg%d_def)
-	arg%d[%s] = %s
-	arg%d_kv.Destroy()
-	arg%d_vv.Destroy()
+	%s := arg%d_keys.Get(arg%d_i)
+	%s := arg%d_dict.Get(%s, arg%d_def)
+	%s
+	%s
+	arg%d[k_] = v_
+	%s.Destroy()
+	%s.Destroy()
 }`,
 			idx, idx,
 			idx,
@@ -1027,27 +1232,27 @@ for arg%d_i := int64(0); arg%d_i < arg%d_n; arg%d_i++ {
 			idx, goType, idx,
 			idx, b,
 			idx, idx, idx, idx,
-			idx, idx, idx,
-			idx, idx, idx, idx,
+			kvName, idx, idx,
+			vvName, idx, kvName, idx,
+			key.UnwrapVariant(b, "k_", kvName),
+			value.UnwrapVariant(b, "v_", vvName),
 			idx,
-			key.UnwrapVariant(b, fmt.Sprintf("arg%d_kv", idx)),
-			value.UnwrapVariant(b, fmt.Sprintf("arg%d_vv", idx)),
-			idx, idx)
+			kvName, vvName)
 	}
 
 	writeBody := func(b, expr, dstName string) string {
 		return fmt.Sprintf(`%s := %s.NewDictionary()
-for k_, v_ := range %s {
-	k_v := %s
-	v_v := %s
+for kIn_, vIn_ := range %s {
+	%s
+	%s
 	%s.Set(k_v, v_v)
 	k_v.Destroy()
 	v_v.Destroy()
 }`,
 			dstName, b,
 			expr,
-			key.WrapVariant(b, "k_"),
-			value.WrapVariant(b, "v_"),
+			key.WrapVariant(b, "k_v", "kIn_"),
+			value.WrapVariant(b, "v_v", "vIn_"),
 			dstName)
 	}
 
@@ -1118,6 +1323,12 @@ func enumTypeInfo(name, exposedName string) *typeInfo {
 		},
 		BuildVariant: func(b string, idx int, srcExpr string) string {
 			return fmt.Sprintf("arg%d := %s.NewVariantInt(int64(%s))", idx, b, srcExpr)
+		},
+		WrapVariant: func(b, dst, src string) string {
+			return fmt.Sprintf("%s := %s.NewVariantInt(int64(%s))", dst, b, src)
+		},
+		UnwrapVariant: func(b, dst, varExpr string) string {
+			return fmt.Sprintf("%s := %s(%s.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&%s))))", dst, name, b, varExpr)
 		},
 	}
 }

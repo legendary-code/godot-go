@@ -160,6 +160,23 @@ func _initialize() -> void:
 	ok = _check("Greeter.echo({x:1,y:2})['x'] = 1", echoed["x"], 1) and ok
 	ok = _check("Greeter.echo({x:1,y:2})['y'] = 2", echoed["y"], 2) and ok
 
+	# Phase 2a: user-enum value in a Dictionary. Wire wraps each Go
+	# Language value as Variant::INT; GDScript sees the int constants
+	# (LanguageEnglish=1, LanguageGerman=2 from locale_language.go's
+	# const block).
+	var lang_codes: Dictionary = ClassDB.class_call_static("Greeter", "lang_codes")
+	ok = _check("Greeter.lang_codes().size() = 2", lang_codes.size(), 2) and ok
+	ok = _check("Greeter.lang_codes()['en'] = 1 (ENGLISH)", lang_codes["en"], 1) and ok
+	ok = _check("Greeter.lang_codes()['de'] = 2 (GERMAN)", lang_codes["de"], 2) and ok
+
+	# Phase 2a: slice value in a Dictionary. Each entry's value is
+	# built as a fresh PackedStringArray inline by the codegen.
+	var chars_by_lang: Dictionary = ClassDB.class_call_static("Greeter", "chars_by_lang")
+	ok = _check("Greeter.chars_by_lang().size() = 2", chars_by_lang.size(), 2) and ok
+	var chars_en: PackedStringArray = chars_by_lang["en"]
+	ok = _check("Greeter.chars_by_lang()['en'].size() = 3", chars_en.size(), 3) and ok
+	ok = _check("Greeter.chars_by_lang()['en'][0] = 'a'", chars_en[0], "a") and ok
+
 	if ok:
 		print("test_locale_language: ALL CHECKS PASSED")
 		quit(0)
