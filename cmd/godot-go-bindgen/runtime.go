@@ -516,8 +516,10 @@ func PrintInfof(format string, args ...any) {
 // engine.print_to_stdout enabled in editor mode). Useful for "noisy"
 // diagnostic logging that should be opt-in.
 //
-// GDExtension doesn't expose print_debug directly (it's a GDScript-
-// only utility). PrintVerbose is the closest analog.
+// GDExtension doesn't expose print_debug directly (GDScript's
+// print_debug is a GDScriptUtilityFunction, not a global utility).
+// PrintDebug is provided as an alias of PrintVerbose for naming
+// muscle-memory.
 func PrintVerbose(args ...any) {
 	callPrintUtility(utilPrintVerbose(), fmt.Sprint(args...))
 }
@@ -526,6 +528,14 @@ func PrintVerbose(args ...any) {
 func PrintVerbosef(format string, args ...any) {
 	callPrintUtility(utilPrintVerbose(), fmt.Sprintf(format, args...))
 }
+
+// PrintDebug is an alias of PrintVerbose. Provided for muscle-memory
+// parity with GDScript's print_debug(); the underlying mechanism is
+// identical (print_verbose utility, opt-in via --verbose).
+func PrintDebug(args ...any) { PrintVerbose(args...) }
+
+// PrintDebugf is an alias of PrintVerbosef.
+func PrintDebugf(format string, args ...any) { PrintVerbosef(format, args...) }
 
 // PrintWarning logs args to Godot's Output dock at warning level
 // (yellow text) with caller info. Routes through gdextension's
