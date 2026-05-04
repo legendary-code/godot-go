@@ -16,10 +16,10 @@ import (
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, func() {
 		v := gdextension.GetGodotVersion()
-		runtime.Printf("godot-go: locale_language example loaded (Godot %s — %s)", v.Short(), v.String)
+		runtime.PrintInfof("godot-go: locale_language example loaded (Godot %s — %s)", v.Short(), v.String)
 	})
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
-		runtime.Print("godot-go: locale_language SCENE deinit, goodbye")
+		runtime.PrintInfo("godot-go: locale_language SCENE deinit, goodbye")
 	})
 }
 

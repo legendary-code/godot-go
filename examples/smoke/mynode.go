@@ -138,7 +138,7 @@ const (
 // @description Greet GDScript callers via Godot's Output dock.
 // @see [method greet]
 func (n *MyNode) Hello() {
-	runtime.Print("godot-go: MyNode.Hello() reached from GDScript")
+	runtime.PrintInfo("godot-go: MyNode.Hello() reached from GDScript")
 }
 
 // Add exercises Phase 5d primitive arg / return marshalling.
@@ -253,5 +253,5 @@ func (n *MyNode) CurrentStance() Stance {
 //
 // @override
 func (n *MyNode) Process(delta float64) {
-	runtime.Print(fmt.Sprintf("godot-go: MyNode._process(%.2f) reached from GDScript", delta))
+	runtime.PrintInfo(fmt.Sprintf("godot-go: MyNode._process(%.2f) reached from GDScript", delta))
 }

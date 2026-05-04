@@ -47,7 +47,7 @@ func newGreeter() *Greeter {
 //
 // @override
 func (g *Greeter) Init() {
-	runtime.Print("Greeter.Init: constructor virtual fired")
+	runtime.PrintInfo("Greeter.Init: constructor virtual fired")
 }
 
 // Hello returns the greeting in the instance's defaultLang —

@@ -33,12 +33,12 @@ import (
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, func() {
 		v := gdextension.GetGodotVersion()
-		runtime.Printf("godot-go: hello godot-go (Godot %s — %s)", v.Short(), v.String)
+		runtime.PrintInfof("godot-go: hello godot-go (Godot %s — %s)", v.Short(), v.String)
 
 		runSmokeChecks()
 	})
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
-		runtime.Print("godot-go: SCENE deinit, goodbye")
+		runtime.PrintInfo("godot-go: SCENE deinit, goodbye")
 	})
 }
 
@@ -47,11 +47,11 @@ func runSmokeChecks() {
 	check := func(label string, ok bool, got, want any) {
 		if ok {
 			passed++
-			runtime.Printf("godot-go: PASS  %s = %v", label, got)
+			runtime.PrintInfof("godot-go: PASS  %s = %v", label, got)
 			return
 		}
 		failed++
-		runtime.Printerrf("godot-go: FAIL  %s = %v (expected %v)", label, got, want)
+		runtime.PrintErrorf("godot-go: FAIL  %s = %v (expected %v)", label, got, want)
 	}
 
 	// Vector2(3, 4).Length() exercises the PtrCall float ABI on both sides:
@@ -223,9 +223,9 @@ func runSmokeChecks() {
 	check("refcount leak smoke (100 RegEx alloc/drop) — main loop survives", true, true, true)
 
 	if failed == 0 {
-		runtime.Printf("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
+		runtime.PrintInfof("godot-go: smoke checks OK (%d/%d passed)", passed, passed+failed)
 	} else {
-		runtime.Printerrf("godot-go: smoke checks FAILED (%d/%d passed, %d failed)",
+		runtime.PrintErrorf("godot-go: smoke checks FAILED (%d/%d passed, %d failed)",
 			passed, passed+failed, failed)
 	}
 }

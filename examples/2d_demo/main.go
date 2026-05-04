@@ -14,10 +14,10 @@ import (
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, func() {
 		v := gdextension.GetGodotVersion()
-		runtime.Printf("godot-go: 2d_demo loaded (Godot %s)", v.Short())
+		runtime.PrintInfof("godot-go: 2d_demo loaded (Godot %s)", v.Short())
 	})
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
-		runtime.Print("godot-go: 2d_demo SCENE deinit, goodbye")
+		runtime.PrintInfo("godot-go: 2d_demo SCENE deinit, goodbye")
 	})
 }
 
