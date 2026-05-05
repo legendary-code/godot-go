@@ -156,6 +156,15 @@ func registerMyNode() {
 			n := &MyNode{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node"))
 			n.BindPtr(parent)
+			// RefCounted-derived user classes need one extra Reference()
+			// at construct time so the engine ptr survives Godot's
+			// typed-Variant property-storage round-trips. Non-RefCounted
+			// classes (Node/Object descendants) don't satisfy the
+			// interface — the assertion is a one-shot per instance,
+			// not per-call, so it doesn't accumulate.
+			if rc, ok := any(n).(interface{ Reference() bool }); ok {
+				rc.Reference()
+			}
 			return parent, registerMyNodeInstance(n, parent)
 		},
 
@@ -1515,9 +1524,237 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     </constants>
 </class>`
 
+// === RefHolder (refholder.go) ===
+
+// Per-instance side tables for RefHolder. The void* value the host
+// hands back to us as p_instance is the small integer id we returned from
+// Construct, not a Go pointer (cgo forbids storing Go pointers in
+// C-visible memory). The parallel <X>ByEngine map is keyed by the engine
+// ObjectPtr Godot uses for object identity — populated by Construct so
+// methods that take *RefHolder args can recover the Go wrapper
+// from the ObjectPtr Godot passes through Variant arg slots.
+var (
+	refHolderInstancesMu sync.Mutex
+	refHolderInstances   = map[uintptr]*RefHolder{}
+	refHolderByEngine    = map[uintptr]*RefHolder{}
+	refHolderNextID      uintptr
+)
+
+func registerRefHolderInstance(n *RefHolder, parent gdextension.ObjectPtr) unsafe.Pointer {
+	refHolderInstancesMu.Lock()
+	refHolderNextID++
+	id := refHolderNextID
+	refHolderInstances[id] = n
+	refHolderByEngine[uintptr(parent)] = n
+	refHolderInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupRefHolderInstance(handle unsafe.Pointer) *RefHolder {
+	refHolderInstancesMu.Lock()
+	defer refHolderInstancesMu.Unlock()
+	return refHolderInstances[uintptr(handle)]
+}
+
+// lookupRefHolderByEngine resolves an engine ObjectPtr to the
+// *RefHolder we registered at Construct time. Returns nil for
+// foreign instances — see the foreign-instance policy in
+// docs/reference.md.
+func lookupRefHolderByEngine(p gdextension.ObjectPtr) *RefHolder {
+	refHolderInstancesMu.Lock()
+	defer refHolderInstancesMu.Unlock()
+	return refHolderByEngine[uintptr(p)]
+}
+
+// NewRefHolder constructs a fresh RefHolder instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table).
+//
+// Use this instead of plain &RefHolder{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*RefHolder).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func NewRefHolder() *RefHolder {
+	parent := gdextension.ConstructObject(gdextension.InternStringName("RefHolder"))
+	return lookupRefHolderByEngine(parent)
+}
+
+func releaseRefHolderInstance(handle unsafe.Pointer) {
+	refHolderInstancesMu.Lock()
+	defer refHolderInstancesMu.Unlock()
+	n, ok := refHolderInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
+	delete(refHolderInstances, uintptr(handle))
+	delete(refHolderByEngine, uintptr(n.Ptr()))
+}
+
+func registerRefHolder() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:      "RefHolder",
+		Parent:    "RefCounted",
+		IsExposed: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &RefHolder{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("RefCounted"))
+			n.BindPtr(parent)
+			// RefCounted-derived user classes need one extra Reference()
+			// at construct time so the engine ptr survives Godot's
+			// typed-Variant property-storage round-trips. Non-RefCounted
+			// classes (Node/Object descendants) don't satisfy the
+			// interface — the assertion is a one-shot per instance,
+			// not per-call, so it doesn't accumulate.
+			if rc, ok := any(n).(interface{ Reference() bool }); ok {
+				rc.Reference()
+			}
+			return parent, registerRefHolderInstance(n, parent)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseRefHolderInstance(instance)
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "RefHolder",
+		Name:  "new_ref_holder_tagged",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self RefHolder
+			arg0 := godot.VariantAsString(args[0])
+			result := self.NewRefHolderTagged(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			godot.VariantSetObject(ret, result_ptr)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self RefHolder
+			arg0 := godot.PtrCallArgString(args, 0)
+			result := self.NewRefHolderTagged(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			*(*gdextension.ObjectPtr)(ret) = result_ptr
+		},
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeObject,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "RefHolder",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"tag",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "RefHolder",
+		Name:  "tag",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.Tag()
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.Tag()
+			godot.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "RefHolder",
+		Name:  "current_ref_count",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.CurrentRefCount()
+			godot.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.CurrentRefCount()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	godotruntime.LoadEditorDocXML(refHolderDocXML)
+}
+
+// refHolderDocXML is the rendered <class> document for RefHolder.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="RefHolder" inherits="RefCounted" version="4.4">
+    <brief_description>Reproduces the typed-Variant property-storage scenario for user-extension RefCounted classes: a static factory mints a fresh instance and returns it through the @class boundary, GDScript stores it on a typed property of a Node, and later code reads the property repeatedly.</brief_description>
+    <description>Reproduces the typed-Variant property-storage scenario for&#xA;user-extension RefCounted classes: a static factory mints a fresh&#xA;instance and returns it through the @class boundary, GDScript stores&#xA;it on a typed property of a Node, and later code reads the property&#xA;repeatedly. Without the framework&#39;s refcount fix, the engine ptr&#xA;would drop to refcount=0 and the property would null-out on the&#xA;second read.</description>
+    <methods>
+        <method name="new_ref_holder_tagged" qualifiers="static">
+            <return type="Object" enum="RefHolder"></return>
+            <param index="0" name="tag" type="String"></param>
+            <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls).</description>
+        </method>
+        <method name="tag">
+            <return type="String"></return>
+            <description>Exposes the stamped value so GDScript can verify identity on&#xA;each access — if the engine pointer was freed mid-flight, the&#xA;method-bind dispatch would crash or return stale memory.</description>
+        </method>
+        <method name="current_ref_count">
+            <return type="int"></return>
+            <description>Surfaces the underlying RefCounted&#39;s get_reference_count()&#xA;for tests to assert directly on Go-side reads (in addition to the&#xA;GDScript-side get_reference_count() readings).</description>
+        </method>
+    </methods>
+</class>`
+
 func init() {
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerMyNode)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
 		gdextension.UnregisterClass("MyNode")
+	})
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerRefHolder)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("RefHolder")
 	})
 }

@@ -240,12 +240,72 @@ func _initialize() -> void:
 
 	n.free()
 
+	# Refcount-stability test for user-extension RefCounted classes —
+	# reproduces the qux DialogController null-out the user reported.
+	# Without the framework's refcount-boundary fix, storing an
+	# extension RefCounted in a typed Variant property and reading it
+	# back zeroes the refcount within a few accesses.
+	_check_refcounted_stability()
+
 	if _failed == 0:
 		print("test_mynode: ALL CHECKS PASSED")
 		quit(0)
 	else:
 		print("test_mynode: FAILED (", _failed, " check(s) failed)")
 		quit(1)
+
+
+func _check_refcounted_stability() -> void:
+	# Static factory mints a fresh RefHolder. Refcount should be ≥ 1
+	# right after the call returns; the engine pointer must survive
+	# subsequent variant operations (assignment, getter reads, method
+	# calls).
+	var rh: RefHolder = RefHolder.new_ref_holder_tagged("alpha")
+	_check("refholder: factory return non-null", rh != null, true)
+	if rh == null:
+		return
+	_check("refholder: tag round-trip", rh.tag(), "alpha")
+	_check("refholder: rc-after-factory >= 1", rh.get_reference_count() >= 1, true)
+
+	# Stash on a Node-typed property holder, then read back through
+	# multiple getter accesses. This mirrors the user's
+	# Character._controller pattern.
+	var holder = Node.new()
+	holder.set_meta("rh", rh)
+	# At this point the local `rh`, the meta-storage variant, and any
+	# pipeline temporaries hold references. The exact count depends on
+	# Godot's internal copy/move semantics across versions, so we just
+	# require: rc > 0 (alive) and reading the meta back yields the same
+	# tagged instance with a working method dispatch.
+	for i in range(5):
+		var read_rh: RefHolder = holder.get_meta("rh")
+		_check("refholder: get_meta non-null (iter %d)" % i, read_rh != null, true)
+		if read_rh == null:
+			break
+		_check("refholder: tag stable (iter %d)" % i, read_rh.tag(), "alpha")
+		_check("refholder: rc > 0 (iter %d)" % i, read_rh.get_reference_count() > 0, true)
+
+	# Also drop the holder and ensure the local rh stays valid (engine
+	# ptr should still be live since we haven't released our local ref).
+	holder.free()
+	_check("refholder: alive after holder freed", rh != null, true)
+	if rh != null:
+		_check("refholder: tag after holder freed", rh.tag(), "alpha")
+
+	# Typed-Variant property on a GDScript class — mirrors the qux
+	# Character.controller pattern exactly. RefHolderOwner has a
+	# typed `holder: RefHolder` property and a `_holder` backing var.
+	# Each getter access reads the underlying refcount; we want it to
+	# stay > 0 across many reads.
+	var owner_rh: RefHolder = RefHolder.new_ref_holder_tagged("typed")
+	var owner = RefHolderOwner.new(owner_rh)
+	for i in range(5):
+		var read_h: RefHolder = owner.holder
+		_check("refholder.typed: getter non-null (iter %d)" % i, read_h != null, true)
+		if read_h == null:
+			break
+		_check("refholder.typed: tag stable (iter %d)" % i, read_h.tag(), "typed")
+		_check("refholder.typed: rc > 0 (iter %d)" % i, read_h.get_reference_count() > 0, true)
 
 
 func _check(label: String, got: Variant, want: Variant) -> void:
