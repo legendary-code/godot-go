@@ -19,6 +19,13 @@ func _on_damaged(amount: int) -> void: _damaged_amount = amount
 func _on_leveled_up() -> void: _leveled_up_count += 1
 func _on_tagged(label: String) -> void: _tagged_label = label
 
+# RefCounted lifecycle callback state — same module-level pattern as
+# the MyNode signal callbacks. Used by _check_refcounted_stability's
+# RefHolder.touched.connect cycle.
+var _signal_callback_count: int = 0
+func _on_refholder_touched(_count: int) -> void:
+	_signal_callback_count += 1
+
 
 func _initialize() -> void:
 	print("test_mynode: ClassDB has MyNode? ", ClassDB.class_exists("MyNode"))
@@ -308,12 +315,12 @@ func _check_refcounted_stability() -> void:
 		_check("refholder.typed: rc > 0 (iter %d)" % i, read_h.get_reference_count() > 0, true)
 
 	# First-emit refcount stability — the qux DialogController bug.
-	# Without the Construct-hook InitRef() call, the first emit_signal
-	# on an extension RefCounted instance trips Godot's refcount_init
-	# self-balance asymmetrically and drains one ref. With InitRef
-	# called at construct time, the variant boxing inside emit_signal
-	# is symmetric (init_ref +1/-1 + dtor unreference -1 was the bug;
-	# now it's just init_ref +1 + dtor -1 = 0).
+	# Without the New<X>() factory's InitRef() call, the first
+	# emit_signal on an extension RefCounted instance trips Godot's
+	# refcount_init self-balance asymmetrically and drains one ref.
+	# With InitRef called post-set_instance, the variant boxing inside
+	# emit_signal is symmetric (init_ref +1/-1 + dtor unreference -1
+	# was the bug; now it's just init_ref +1 + dtor -1 = 0).
 	var sig_rh: RefHolder = RefHolder.new_ref_holder_tagged("signaled")
 	var rc_before_emit = sig_rh.get_reference_count()
 	sig_rh.touch(1)
@@ -326,6 +333,74 @@ func _check_refcounted_stability() -> void:
 	sig_rh.touch(4)
 	_check("refholder.signal: rc stable across multiple emits",
 			sig_rh.get_reference_count(), rc_before_emit)
+
+	# Connect + emit cycle — mirrors the exact qux flow:
+	#   _mount(chr): var ctl = chr._controller
+	#                ctl.signal.connect(callback)
+	#                ctl.method_that_emits_signal()
+	# A connected callable is the typical receiver shape; we want to
+	# confirm rc stays stable across the connect+emit chain and the
+	# callback actually fires.
+	_signal_callback_count = 0
+	var conn_rh: RefHolder = RefHolder.new_ref_holder_tagged("connected")
+	var rc_before_connect = conn_rh.get_reference_count()
+	conn_rh.touched.connect(_on_refholder_touched)
+	_check("refholder.connect: rc stable across connect",
+			conn_rh.get_reference_count(), rc_before_connect)
+	conn_rh.touch(7)
+	_check("refholder.connect: rc stable across emit",
+			conn_rh.get_reference_count(), rc_before_connect)
+	_check("refholder.connect: callback fired",
+			_signal_callback_count, 1)
+	conn_rh.touch(11)
+	conn_rh.touch(13)
+	_check("refholder.connect: rc stable after multiple emits",
+			conn_rh.get_reference_count(), rc_before_connect)
+	_check("refholder.connect: callback fired 3 times total",
+			_signal_callback_count, 3)
+
+	# Multi-level typed-Variant property storage — Node holds a custom
+	# GDScript class which holds the extension RefCounted. Reads chain
+	# through both property accessors. This is the full qux shape:
+	# %CharacterDialog.character (Node) → character._controller (extension RefCounted).
+	var deep_rh: RefHolder = RefHolder.new_ref_holder_tagged("deep")
+	var deep_owner = RefHolderOwner.new(deep_rh)
+	var outer = Node.new()
+	outer.set_meta("inner_owner", deep_owner)
+	for i in range(3):
+		var got_owner: RefHolderOwner = outer.get_meta("inner_owner")
+		_check("refholder.deep: outer.inner_owner non-null (iter %d)" % i,
+				got_owner != null, true)
+		if got_owner == null:
+			break
+		var got_rh: RefHolder = got_owner.holder
+		_check("refholder.deep: inner.holder non-null (iter %d)" % i,
+				got_rh != null, true)
+		if got_rh == null:
+			break
+		_check("refholder.deep: tag stable (iter %d)" % i, got_rh.tag(), "deep")
+		_check("refholder.deep: rc > 0 (iter %d)" % i,
+				got_rh.get_reference_count() > 0, true)
+		# Emit on the deeply-stored instance; rc must stay positive
+		# (replicates _mount → ctl.reset() inside the qux dialog flow).
+		got_rh.touch(int64(i))
+		_check("refholder.deep: rc > 0 after emit (iter %d)" % i,
+				got_rh.get_reference_count() > 0, true)
+	outer.free()
+
+	# Lifecycle endpoint — when all references drop, the engine ptr is
+	# freed and the framework's Free callback fires. We can't directly
+	# observe Free from GDScript, but we can confirm the wrapper isn't
+	# leaking the engine ptr indefinitely: get_reference_count() on a
+	# fresh instance ought to come back rc=1 each time, regardless of
+	# how many were created before. Stable refcount baseline = no leak.
+	for i in range(3):
+		var fresh: RefHolder = RefHolder.new_ref_holder_tagged("fresh-%d" % i)
+		_check("refholder.lifecycle: fresh rc=1 (iter %d)" % i,
+				fresh.get_reference_count(), 1)
+		fresh.touch(int64(i))
+		_check("refholder.lifecycle: rc stable across emit (iter %d)" % i,
+				fresh.get_reference_count(), 1)
 
 
 func _check(label: String, got: Variant, want: Variant) -> void:
