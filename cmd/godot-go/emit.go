@@ -1164,6 +1164,24 @@ func register{{$class.Class}}() {
 			{{- end}}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.Parent}}"))
 			n.BindPtr(parent)
+			// RefCounted initialization. classdb_construct_object2 leaves
+			// the freshly allocated RefCounted with refcount=1 but the
+			// one-shot refcount_init slot UNCONSUMED — godot-cpp callers
+			// would normally consume it by wrapping the result in Ref<T>.
+			// We don't use Ref<T>, so we call InitRef() ourselves: a
+			// reference() / self-balanced unreference() pair that's
+			// rc-neutral but consumes refcount_init. Without this call,
+			// the first Variant(Object*) construction (which happens
+			// inside emit_signal's per-callable boxing) trips the
+			// self-balance asymmetrically, draining one ref and freeing
+			// the engine pointer out from under any property storing it.
+			//
+			// Type-assertion guards against non-RefCounted user classes
+			// (Node-derived, Object-derived) — InitRef is only inherited
+			// from godot.RefCounted, so the assertion fails and we skip.
+			if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+				rc.InitRef()
+			}
 			return parent, register{{$class.Class}}Instance(n, parent)
 		},
 

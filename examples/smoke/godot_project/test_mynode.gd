@@ -307,6 +307,26 @@ func _check_refcounted_stability() -> void:
 		_check("refholder.typed: tag stable (iter %d)" % i, read_h.tag(), "typed")
 		_check("refholder.typed: rc > 0 (iter %d)" % i, read_h.get_reference_count() > 0, true)
 
+	# First-emit refcount stability — the qux DialogController bug.
+	# Without the Construct-hook InitRef() call, the first emit_signal
+	# on an extension RefCounted instance trips Godot's refcount_init
+	# self-balance asymmetrically and drains one ref. With InitRef
+	# called at construct time, the variant boxing inside emit_signal
+	# is symmetric (init_ref +1/-1 + dtor unreference -1 was the bug;
+	# now it's just init_ref +1 + dtor -1 = 0).
+	var sig_rh: RefHolder = RefHolder.new_ref_holder_tagged("signaled")
+	var rc_before_emit = sig_rh.get_reference_count()
+	sig_rh.touch(1)
+	var rc_after_first_emit = sig_rh.get_reference_count()
+	_check("refholder.signal: rc stable across first emit",
+			rc_after_first_emit, rc_before_emit)
+	# A few more emits to ensure subsequent ones don't drift.
+	sig_rh.touch(2)
+	sig_rh.touch(3)
+	sig_rh.touch(4)
+	_check("refholder.signal: rc stable across multiple emits",
+			sig_rh.get_reference_count(), rc_before_emit)
+
 
 func _check(label: String, got: Variant, want: Variant) -> void:
 	if got == want:

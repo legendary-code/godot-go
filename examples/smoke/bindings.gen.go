@@ -156,6 +156,24 @@ func registerMyNode() {
 			n := &MyNode{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node"))
 			n.BindPtr(parent)
+			// RefCounted initialization. classdb_construct_object2 leaves
+			// the freshly allocated RefCounted with refcount=1 but the
+			// one-shot refcount_init slot UNCONSUMED — godot-cpp callers
+			// would normally consume it by wrapping the result in Ref<T>.
+			// We don't use Ref<T>, so we call InitRef() ourselves: a
+			// reference() / self-balanced unreference() pair that's
+			// rc-neutral but consumes refcount_init. Without this call,
+			// the first Variant(Object*) construction (which happens
+			// inside emit_signal's per-callable boxing) trips the
+			// self-balance asymmetrically, draining one ref and freeing
+			// the engine pointer out from under any property storing it.
+			//
+			// Type-assertion guards against non-RefCounted user classes
+			// (Node-derived, Object-derived) — InitRef is only inherited
+			// from godot.RefCounted, so the assertion fails and we skip.
+			if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+				rc.InitRef()
+			}
 			return parent, registerMyNodeInstance(n, parent)
 		},
 
@@ -1589,6 +1607,18 @@ func releaseRefHolderInstance(handle unsafe.Pointer) {
 	delete(refHolderByEngine, uintptr(n.Ptr()))
 }
 
+// Touched emits the touched signal on this instance. Synthesized
+// from a @signals interface declaration; per-arg Variants are constructed
+// from the typed parameters and dispatched via Object::emit_signal.
+func (n *RefHolder) Touched(count int64) {
+	arg0 := godot.NewVariantInt(count)
+	defer arg0.Destroy()
+	args := []gdextension.VariantPtr{
+		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
+	}
+	gdextension.EmitSignal(n.Ptr(), gdextension.InternStringName("touched"), args)
+}
+
 func registerRefHolder() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:      "RefHolder",
@@ -1599,6 +1629,24 @@ func registerRefHolder() {
 			n := &RefHolder{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("RefCounted"))
 			n.BindPtr(parent)
+			// RefCounted initialization. classdb_construct_object2 leaves
+			// the freshly allocated RefCounted with refcount=1 but the
+			// one-shot refcount_init slot UNCONSUMED — godot-cpp callers
+			// would normally consume it by wrapping the result in Ref<T>.
+			// We don't use Ref<T>, so we call InitRef() ourselves: a
+			// reference() / self-balanced unreference() pair that's
+			// rc-neutral but consumes refcount_init. Without this call,
+			// the first Variant(Object*) construction (which happens
+			// inside emit_signal's per-callable boxing) trips the
+			// self-balance asymmetrically, draining one ref and freeing
+			// the engine pointer out from under any property storing it.
+			//
+			// Type-assertion guards against non-RefCounted user classes
+			// (Node-derived, Object-derived) — InitRef is only inherited
+			// from godot.RefCounted, so the assertion fails and we skip.
+			if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+				rc.InitRef()
+			}
 			return parent, registerRefHolderInstance(n, parent)
 		},
 
@@ -1702,6 +1750,57 @@ func registerRefHolder() {
 		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "RefHolder",
+		Name:  "touch",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := godot.VariantAsInt64(args[0])
+			self.Touch(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupRefHolderInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.Touch(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"n",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
+		Class: "RefHolder",
+		Name:  "touched",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"count",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
 	godotruntime.LoadEditorDocXML(refHolderDocXML)
 }
 
@@ -1711,13 +1810,13 @@ func registerRefHolder() {
 // nil and the load call is a no-op).
 const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
 <class name="RefHolder" inherits="RefCounted" version="4.4">
-    <brief_description>Reproduces the typed-Variant property-storage scenario for user-extension RefCounted classes: a static factory mints a fresh instance and returns it through the @class boundary, GDScript stores it on a typed property of a Node, and later code reads the property repeatedly.</brief_description>
-    <description>Reproduces the typed-Variant property-storage scenario for&#xA;user-extension RefCounted classes: a static factory mints a fresh&#xA;instance and returns it through the @class boundary, GDScript stores&#xA;it on a typed property of a Node, and later code reads the property&#xA;repeatedly. Without the framework&#39;s refcount fix, the engine ptr&#xA;would drop to refcount=0 and the property would null-out on the&#xA;second read.</description>
+    <brief_description>Reproduces the typed-Variant property-storage scenario for user-extension RefCounted classes: a static factory mints a fresh instance and returns it through the @class boundary, GDScript stores it on a typed property of a Node, and later user code emits signals on the held instance.</brief_description>
+    <description>Reproduces the typed-Variant property-storage scenario&#xA;for user-extension RefCounted classes: a static factory mints a&#xA;fresh instance and returns it through the @class boundary, GDScript&#xA;stores it on a typed property of a Node, and later user code emits&#xA;signals on the held instance. With the Construct-hook signal&#xA;warmup, the first user-emitted signal is rc-stable; without it,&#xA;the property would null-out a few accesses later.</description>
     <methods>
         <method name="new_ref_holder_tagged" qualifiers="static">
             <return type="Object" enum="RefHolder"></return>
             <param index="0" name="tag" type="String"></param>
-            <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls).</description>
+            <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls, signal emits).</description>
         </method>
         <method name="tag">
             <return type="String"></return>
@@ -1725,9 +1824,19 @@ const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </method>
         <method name="current_ref_count">
             <return type="int"></return>
-            <description>Surfaces the underlying RefCounted&#39;s get_reference_count()&#xA;for tests to assert directly on Go-side reads (in addition to the&#xA;GDScript-side get_reference_count() readings).</description>
+            <description>Surfaces the underlying RefCounted&#39;s&#xA;get_reference_count() for tests to assert directly on Go-side reads&#xA;(in addition to the GDScript-side get_reference_count() readings).</description>
+        </method>
+        <method name="touch">
+            <param index="0" name="n" type="int"></param>
+            <description>Fires the Touched signal so the GDScript test can verify the&#xA;first emit doesn&#39;t drain the engine refcount. Without the framework&#39;s&#xA;Construct-hook warmup, this first emit would drop one ref from the&#xA;underlying RefCounted (Godot&#39;s per-instance signal lazy init) and&#xA;the property storage would shortly null-out.</description>
         </method>
     </methods>
+    <signals>
+        <signal name="touched">
+            <param index="0" name="count" type="int"></param>
+            <description></description>
+        </signal>
+    </signals>
 </class>`
 
 func init() {
