@@ -383,7 +383,7 @@ func _check_refcounted_stability() -> void:
 				got_rh.get_reference_count() > 0, true)
 		# Emit on the deeply-stored instance; rc must stay positive
 		# (replicates _mount → ctl.reset() inside the qux dialog flow).
-		got_rh.touch(int64(i))
+		got_rh.touch(i)
 		_check("refholder.deep: rc > 0 after emit (iter %d)" % i,
 				got_rh.get_reference_count() > 0, true)
 	outer.free()
@@ -398,7 +398,7 @@ func _check_refcounted_stability() -> void:
 		var fresh: RefHolder = RefHolder.new_ref_holder_tagged("fresh-%d" % i)
 		_check("refholder.lifecycle: fresh rc=1 (iter %d)" % i,
 				fresh.get_reference_count(), 1)
-		fresh.touch(int64(i))
+		fresh.touch(i)
 		_check("refholder.lifecycle: rc stable across emit (iter %d)" % i,
 				fresh.get_reference_count(), 1)
 
