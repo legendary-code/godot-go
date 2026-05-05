@@ -1164,15 +1164,6 @@ func register{{$class.Class}}() {
 			{{- end}}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.Parent}}"))
 			n.BindPtr(parent)
-			// RefCounted-derived user classes need one extra Reference()
-			// at construct time so the engine ptr survives Godot's
-			// typed-Variant property-storage round-trips. Non-RefCounted
-			// classes (Node/Object descendants) don't satisfy the
-			// interface — the assertion is a one-shot per instance,
-			// not per-call, so it doesn't accumulate.
-			if rc, ok := any(n).(interface{ Reference() bool }); ok {
-				rc.Reference()
-			}
 			return parent, register{{$class.Class}}Instance(n, parent)
 		},
 
