@@ -71,7 +71,22 @@ func lookupMyNodeByEngine(p gdextension.ObjectPtr) *MyNode {
 // wrappers is not yet wired.
 func NewMyNode() *MyNode {
 	parent := gdextension.ConstructObject(gdextension.InternStringName("MyNode"))
-	return lookupMyNodeByEngine(parent)
+	n := lookupMyNodeByEngine(parent)
+	// RefCounted-derived user classes need init_ref called once on
+	// the freshly-constructed instance — godot-cpp does this implicitly
+	// via Ref<T>; godot-go has to do it explicitly. Without it, the
+	// first Variant(Object*) construction (e.g. inside emit_signal's
+	// per-callable boxing) trips Godot's refcount_init self-balance
+	// asymmetrically, draining one ref. Has to happen AFTER
+	// object_set_instance has wired the extension instance handle —
+	// calling InitRef from inside the Construct hook (before
+	// set_instance fires) doesn't take. Type-assert against an
+	// inline interface holding InitRef so non-RefCounted user classes
+	// (Node-derived, Object-derived) skip silently.
+	if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+		rc.InitRef()
+	}
+	return n
 }
 
 func releaseMyNodeInstance(handle unsafe.Pointer) {
@@ -156,24 +171,6 @@ func registerMyNode() {
 			n := &MyNode{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node"))
 			n.BindPtr(parent)
-			// RefCounted initialization. classdb_construct_object2 leaves
-			// the freshly allocated RefCounted with refcount=1 but the
-			// one-shot refcount_init slot UNCONSUMED — godot-cpp callers
-			// would normally consume it by wrapping the result in Ref<T>.
-			// We don't use Ref<T>, so we call InitRef() ourselves: a
-			// reference() / self-balanced unreference() pair that's
-			// rc-neutral but consumes refcount_init. Without this call,
-			// the first Variant(Object*) construction (which happens
-			// inside emit_signal's per-callable boxing) trips the
-			// self-balance asymmetrically, draining one ref and freeing
-			// the engine pointer out from under any property storing it.
-			//
-			// Type-assertion guards against non-RefCounted user classes
-			// (Node-derived, Object-derived) — InitRef is only inherited
-			// from godot.RefCounted, so the assertion fails and we skip.
-			if rc, ok := any(n).(interface{ InitRef() bool }); ok {
-				rc.InitRef()
-			}
 			return parent, registerMyNodeInstance(n, parent)
 		},
 
@@ -1593,7 +1590,22 @@ func lookupRefHolderByEngine(p gdextension.ObjectPtr) *RefHolder {
 // wrappers is not yet wired.
 func NewRefHolder() *RefHolder {
 	parent := gdextension.ConstructObject(gdextension.InternStringName("RefHolder"))
-	return lookupRefHolderByEngine(parent)
+	n := lookupRefHolderByEngine(parent)
+	// RefCounted-derived user classes need init_ref called once on
+	// the freshly-constructed instance — godot-cpp does this implicitly
+	// via Ref<T>; godot-go has to do it explicitly. Without it, the
+	// first Variant(Object*) construction (e.g. inside emit_signal's
+	// per-callable boxing) trips Godot's refcount_init self-balance
+	// asymmetrically, draining one ref. Has to happen AFTER
+	// object_set_instance has wired the extension instance handle —
+	// calling InitRef from inside the Construct hook (before
+	// set_instance fires) doesn't take. Type-assert against an
+	// inline interface holding InitRef so non-RefCounted user classes
+	// (Node-derived, Object-derived) skip silently.
+	if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+		rc.InitRef()
+	}
+	return n
 }
 
 func releaseRefHolderInstance(handle unsafe.Pointer) {
@@ -1629,24 +1641,6 @@ func registerRefHolder() {
 			n := &RefHolder{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("RefCounted"))
 			n.BindPtr(parent)
-			// RefCounted initialization. classdb_construct_object2 leaves
-			// the freshly allocated RefCounted with refcount=1 but the
-			// one-shot refcount_init slot UNCONSUMED — godot-cpp callers
-			// would normally consume it by wrapping the result in Ref<T>.
-			// We don't use Ref<T>, so we call InitRef() ourselves: a
-			// reference() / self-balanced unreference() pair that's
-			// rc-neutral but consumes refcount_init. Without this call,
-			// the first Variant(Object*) construction (which happens
-			// inside emit_signal's per-callable boxing) trips the
-			// self-balance asymmetrically, draining one ref and freeing
-			// the engine pointer out from under any property storing it.
-			//
-			// Type-assertion guards against non-RefCounted user classes
-			// (Node-derived, Object-derived) — InitRef is only inherited
-			// from godot.RefCounted, so the assertion fails and we skip.
-			if rc, ok := any(n).(interface{ InitRef() bool }); ok {
-				rc.InitRef()
-			}
 			return parent, registerRefHolderInstance(n, parent)
 		},
 

@@ -71,7 +71,22 @@ func lookupMoverByEngine(p gdextension.ObjectPtr) *Mover {
 // wrappers is not yet wired.
 func NewMover() *Mover {
 	parent := gdextension.ConstructObject(gdextension.InternStringName("Mover"))
-	return lookupMoverByEngine(parent)
+	n := lookupMoverByEngine(parent)
+	// RefCounted-derived user classes need init_ref called once on
+	// the freshly-constructed instance — godot-cpp does this implicitly
+	// via Ref<T>; godot-go has to do it explicitly. Without it, the
+	// first Variant(Object*) construction (e.g. inside emit_signal's
+	// per-callable boxing) trips Godot's refcount_init self-balance
+	// asymmetrically, draining one ref. Has to happen AFTER
+	// object_set_instance has wired the extension instance handle —
+	// calling InitRef from inside the Construct hook (before
+	// set_instance fires) doesn't take. Type-assert against an
+	// inline interface holding InitRef so non-RefCounted user classes
+	// (Node-derived, Object-derived) skip silently.
+	if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+		rc.InitRef()
+	}
+	return n
 }
 
 func releaseMoverInstance(handle unsafe.Pointer) {
@@ -115,15 +130,6 @@ func registerMover() {
 			n := &Mover{}
 			parent := gdextension.ConstructObject(gdextension.InternStringName("Node2D"))
 			n.BindPtr(parent)
-			// RefCounted-derived user classes need one extra Reference()
-			// at construct time so the engine ptr survives Godot's
-			// typed-Variant property-storage round-trips. Non-RefCounted
-			// classes (Node/Object descendants) don't satisfy the
-			// interface — the assertion is a one-shot per instance,
-			// not per-call, so it doesn't accumulate.
-			if rc, ok := any(n).(interface{ Reference() bool }); ok {
-				rc.Reference()
-			}
 			return parent, registerMoverInstance(n, parent)
 		},
 
