@@ -52,7 +52,7 @@ below organize the tags by attachment site.
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
 | `@class` | exactly one per file | none | Marks this struct as the file's extension class. The codegen registers it with Godot's ClassDB. Each file declares at most one Godot class; additional Go structs in the same file are plain Go types and aren't registered. |
-| `@abstract` | optional | none | Only valid on `@class` structs. Suppresses the `New<Class>()` Go-side factory so Go callers can't construct an instance directly. Pair with `@abstract_methods` to declare a contract subclasses must implement — Godot's parser refuses concrete subclasses that skip required virtuals. **Note**: `@abstract` deliberately does NOT pass `is_abstract` to the ClassDB registration: that engine flag nullifies the registration's `creation_func`, which breaks GDScript classes extending the class (`class_name X extends MyAbstractGoClass` would error with "Parameter 'ti->creation_func' is null"). Abstract enforcement is therefore Go-side (no factory) + Godot-parser-side (via `@abstract_methods`'s VirtualRequired flags); GDScript could technically still call `MyAbstractGoClass.new()` directly if the class has no required virtuals. |
+| `@abstract` | optional | none | Only valid on `@class` structs. Suppresses the `New<Class>()` Go-side factory and passes `is_abstract=true` to the ClassDB registration — godot-cpp parity (`GDREGISTER_ABSTRACT_CLASS`). Direct GDScript construction errors at the analyzer: `Native class "MyAbstract" cannot be constructed as it is abstract`. **Trade-off**: Godot's `is_abstract` is the same flag that gates GDScript inheritance — `class_name X extends MyAbstract; X.new()` also errors with `Parameter 'ti->creation_func' is null`, because Godot has no engine flag that separates direct construction from inheritance (both paths hit `_instantiate_internal` and the same null `creation_func`). If you want GDScript subclasses, drop `@abstract` and rely on the `New<Class>()` suppression alone — concrete subclasses are then unavoidable from GDScript, but Go callers still can't construct directly. Pair with `@abstract_methods` for the contract declaration in either case. |
 | `@editor` | optional | none | Only valid on `@class` structs. Registers the class at `INIT_LEVEL_EDITOR` instead of `INIT_LEVEL_SCENE`, so it's invisible to deployed game builds. Use for `EditorPlugin` subclasses, custom inspectors, gizmos, etc. |
 
 Documentation tags below land in the generated docs XML the editor
@@ -361,16 +361,28 @@ Constraints:
   implementation routes the dispatcher's `Object::call` to ClassDB's
   hierarchy lookup, which fails with Godot's "method not found"
   CallError at runtime.
-- For GDScript subclasses, Godot enforces the contract at parse
-  time. Each method registers via
-  `classdb_register_extension_class_virtual_method` with
-  `METHOD_FLAG_VIRTUAL_REQUIRED`, so a `class_name X extends Y`
-  script that doesn't override every required virtual fails to
-  load. Routing through the virtual-method entry point also keeps
-  the parser's `NATIVE_METHOD_OVERRIDE` warning silent on
-  legitimate overrides — that warning gates on
+- **GDScript override discipline (when applicable) is on you.**
+  When the parent class is `@abstract`, GDScript can't inherit at
+  all — see the `@abstract` row above. When you drop `@abstract` to
+  allow inheritance, Godot's analyzer still doesn't enforce overrides:
+  `gdscript_analyzer.cpp:1530` keys the override-completeness check
+  on parsed GDScript AST `FunctionNode::is_abstract` flags, and the
+  parent-walk `break`s the moment the chain crosses into a native
+  (engine or GDExtension) class. So a `class_name X extends Y`
+  script subclassing your Go `@abstract_methods` parent compiles
+  cleanly whether or not it overrides. Calling an unimplemented
+  virtual surfaces as a runtime "method not found" CallError —
+  same shape as the Go-subclass case above. There is no GDExtension
+  API in 4.5/4.6 that wires into the analyzer's check
+  ([godot-proposals#1631](https://github.com/godotengine/godot-proposals/issues/1631)
+  tracks the upstream gap).
+- The methods register through
+  `classdb_register_extension_class_virtual_method` rather than the
+  bind-method API. Side effect: the parser's `NATIVE_METHOD_OVERRIDE`
+  warning stays silent on legitimate overrides — it gates on
   `ClassDB::get_method`, which doesn't see virtual_methods_map
-  entries.
+  entries. Without this routing, every override would be flagged as
+  "won't be called by the engine" and fail under "warnings as errors."
 
 ```go
 // @class
