@@ -40,3 +40,24 @@ func (d *Dog) Move(distance int64) {
 func (d *Dog) DistanceTraveled() int64 {
 	return d.distanceTraveled
 }
+
+// SpeakViaDispatch routes through the inherited Animal dispatcher
+// (Object::call → ClassDB hierarchy lookup → this same Dog
+// instance's Speak registration) instead of calling the user
+// implementation directly. The two return paths should produce the
+// same value — that's the point of @abstract_methods polymorphism.
+//
+// Implementation note: `d.Animal.Speak()` reaches the embedded
+// Animal's synthesized dispatcher; calling `d.Speak()` here would
+// invoke Dog.Speak directly (Go method-set shadowing).
+func (d *Dog) SpeakViaDispatch() string {
+	return d.Animal.Speak()
+}
+
+// MoveViaDispatch is the Move-equivalent of SpeakViaDispatch — args
+// flow through the dispatcher (built into a Variant, passed to
+// Object::call) and the engine routes back to Dog.Move which
+// accumulates into distanceTraveled.
+func (d *Dog) MoveViaDispatch(distance int64) {
+	d.Animal.Move(distance)
+}

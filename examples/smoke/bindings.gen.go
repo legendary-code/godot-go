@@ -324,6 +324,65 @@ func registerDog() {
 		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
 	})
 
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Dog",
+		Name:  "speak_via_dispatch",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.SpeakViaDispatch()
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.SpeakViaDispatch()
+			godot.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Dog",
+		Name:  "move_via_dispatch",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := godot.VariantAsInt64(args[0])
+			self.MoveViaDispatch(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.MoveViaDispatch(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"distance",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
 	godotruntime.LoadEditorDocXML(dogDocXML)
 }
 
@@ -347,6 +406,14 @@ const dogDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="distance_traveled">
             <return type="int"></return>
             <description>Exposes the accumulated movement total to GDScript&#xA;— without this, there&#39;s no way to confirm the Move dispatcher&#xA;reached Dog&#39;s implementation vs hitting Animal&#39;s &#34;method not found&#34;&#xA;error.</description>
+        </method>
+        <method name="speak_via_dispatch">
+            <return type="String"></return>
+            <description>Routes through the inherited Animal dispatcher&#xA;(Object::call → ClassDB hierarchy lookup → this same Dog&#xA;instance&#39;s Speak registration) instead of calling the user&#xA;implementation directly. The two return paths should produce the&#xA;same value — that&#39;s the point of @abstract_methods polymorphism.&#xA;&#xA;Implementation note: ` + "`" + `d.Animal.Speak()` + "`" + ` reaches the embedded&#xA;Animal&#39;s synthesized dispatcher; calling ` + "`" + `d.Speak()` + "`" + ` here would&#xA;invoke Dog.Speak directly (Go method-set shadowing).</description>
+        </method>
+        <method name="move_via_dispatch">
+            <param index="0" name="distance" type="int"></param>
+            <description>Is the Move-equivalent of SpeakViaDispatch — args&#xA;flow through the dispatcher (built into a Variant, passed to&#xA;Object::call) and the engine routes back to Dog.Move which&#xA;accumulates into distanceTraveled.</description>
         </method>
     </methods>
 </class>`

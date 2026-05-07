@@ -441,6 +441,18 @@ func _check_abstract_methods() -> void:
 	_check("dog.distance_traveled accumulated 18",
 			d.distance_traveled(), 18)
 
+	# End-to-end @abstract_methods dispatcher test. speak_via_dispatch
+	# / move_via_dispatch are Go-side methods on Dog that route through
+	# the inherited Animal dispatcher (Object::call → ClassDB lookup
+	# → Dog's concrete registration) instead of calling user code
+	# directly. If the dispatcher path is broken, these would either
+	# return empty / not accumulate distance, or surface a CallError.
+	_check("dog.speak_via_dispatch returns Woof",
+			d.speak_via_dispatch(), "Woof")
+	d.move_via_dispatch(13)
+	_check("dog.distance_traveled after dispatcher move = 31",
+			d.distance_traveled(), 31)
+
 
 func _check(label: String, got: Variant, want: Variant) -> void:
 	if got == want:
