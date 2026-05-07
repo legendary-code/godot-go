@@ -36,15 +36,41 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 	// All @class files in a package extend from the same bindings
 	// package; otherwise the user's source wouldn't compile (every
 	// package can have only one local name per import path).
-	bindingsImport := classes[0].MainClass.ParentImport
-	for _, d := range classes[1:] {
+	// Same-package extends (parentImport == "") means this class
+	// extends another @class in the same package — those don't
+	// contribute to bindings-import resolution; we look at non-empty
+	// imports across the package and require they all match.
+	bindingsImport := ""
+	bindingsImportFile := ""
+	for _, d := range classes {
+		if d.MainClass.ParentImport == "" {
+			continue
+		}
+		if bindingsImport == "" {
+			bindingsImport = d.MainClass.ParentImport
+			bindingsImportFile = d.FilePath
+			continue
+		}
 		if d.MainClass.ParentImport != bindingsImport {
-			return fmt.Errorf("@class %q extends %q but @class %q in the same package extends %q — all classes in a package must use the same bindings import",
-				classes[0].MainClass.Name, bindingsImport,
-				d.MainClass.Name, d.MainClass.ParentImport)
+			return fmt.Errorf("mixed bindings imports in package: @class in %s extends %q but @class in %s extends %q — all classes that extend through a package alias must use the same bindings import",
+				bindingsImportFile, bindingsImport,
+				d.FilePath, d.MainClass.ParentImport)
 		}
 	}
-	bindingsAlias := localNameFor(classes[0].Imports, bindingsImport)
+	if bindingsImport == "" {
+		return fmt.Errorf("no @class in this package extends through a bindings package — at least one class must @extends an engine class (e.g. godot.Node, godot.RefCounted) so the framework knows which bindings package to import")
+	}
+	// localNameFor needs to look in a file that actually imports the
+	// bindings package — find it (the same one we recorded when we
+	// first observed this import).
+	var bindingsFileImports map[string]string
+	for _, d := range classes {
+		if d.FilePath == bindingsImportFile {
+			bindingsFileImports = d.Imports
+			break
+		}
+	}
+	bindingsAlias := localNameFor(bindingsFileImports, bindingsImport)
 	if bindingsAlias == "" {
 		return fmt.Errorf("internal: bindings import %q not in file imports — discover should have rejected this", bindingsImport)
 	}
@@ -90,6 +116,54 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		packageClasses[d.MainClass.Name] = true
 	}
 
+	// Same-package @extends validation. discover.go accepts a bare
+	// ident on @extends without confirming the name exists; we close
+	// that loop here, where we have the package-wide class set built
+	// up. ParentImport=="" signals "@extends references a same-package
+	// class" — its name must be in packageClasses.
+	classByName := map[string]*classInfo{}
+	for _, d := range classes {
+		classByName[d.MainClass.Name] = d.MainClass
+	}
+	for _, d := range classes {
+		if d.MainClass.ParentImport != "" {
+			continue
+		}
+		if !packageClasses[d.MainClass.Parent] {
+			return fmt.Errorf("@class %q extends %q (bare-ident, same-package), but no @class with that name was discovered in this package — declare it as a @class struct in a sibling file or use the qualified `<bindings>.<Parent>` form for an engine class",
+				d.MainClass.Name, d.MainClass.Parent)
+		}
+	}
+
+	// Engine-root resolution: for every user class, walk up the
+	// `@extends` chain until we reach a cross-package parent
+	// (ParentImport != ""). That cross-package class is the engine
+	// root — what we pass to gdextension.ConstructObject in the
+	// Construct hook. We can't ConstructObject same-package
+	// intermediates: they may be @abstract (fails outright) or fire
+	// their own Construct hooks that try to allocate a SECOND
+	// engine ptr. The engine root is the only stable thing to
+	// allocate; ClassDB's class hierarchy carries the inheritance
+	// chain via the per-class `Parent` registrations.
+	engineRoots := map[string]string{}
+	for _, d := range classes {
+		ci := d.MainClass
+		root := ci.Parent
+		visited := map[string]bool{ci.Name: true}
+		for {
+			pc, ok := classByName[root]
+			if !ok {
+				break // cross-package parent — stop walking
+			}
+			if visited[pc.Name] {
+				return fmt.Errorf("@extends cycle detected involving %q — same-package extends must form a tree", pc.Name)
+			}
+			visited[pc.Name] = true
+			root = pc.Parent
+		}
+		engineRoots[ci.Name] = root
+	}
+
 	// Build per-class emit payloads. Each @class file's enums scope to
 	// its own MainClass — they're isolated per-file in the discover
 	// result, so each class's enumSet is built from its own discovered
@@ -101,6 +175,7 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		if err != nil {
 			return err
 		}
+		ec.EngineRoot = engineRoots[d.MainClass.Name]
 		if classNeedsVariant {
 			needsVariant = true
 		}
@@ -178,19 +253,28 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		needsVariant = true
 	}
 
+	abstractMethods, err := buildEmitAbstractMethods(ci.AbstractMethods, packageEnums, packageClasses, bindingsAlias, ci.Name)
+	if err != nil {
+		return emitClass{}, false, err
+	}
+	if len(abstractMethods) > 0 {
+		needsVariant = true
+	}
+
 	ec := emitClass{
-		SourceFile:     filepath.Base(d.FilePath),
-		Class:          ci.Name,
-		Parent:         ci.Parent,
-		Lower:          lowerFirst(ci.Name),
-		InitLevel:      initLevel,
-		IsAbstract:     ci.IsAbstract,
-		HasConstructor: ci.HasConstructor,
-		Methods:        supported,
-		Accessors:      accessors,
-		Properties:     properties,
-		Signals:        signals,
-		Enums:          buildEmitEnums(d.Enums),
+		SourceFile:      filepath.Base(d.FilePath),
+		Class:           ci.Name,
+		Parent:          ci.Parent,
+		Lower:           lowerFirst(ci.Name),
+		InitLevel:       initLevel,
+		IsAbstract:      ci.IsAbstract,
+		HasConstructor:  ci.HasConstructor,
+		Methods:         supported,
+		Accessors:       accessors,
+		Properties:      properties,
+		Signals:         signals,
+		AbstractMethods: abstractMethods,
+		Enums:           buildEmitEnums(d.Enums),
 	}
 
 	if emitHasDocSurface(ci, ec) {
@@ -246,12 +330,22 @@ type emitClass struct {
 
 	Class      string
 	Parent     string
+	// EngineRoot is the first cross-package ancestor (engine class)
+	// up the @extends chain. For a class that directly extends an
+	// engine class (Parent == EngineRoot), the two are the same.
+	// For a class that extends another same-package @class, EngineRoot
+	// is the eventual engine ancestor — that's what the Construct hook
+	// passes to ConstructObject (constructing an intermediate user
+	// @class would re-fire its Construct hook or fail outright if it's
+	// @abstract). Class hierarchy registration still uses Parent.
+	EngineRoot string
 	Lower      string // class name with first rune lowercased — used for unexported helpers
 	IsAbstract bool   // @abstract on this class — passed through to RegisterClass
 	Methods    []emitMethod
 	Accessors  []emitAccessor // synthesized GetX/SetX Go methods for field-form @property declarations
 	Properties []emitProperty // RegisterClassProperty calls (one per @property, both forms)
-	Signals    []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
+	Signals         []emitSignal   // RegisterClassSignal + synthesized emit method per @signals method
+	AbstractMethods []emitAbstractMethod // synthesized dispatcher method per @abstract_methods declaration — routes via Object::call to whatever subclasses register
 	Enums      []emitEnum     // @enum / @bitfield-tagged user enums registered as class-scoped integer constants
 	// DocXML is the rendered <class>…</class> document baked into the
 	// bindings as a const string. Empty when the class has no doc-able
@@ -938,6 +1032,119 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userCla
 	return out, nil
 }
 
+// emitAbstractMethod is one method declared on a `@abstract_methods`
+// interface. Renders to a Go-side dispatcher on `*<MainClass>` that
+// builds per-arg Variants, invokes Object::call against the engine
+// pointer, and unwraps the return.
+type emitAbstractMethod struct {
+	docInfo
+
+	GoName    string // Go identifier the dispatcher exposes to user code
+	GodotName string // snake_case name passed to Object::call ("speak", etc.)
+
+	// Args carry the per-arg metadata the template needs to render the
+	// dispatcher's signature and the per-arg Variant build/destroy
+	// fragments.
+	Args []emitAbstractMethodArg
+
+	// HasReturn / Return* describe the return-Variant unwrap. If
+	// HasReturn is false, the dispatcher discards the return slot.
+	HasReturn bool
+	// ReturnGoType is the user-facing Go return type ("string",
+	// "int64", "*MainClass", etc.) — exactly what we'd render in the
+	// method signature.
+	ReturnGoType string
+	// ReturnUnwrap is a single statement that converts a Variant value
+	// named `result_var` (the Variant filled by Object::call) into
+	// a typed value bound to the local identifier `result`. Multi-step
+	// types (object pointers) emit multi-line statements ending with
+	// the `result :=` assignment.
+	ReturnUnwrap string
+
+	// SourceInterface is the Go name of the @abstract_methods interface
+	// this method came from. Currently informational; future work may
+	// surface it in the XML doc.
+	SourceInterface string
+}
+
+// emitAbstractMethodArg is one positional slot of an abstract method
+// dispatcher. Renders both the Go signature parameter and the per-arg
+// Variant construction fragment.
+type emitAbstractMethodArg struct {
+	Index    int    // 0-based positional arg index (matches argN naming)
+	GoName   string // identifier the dispatcher signature exposes
+	GoType   string // Go source-rendered type expression
+	BuildVar string // single statement that constructs the Variant, e.g.
+	// `arg0 := bindings.NewVariantInt(distance)`. The Variant is
+	// destroyed via `defer arg0.Destroy()` rendered separately in
+	// the template.
+}
+
+// buildEmitAbstractMethods walks the discovered @abstract_methods
+// declarations and produces emitAbstractMethod records the template
+// renders into per-method dispatchers on the parent struct. Arg /
+// return types resolve through the same resolveType path as regular
+// methods, so abstract method type support tracks method arg/return
+// type support.
+func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitAbstractMethod, error) {
+	if len(abstracts) == 0 {
+		return nil, nil
+	}
+	out := make([]emitAbstractMethod, 0, len(abstracts))
+	for _, a := range abstracts {
+		em := emitAbstractMethod{
+			docInfo:         a.docInfo,
+			GoName:          a.Name,
+			GodotName:       a.GodotName,
+			SourceInterface: a.SourceInterface,
+		}
+		idx := 0
+		for _, field := range a.Args {
+			info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
+			if err != nil {
+				return nil, fmt.Errorf("@abstract_methods %s arg %d: %w", a.Name, idx, err)
+			}
+			count := len(field.Names)
+			if count == 0 {
+				count = 1
+			}
+			for k := 0; k < count; k++ {
+				goArgName := fmt.Sprintf("arg%d", idx)
+				if k < len(field.Names) && field.Names[k].Name != "" && field.Names[k].Name != "_" {
+					goArgName = field.Names[k].Name
+				}
+				em.Args = append(em.Args, emitAbstractMethodArg{
+					Index:    idx,
+					GoName:   goArgName,
+					GoType:   info.GoType,
+					BuildVar: info.BuildVariant(bindings, idx, goArgName),
+				})
+				idx++
+			}
+		}
+		if a.Result != nil {
+			info, err := resolveType(a.Result.Type, enums, userClasses, mainClass, bindings)
+			if err != nil {
+				return nil, fmt.Errorf("@abstract_methods %s return: %w", a.Name, err)
+			}
+			em.HasReturn = true
+			em.ReturnGoType = info.GoType
+			// UnwrapVariant gives us a multi-statement form that ends
+			// with `result := <typed value>`. mapTypeInfo introduced this
+			// helper; primitives + enums + class pointers all populate
+			// it. If the caller wired a type without UnwrapVariant
+			// (slice, etc.), surface a clear error rather than emitting
+			// invalid source.
+			if info.UnwrapVariant == nil {
+				return nil, fmt.Errorf("@abstract_methods %s return type %q is not supported (only types with variant unwrap helpers can flow back through Object::call)", a.Name, info.GoType)
+			}
+			em.ReturnUnwrap = info.UnwrapVariant(bindings, "result", "result_var")
+		}
+		out = append(out, em)
+	}
+	return out, nil
+}
+
 // syntheticGetterMethod hand-builds an emitMethod equivalent to what
 // classifyForEmit would produce for `func (n *T) Get<Name>() <Type>`.
 // Dispatch uses the same `result := self.<GoName>()` shape the template
@@ -1162,6 +1369,37 @@ func (n *{{$class.Class}}) {{.GoName}}({{range $i, $a := .PerArg}}{{if $i}}, {{e
 	{{- end}}
 }
 {{end}}
+{{range .AbstractMethods}}
+// {{.GoName}} dispatches polymorphically to whatever subclass registered
+// "{{.GodotName}}". Synthesized from a @abstract_methods interface
+// declaration; per-arg Variants are built from the typed parameters
+// and routed through gdextension.ObjectCall (Godot's variant call
+// protocol). Subclass implementations register the concrete method
+// under the same Godot name, so ClassDB's hierarchy lookup picks
+// the right override at call time. Calling on an instance of the
+// declaring class itself (when not overridden) surfaces Godot's
+// "method not found" CallError.
+func (n *{{$class.Class}}) {{.GoName}}({{range $i, $a := .Args}}{{if $i}}, {{end}}{{$a.GoName}} {{$a.GoType}}{{end}}){{if .HasReturn}} {{.ReturnGoType}}{{end}} {
+	{{- range .Args}}
+	{{.BuildVar}}
+	defer arg{{.Index}}.Destroy()
+	{{- end}}
+	{{- if .Args}}
+	args := []gdextension.VariantPtr{
+		{{- range .Args}}
+		gdextension.VariantPtr(unsafe.Pointer(&arg{{.Index}})),
+		{{- end}}
+	}
+	{{- end}}
+	var result_var {{$.BindingsAlias}}.Variant
+	defer result_var.Destroy()
+	gdextension.ObjectCall(n.Ptr(), gdextension.InternStringName("{{.GodotName}}"), {{if .Args}}args{{else}}nil{{end}}, gdextension.VariantPtr(unsafe.Pointer(&result_var)))
+	{{- if .HasReturn}}
+	{{.ReturnUnwrap}}
+	return result
+	{{- end}}
+}
+{{end}}
 func register{{$class.Class}}() {
 	gdextension.RegisterClass(gdextension.ClassDef{
 		Name:      "{{$class.Class}}",
@@ -1177,7 +1415,7 @@ func register{{$class.Class}}() {
 			{{- else}}
 			n := &{{$class.Class}}{}
 			{{- end}}
-			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.Parent}}"))
+			parent := gdextension.ConstructObject(gdextension.InternStringName("{{$class.EngineRoot}}"))
 			n.BindPtr(parent)
 			return parent, register{{$class.Class}}Instance(n, parent)
 		},

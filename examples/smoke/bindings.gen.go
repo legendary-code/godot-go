@@ -11,6 +11,346 @@ import (
 	godotruntime "github.com/legendary-code/godot-go/godot/runtime"
 )
 
+// === Animal (animal.go) ===
+
+// Per-instance side tables for Animal. The void* value the host
+// hands back to us as p_instance is the small integer id we returned from
+// Construct, not a Go pointer (cgo forbids storing Go pointers in
+// C-visible memory). The parallel <X>ByEngine map is keyed by the engine
+// ObjectPtr Godot uses for object identity — populated by Construct so
+// methods that take *Animal args can recover the Go wrapper
+// from the ObjectPtr Godot passes through Variant arg slots.
+var (
+	animalInstancesMu sync.Mutex
+	animalInstances   = map[uintptr]*Animal{}
+	animalByEngine    = map[uintptr]*Animal{}
+	animalNextID      uintptr
+)
+
+func registerAnimalInstance(n *Animal, parent gdextension.ObjectPtr) unsafe.Pointer {
+	animalInstancesMu.Lock()
+	animalNextID++
+	id := animalNextID
+	animalInstances[id] = n
+	animalByEngine[uintptr(parent)] = n
+	animalInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupAnimalInstance(handle unsafe.Pointer) *Animal {
+	animalInstancesMu.Lock()
+	defer animalInstancesMu.Unlock()
+	return animalInstances[uintptr(handle)]
+}
+
+// lookupAnimalByEngine resolves an engine ObjectPtr to the
+// *Animal we registered at Construct time. Returns nil for
+// foreign instances — see the foreign-instance policy in
+// docs/reference.md.
+func lookupAnimalByEngine(p gdextension.ObjectPtr) *Animal {
+	animalInstancesMu.Lock()
+	defer animalInstancesMu.Unlock()
+	return animalByEngine[uintptr(p)]
+}
+
+func releaseAnimalInstance(handle unsafe.Pointer) {
+	animalInstancesMu.Lock()
+	defer animalInstancesMu.Unlock()
+	n, ok := animalInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
+	delete(animalInstances, uintptr(handle))
+	delete(animalByEngine, uintptr(n.Ptr()))
+}
+
+// Speak dispatches polymorphically to whatever subclass registered
+// "speak". Synthesized from a @abstract_methods interface
+// declaration; per-arg Variants are built from the typed parameters
+// and routed through gdextension.ObjectCall (Godot's variant call
+// protocol). Subclass implementations register the concrete method
+// under the same Godot name, so ClassDB's hierarchy lookup picks
+// the right override at call time. Calling on an instance of the
+// declaring class itself (when not overridden) surfaces Godot's
+// "method not found" CallError.
+func (n *Animal) Speak() string {
+	var result_var godot.Variant
+	defer result_var.Destroy()
+	gdextension.ObjectCall(n.Ptr(), gdextension.InternStringName("speak"), nil, gdextension.VariantPtr(unsafe.Pointer(&result_var)))
+	result := godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&result_var)))
+	return result
+}
+
+// Move dispatches polymorphically to whatever subclass registered
+// "move". Synthesized from a @abstract_methods interface
+// declaration; per-arg Variants are built from the typed parameters
+// and routed through gdextension.ObjectCall (Godot's variant call
+// protocol). Subclass implementations register the concrete method
+// under the same Godot name, so ClassDB's hierarchy lookup picks
+// the right override at call time. Calling on an instance of the
+// declaring class itself (when not overridden) surfaces Godot's
+// "method not found" CallError.
+func (n *Animal) Move(distance int64) {
+	arg0 := godot.NewVariantInt(distance)
+	defer arg0.Destroy()
+	args := []gdextension.VariantPtr{
+		gdextension.VariantPtr(unsafe.Pointer(&arg0)),
+	}
+	var result_var godot.Variant
+	defer result_var.Destroy()
+	gdextension.ObjectCall(n.Ptr(), gdextension.InternStringName("move"), args, gdextension.VariantPtr(unsafe.Pointer(&result_var)))
+}
+
+func registerAnimal() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:       "Animal",
+		Parent:     "RefCounted",
+		IsExposed:  true,
+		IsAbstract: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &Animal{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("RefCounted"))
+			n.BindPtr(parent)
+			return parent, registerAnimalInstance(n, parent)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseAnimalInstance(instance)
+		},
+	})
+
+	godotruntime.LoadEditorDocXML(animalDocXML)
+}
+
+// animalDocXML is the rendered <class> document for Animal.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const animalDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="Animal" inherits="RefCounted" version="4.4">
+    <brief_description>Is an abstract base class with no instantiable form of its own — ` + "`" + `@abstract` + "`" + ` blocks ` + "`" + `Animal.new()` + "`" + ` from GDScript.</brief_description>
+    <description>Is an abstract base class with no instantiable form of its&#xA;own — ` + "`" + `@abstract` + "`" + ` blocks ` + "`" + `Animal.new()` + "`" + ` from GDScript. The class&#xA;exists so subclasses can extend it (via ` + "`" + `@extends Animal` + "`" + `) and so&#xA;the codegen has somewhere to attach the dispatchers for the methods&#xA;declared on AnimalAbstract.</description>
+</class>`
+
+// === Dog (dog.go) ===
+
+// Per-instance side tables for Dog. The void* value the host
+// hands back to us as p_instance is the small integer id we returned from
+// Construct, not a Go pointer (cgo forbids storing Go pointers in
+// C-visible memory). The parallel <X>ByEngine map is keyed by the engine
+// ObjectPtr Godot uses for object identity — populated by Construct so
+// methods that take *Dog args can recover the Go wrapper
+// from the ObjectPtr Godot passes through Variant arg slots.
+var (
+	dogInstancesMu sync.Mutex
+	dogInstances   = map[uintptr]*Dog{}
+	dogByEngine    = map[uintptr]*Dog{}
+	dogNextID      uintptr
+)
+
+func registerDogInstance(n *Dog, parent gdextension.ObjectPtr) unsafe.Pointer {
+	dogInstancesMu.Lock()
+	dogNextID++
+	id := dogNextID
+	dogInstances[id] = n
+	dogByEngine[uintptr(parent)] = n
+	dogInstancesMu.Unlock()
+	return unsafe.Pointer(id)
+}
+
+func lookupDogInstance(handle unsafe.Pointer) *Dog {
+	dogInstancesMu.Lock()
+	defer dogInstancesMu.Unlock()
+	return dogInstances[uintptr(handle)]
+}
+
+// lookupDogByEngine resolves an engine ObjectPtr to the
+// *Dog we registered at Construct time. Returns nil for
+// foreign instances — see the foreign-instance policy in
+// docs/reference.md.
+func lookupDogByEngine(p gdextension.ObjectPtr) *Dog {
+	dogInstancesMu.Lock()
+	defer dogInstancesMu.Unlock()
+	return dogByEngine[uintptr(p)]
+}
+
+// NewDog constructs a fresh Dog instance via
+// Godot's ClassDB. Routes through gdextension.ConstructObject, which
+// fires the framework's Construct hook (creating the Go wrapper and
+// registering it in the side table).
+//
+// Use this instead of plain &Dog{} when you need an
+// engine-backed instance. Hollow struct literals have no engine
+// pointer and serialize as nil at the @class boundary.
+//
+// RefCounted-derived classes start the new instance at refcount 1
+// (per Godot's ConstructObject semantics). The variant boundary
+// increments when the wrapper crosses into Godot. The factory's
+// initial reference is the caller's responsibility — call
+// (*Dog).Unreference() if you need explicit cleanup
+// before relying on Go GC; finalizer-driven release for user-class
+// wrappers is not yet wired.
+func NewDog() *Dog {
+	parent := gdextension.ConstructObject(gdextension.InternStringName("Dog"))
+	n := lookupDogByEngine(parent)
+	// RefCounted-derived user classes need init_ref called once on
+	// the freshly-constructed instance — godot-cpp does this implicitly
+	// via Ref<T>; godot-go has to do it explicitly. Without it, the
+	// first Variant(Object*) construction (e.g. inside emit_signal's
+	// per-callable boxing) trips Godot's refcount_init self-balance
+	// asymmetrically, draining one ref. Has to happen AFTER
+	// object_set_instance has wired the extension instance handle —
+	// calling InitRef from inside the Construct hook (before
+	// set_instance fires) doesn't take. Type-assert against an
+	// inline interface holding InitRef so non-RefCounted user classes
+	// (Node-derived, Object-derived) skip silently.
+	if rc, ok := any(n).(interface{ InitRef() bool }); ok {
+		rc.InitRef()
+	}
+	return n
+}
+
+func releaseDogInstance(handle unsafe.Pointer) {
+	dogInstancesMu.Lock()
+	defer dogInstancesMu.Unlock()
+	n, ok := dogInstances[uintptr(handle)]
+	if !ok {
+		return
+	}
+	delete(dogInstances, uintptr(handle))
+	delete(dogByEngine, uintptr(n.Ptr()))
+}
+
+func registerDog() {
+	gdextension.RegisterClass(gdextension.ClassDef{
+		Name:      "Dog",
+		Parent:    "Animal",
+		IsExposed: true,
+
+		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
+			n := &Dog{}
+			parent := gdextension.ConstructObject(gdextension.InternStringName("RefCounted"))
+			n.BindPtr(parent)
+			return parent, registerDogInstance(n, parent)
+		},
+
+		Free: func(instance unsafe.Pointer) {
+			releaseDogInstance(instance)
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Dog",
+		Name:  "speak",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.Speak()
+			godot.VariantSetString(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.Speak()
+			godot.PtrCallStoreString(ret, result)
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeString,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Dog",
+		Name:  "move",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := godot.VariantAsInt64(args[0])
+			self.Move(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.Move(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"distance",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "Dog",
+		Name:  "distance_traveled",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.DistanceTraveled()
+			godot.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupDogInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.DistanceTraveled()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	godotruntime.LoadEditorDocXML(dogDocXML)
+}
+
+// dogDocXML is the rendered <class> document for Dog.
+// Loaded at SCENE init via editor_help_load_xml_from_utf8_chars (an
+// editor-only entry point — game-mode runtimes resolve the symbol to
+// nil and the load call is a no-op).
+const dogDocXML = `<?xml version="1.0" encoding="UTF-8"?>
+<class name="Dog" inherits="Animal" version="4.4">
+    <brief_description>Is a concrete subclass of Animal.</brief_description>
+    <description>Is a concrete subclass of Animal. Implements both abstract&#xA;methods declared on AnimalAbstract — these are registered as&#xA;regular ClassDB methods on Dog. When code holds a ` + "`" + `*Animal` + "`" + `&#xA;reference (e.g. via the dispatcher synthesized on the parent),&#xA;Godot&#39;s hierarchy lookup routes to Dog&#39;s ` + "`" + `speak` + "`" + ` / ` + "`" + `move` + "`" + `.&#xA;&#xA;Demonstrates the same-package user-class extension pattern: bare&#xA;` + "`" + `Animal` + "`" + ` (no package qualifier) on the embedded @extends field.&#xA;Discover-time accepts the bare ident; emit-time validates against&#xA;the package&#39;s @class set.</description>
+    <methods>
+        <method name="speak">
+            <return type="String"></return>
+            <description>Overrides AnimalAbstract.Speak.</description>
+        </method>
+        <method name="move">
+            <param index="0" name="distance" type="int"></param>
+            <description>Overrides AnimalAbstract.Move and tallies distance into the&#xA;instance for inspection from GDScript.</description>
+        </method>
+        <method name="distance_traveled">
+            <return type="int"></return>
+            <description>Exposes the accumulated movement total to GDScript&#xA;— without this, there&#39;s no way to confirm the Move dispatcher&#xA;reached Dog&#39;s implementation vs hitting Animal&#39;s &#34;method not found&#34;&#xA;error.</description>
+        </method>
+    </methods>
+</class>`
+
 // === MyNode (mynode.go) ===
 
 // Per-instance side tables for MyNode. The void* value the host
@@ -1834,6 +2174,14 @@ const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
 </class>`
 
 func init() {
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerAnimal)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("Animal")
+	})
+	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerDog)
+	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
+		gdextension.UnregisterClass("Dog")
+	})
 	gdextension.RegisterInitCallback(gdextension.InitLevelScene, registerMyNode)
 	gdextension.RegisterDeinitCallback(gdextension.InitLevelScene, func() {
 		gdextension.UnregisterClass("MyNode")

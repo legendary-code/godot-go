@@ -95,13 +95,30 @@ type MyEditorTool struct {
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@extends` | exactly one per `@class` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type must be a package-qualified type like `godot.Node` — works for your bindings package (`godot.Node`, `godot.RefCounted`), the user-class package of another GDExtension, or any third-party module that re-exports a registered class. The runtime registration succeeds when the parent class is in Godot's ClassDB by the time this class loads, so cross-extension inheritance requires the providing extension to register first. |
+| `@extends` | exactly one per `@class` struct | none | Marks the embedded type as the parent class. Single-inheritance only — Godot's model. The embedded type may be a package-qualified type like `godot.Node` (engine class, cross-extension class, or any third-party module that re-exports a registered class) **or** a bare identifier naming another `@class` struct in the same package (user-class inheritance). The runtime registration succeeds when the parent class is in Godot's ClassDB by the time this class loads, so cross-extension inheritance requires the providing extension to register first. |
 
 ```go
+// Engine-class parent (cross-package, qualified):
+//
 // @class
 type MyNode struct {
     // @extends — required, exactly one, must sit on an embedded field.
     godot.Node
+}
+
+// Same-package user-class parent (bare identifier):
+//
+// @class
+// @abstract
+type Animal struct {
+    // @extends
+    godot.RefCounted
+}
+
+// @class
+type Dog struct {
+    // @extends
+    Animal   // bare ident — must be a @class in this package
 }
 ```
 
@@ -267,9 +284,15 @@ Method classification rules at a glance:
 
 ### On an interface
 
+Interfaces declared at file scope can carry either of two doctags;
+they both turn the interface into a contract that drives codegen on
+the file's `@class` struct.
+
+#### `@signals`
+
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@signals` | yes (per signal interface) | none | Marks the interface as a signal contract. Each interface method becomes a Godot signal on the file's `@class`; the codegen synthesizes a typed `func (*Class) Name(args...)` emit method on the class. The interface itself isn't implemented by anything — the methods declare shape only. |
+| `@signals` | optional (one or more per class) | none | Marks the interface as a signal contract. Each interface method becomes a Godot signal on the file's `@class`; the codegen synthesizes a typed `func (*Class) Name(args...)` emit method on the class. The interface itself isn't implemented by anything — the methods declare shape only. |
 
 Constraints:
 
@@ -313,6 +336,86 @@ Variants and dispatch through `Object::emit_signal`. GDScript can't
 call them as methods (signals aren't callable from outside the
 class anyway); GDScript uses the standard `n.damaged.emit(75)` /
 `n.emit_signal("damaged", 75)` syntax.
+
+#### `@abstract_methods`
+
+| Tag | Required? | Argument | What it does |
+|---|---|---|---|
+| `@abstract_methods` | optional (one or more per class) | none | Marks the interface as a contract subclasses must implement. For each interface method the codegen synthesizes a Go-side dispatcher on `*<MainClass>` that routes the call through Godot's variant call protocol (`Object::call`); ClassDB's hierarchy lookup then dispatches to whatever the actual instance's class registered under the same name. Lets parent-typed Go references (e.g. `*Animal` holding a `*Dog`) call methods polymorphically without compile-time class knowledge. |
+
+Constraints:
+
+- Methods may take any types supported at the regular `@class`
+  method boundary. Return types must have a Variant-unwrap helper
+  (primitives, user enums, user/engine class pointers — types that
+  also work as map values).
+- At most one return value (Godot's variant call carries a single
+  return slot).
+- Method names must be unique across all `@abstract_methods` /
+  `@signals` interfaces on the class and must not collide with
+  regular methods declared on the `@class` struct.
+- Embedded interfaces inside an `@abstract_methods` interface are
+  rejected — only direct method declarations become abstract methods.
+- The framework does **not** enforce at compile time that subclasses
+  implement every abstract method. If a subclass omits an
+  implementation, calling the dispatcher routes to ClassDB's
+  hierarchy lookup, which fails with Godot's "method not found"
+  CallError at runtime.
+
+```go
+// @class
+// @abstract
+type Animal struct {
+    // @extends
+    godot.RefCounted
+}
+
+// @abstract_methods
+type AnimalAbstract interface {
+    // Speak returns the animal's signature noise. Subclasses must
+    // implement.
+    Speak() string
+
+    // Move advances the animal by `distance` units.
+    Move(distance int64)
+}
+
+// @class
+type Dog struct {
+    // @extends
+    Animal
+}
+
+// Speak overrides AnimalAbstract.Speak. Registered as a regular
+// method on Dog — the parent's dispatcher routes here via
+// Object::call when invoked on this instance.
+func (d *Dog) Speak() string {
+    return "Woof"
+}
+
+func (d *Dog) Move(distance int64) {
+    // ...
+}
+```
+
+From Go: holding a `*Animal` reference and calling `Speak()` invokes
+the dispatcher, which dispatches via `Object::call` to whatever the
+actual class registered. Calling `dog.Speak()` directly on a `*Dog`
+bypasses the round-trip — Go's method-set lookup picks the user's
+`Dog.Speak` directly (it shadows the embedded `Animal.Speak`
+dispatcher).
+
+From GDScript: `dog.speak()` dispatches through ClassDB the way it
+would for any registered method. The `@abstract_methods` declaration
+is invisible — GDScript dispatches by name on the receiver's actual
+class regardless of static typing.
+
+**Footgun.** Calling `d.Animal.Speak()` from inside your `Dog.Speak()`
+implementation — to invoke "the parent default" — hits the
+dispatcher, which routes back to `Dog.Speak` via Godot's hierarchy
+lookup. Infinite loop. There's no super-call mechanism for
+`@abstract_methods`; if you want shared logic, factor it into a
+separate (non-abstract) helper method on the parent struct.
 
 ### On a typed-int declaration
 

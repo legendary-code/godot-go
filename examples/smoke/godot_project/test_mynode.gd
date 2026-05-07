@@ -254,6 +254,13 @@ func _initialize() -> void:
 	# back zeroes the refcount within a few accesses.
 	_check_refcounted_stability()
 
+	# @abstract_methods + same-package @extends — Dog inherits from
+	# Animal (an @abstract @class), Animal declares speak/move via
+	# @abstract_methods, Dog provides the concrete impls. From
+	# GDScript: Animal.new() should fail (abstract); Dog.new() works
+	# and dog.speak() / dog.move(N) reach Dog's user impl.
+	_check_abstract_methods()
+
 	if _failed == 0:
 		print("test_mynode: ALL CHECKS PASSED")
 		quit(0)
@@ -401,6 +408,38 @@ func _check_refcounted_stability() -> void:
 		fresh.touch(i)
 		_check("refholder.lifecycle: rc stable across emit (iter %d)" % i,
 				fresh.get_reference_count(), 1)
+
+
+func _check_abstract_methods() -> void:
+	# Animal is @abstract — ClassDB.can_instantiate should report
+	# false, and ClassDB.instantiate should refuse. The class is
+	# still registered (so subclasses can target it as a parent).
+	_check("animal.classdb_exists",
+			ClassDB.class_exists("Animal"), true)
+	_check("animal.cannot_instantiate",
+			ClassDB.can_instantiate("Animal"), false)
+
+	# Dog is concrete — instantiates fine and inherits from Animal
+	# in ClassDB's hierarchy.
+	_check("dog.classdb_exists",
+			ClassDB.class_exists("Dog"), true)
+	_check("dog.can_instantiate",
+			ClassDB.can_instantiate("Dog"), true)
+	_check("dog.parent_is_animal",
+			ClassDB.get_parent_class("Dog"), &"Animal")
+	_check("animal.parent_is_refcounted",
+			ClassDB.get_parent_class("Animal"), &"RefCounted")
+
+	# Construct a Dog. Calling speak() / move() routes through Dog's
+	# concrete registrations; the @abstract_methods dispatcher on
+	# *Animal exists for Go-side polymorphism but isn't visible here
+	# (GDScript dispatches by name on the receiver's class).
+	var d: Dog = Dog.new()
+	_check("dog.speak returns Woof", d.speak(), "Woof")
+	d.move(7)
+	d.move(11)
+	_check("dog.distance_traveled accumulated 18",
+			d.distance_traveled(), 18)
 
 
 func _check(label: String, got: Variant, want: Variant) -> void:

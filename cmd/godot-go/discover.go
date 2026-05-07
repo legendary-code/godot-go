@@ -96,9 +96,10 @@ type classInfo struct {
 	// existing in deployed game builds.
 	IsEditor bool
 
-	Methods    []*methodInfo
-	Properties []*propertyInfo
-	Signals    []*signalInfo
+	Methods         []*methodInfo
+	Properties      []*propertyInfo
+	Signals         []*signalInfo
+	AbstractMethods []*abstractMethodInfo
 
 	// HasConstructor records whether the file defines an unexported
 	// package-level `func new<ClassName>() *<ClassName>`. Codegen
@@ -109,6 +110,37 @@ type classInfo struct {
 	// `_init` virtual where Godot's Class.new(args...) forwarding
 	// can deliver them.
 	HasConstructor bool
+}
+
+// abstractMethodInfo is one method declared on a `@abstract_methods`
+// interface. Each entry produces a Go-side dispatcher method on the
+// parent `*<MainClass>` that routes through Godot's variant call
+// (`Object::call`) to whatever concrete implementation a subclass
+// registered under the same name. Lets parent-typed Go references
+// dispatch polymorphically across the user-class inheritance chain
+// without any compile-time class knowledge.
+type abstractMethodInfo struct {
+	docInfo
+
+	Name string // Go identifier as it appeared on the interface (e.g. "Speak")
+	// GodotName is the snake_case name the dispatcher uses when calling
+	// through Object::call. Subclasses register their override under this
+	// name (matched via the existing snake-case method registration path).
+	GodotName string
+	Pos       token.Pos
+	// Args carry the AST type expressions for each formal parameter,
+	// preserved so emit.go can resolve them via the same resolveType
+	// path used for regular method args. Supported types are the
+	// framework's primitive set plus user/engine class pointers (same
+	// as method args / returns).
+	Args []*ast.Field
+	// Result is the AST type expression for the return value. Nil for
+	// void abstract methods. Multi-return is rejected at parse time —
+	// Godot's variant call protocol carries a single return slot.
+	Result *ast.Field
+	// SourceInterface is the Go name of the @abstract_methods interface
+	// this method came from. Used in error messages.
+	SourceInterface string
 }
 
 // signalInfo is one signal declared on a `@signals` interface. Multiple
@@ -301,6 +333,7 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	// without registering it.
 	intTypes := map[string]*enumInfo{}
 	signalIfaces := []*ast.TypeSpec{}
+	abstractIfaces := []*ast.TypeSpec{}
 	mainName := ""
 	for _, decl := range file.Decls {
 		gd, ok := decl.(*ast.GenDecl)
@@ -376,6 +409,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			case *ast.InterfaceType:
 				if doctag.Has(tags, "signals") {
 					signalIfaces = append(signalIfaces, ts)
+				}
+				if doctag.Has(tags, "abstract_methods") {
+					abstractIfaces = append(abstractIfaces, ts)
 				}
 			}
 		}
@@ -563,6 +599,15 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		return nil, err
 	}
 
+	// AbstractMethods: walk @abstract_methods-tagged interfaces. Each
+	// interface method becomes a dispatcher synthesized on the main
+	// class (parent struct), routing through Object::call so subclass
+	// implementations of the same name are picked up via Godot's
+	// hierarchy lookup at call time.
+	if err := collectAbstractMethods(fset, d.MainClass, abstractIfaces); err != nil {
+		return nil, err
+	}
+
 	// Parent is guaranteed non-empty here — findExtendsParent errors
 	// out at type-collection time if the @class struct is missing
 	// @extends or has more than one. No further validation needed.
@@ -636,6 +681,101 @@ func collectSignals(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) 
 					GodotName:       naming.PascalToSnake(name.Name),
 					Pos:             name.Pos(),
 					Args:            ft.Params.List,
+					SourceInterface: iface.Name.Name,
+				})
+			}
+		}
+	}
+	return nil
+}
+
+// collectAbstractMethods walks @abstract_methods-tagged interfaces and
+// accumulates a flat list of abstractMethodInfo on the main class.
+// Each method becomes a Go-side dispatcher on the parent struct that
+// routes through Object::call so subclass implementations of the same
+// name are picked up via Godot's hierarchy lookup at call time.
+//
+// Validation:
+//
+//   - method name must not collide with a regular method on the
+//     @class (codegen would generate two methods of the same name on
+//     *<Class>, which Go would reject — surface here for a clearer
+//     error).
+//   - method name must not collide with a @signals signal name (same
+//     reason).
+//   - method names across all @abstract_methods interfaces on this
+//     class must be unique.
+//   - methods may have at most one return value (Godot's variant call
+//     return slot is single).
+//   - embedded interfaces inside the @abstract_methods interface are
+//     rejected — only direct method declarations become abstract
+//     methods.
+//
+// Argument types are not resolved here — the emitter does that via
+// the shared resolveType path.
+func collectAbstractMethods(fset *token.FileSet, ci *classInfo, ifaces []*ast.TypeSpec) error {
+	if len(ifaces) == 0 {
+		return nil
+	}
+	methodNames := map[string]token.Pos{}
+	for _, m := range ci.Methods {
+		methodNames[m.GoName] = m.Pos
+	}
+	signalNames := map[string]token.Pos{}
+	for _, s := range ci.Signals {
+		signalNames[s.Name] = s.Pos
+	}
+
+	abstractNames := map[string]token.Pos{}
+	for _, iface := range ifaces {
+		it := iface.Type.(*ast.InterfaceType)
+		if it.Methods == nil {
+			continue
+		}
+		for _, m := range it.Methods.List {
+			if len(m.Names) == 0 {
+				return fmt.Errorf("%s: @abstract_methods interface %s embeds another interface; only direct method declarations become abstract methods",
+					posStr(fset, m.Pos()), iface.Name.Name)
+			}
+			ft, ok := m.Type.(*ast.FuncType)
+			if !ok {
+				continue
+			}
+			results := fieldsOf(ft.Results)
+			if len(results) > 1 {
+				return fmt.Errorf("%s: abstract method %s on %s declares multiple return values; Godot's variant call carries a single return slot",
+					posStr(fset, m.Pos()), m.Names[0].Name, iface.Name.Name)
+			}
+			var resultField *ast.Field
+			if len(results) == 1 {
+				resultField = results[0]
+				if len(resultField.Names) > 1 {
+					return fmt.Errorf("%s: abstract method %s on %s declares a multi-name return field; only one named or anonymous return is supported",
+						posStr(fset, m.Pos()), m.Names[0].Name, iface.Name.Name)
+				}
+			}
+			for _, name := range m.Names {
+				if existing, dup := abstractNames[name.Name]; dup {
+					return fmt.Errorf("%s: duplicate abstract method %q (also at %s) — names must be unique across all @abstract_methods interfaces on a class",
+						posStr(fset, name.Pos()), name.Name, posStr(fset, existing))
+				}
+				if existing, dup := methodNames[name.Name]; dup {
+					return fmt.Errorf("%s: abstract method %q collides with regular method %s (at %s) — codegen would synthesize a dispatcher of that name on *%s, which Go would reject as a duplicate declaration",
+						posStr(fset, name.Pos()), name.Name, name.Name, posStr(fset, existing), ci.Name)
+				}
+				if existing, dup := signalNames[name.Name]; dup {
+					return fmt.Errorf("%s: abstract method %q collides with signal %s (at %s) — both would synthesize a method named %s on *%s",
+						posStr(fset, name.Pos()), name.Name, name.Name, posStr(fset, existing), name.Name, ci.Name)
+				}
+				abstractNames[name.Name] = name.Pos()
+				abstractTags := doctag.Parse(m.Doc)
+				ci.AbstractMethods = append(ci.AbstractMethods, &abstractMethodInfo{
+					docInfo:         parseDocInfo(m.Doc, abstractTags, name.Name),
+					Name:            name.Name,
+					GodotName:       naming.PascalToSnake(name.Name),
+					Pos:             name.Pos(),
+					Args:            ft.Params.List,
+					Result:          resultField,
 					SourceInterface: iface.Name.Name,
 				})
 			}
@@ -1056,23 +1196,32 @@ func findExtendsParent(fset *token.FileSet, st *ast.StructType, structPos token.
 			return "", "", fmt.Errorf("%s: @extends on named field %q — @extends marks the *embedded* parent type (anonymous field), not a regular composition field",
 				posStr(fset, f.Pos()), f.Names[0].Name)
 		}
-		ft, ok := f.Type.(*ast.SelectorExpr)
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded package-qualified type like godot.Node",
+		switch ft := f.Type.(type) {
+		case *ast.SelectorExpr:
+			// Cross-package parent — `godot.Node`, `mypkg.Animal`. The
+			// import lookup confirms the package is in scope.
+			pkgIdent, ok := ft.X.(*ast.Ident)
+			if !ok {
+				return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded type like godot.Node",
+					posStr(fset, f.Pos()))
+			}
+			path, ok := imports[pkgIdent.Name]
+			if !ok {
+				return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
+					posStr(fset, f.Pos()), pkgIdent.Name, ft.Sel.Name, pkgIdent.Name)
+			}
+			parent = ft.Sel.Name
+			parentImport = path
+		case *ast.Ident:
+			// Same-package bare ident — `Animal` (another @class in this
+			// package). parentImport is left empty; emit-time validation
+			// confirms the name resolves to a registered package class.
+			parent = ft.Name
+			parentImport = ""
+		default:
+			return "", "", fmt.Errorf("%s: @extends on field with type %T — must be an embedded package-qualified type like godot.Node, or a bare same-package @class identifier like Animal",
 				posStr(fset, f.Pos()), f.Type)
 		}
-		pkgIdent, ok := ft.X.(*ast.Ident)
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on field with non-package selector — must be an embedded type like godot.Node",
-				posStr(fset, f.Pos()))
-		}
-		path, ok := imports[pkgIdent.Name]
-		if !ok {
-			return "", "", fmt.Errorf("%s: @extends on %s.%s — package %q isn't imported by this file",
-				posStr(fset, f.Pos()), pkgIdent.Name, ft.Sel.Name, pkgIdent.Name)
-		}
-		parent = ft.Sel.Name
-		parentImport = path
 	}
 	switch hits {
 	case 0:

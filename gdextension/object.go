@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -95,6 +96,50 @@ func DestroyObject(o ObjectPtr) {
 		return
 	}
 	C.godot_go_call_object_destroy(iface.objectDestroy, C.GDExtensionObjectPtr(o))
+}
+
+// objectMethodCall caches the MethodBind for Object::call so the
+// per-call lookup is amortized. Hash 3643564216 from
+// extension_api.json#classes[Object].methods[call].hash; stable
+// across Godot 4.4–4.6.
+var objectMethodCall = sync.OnceValue(func() MethodBindPtr {
+	return GetMethodBind(
+		InternStringName("Object"),
+		InternStringName("call"),
+		3643564216)
+})
+
+// ObjectCall dispatches `instance.method_name(args...)` through Godot's
+// variant call protocol — the engine looks up `method_name` against the
+// instance's actual class hierarchy and invokes the matching
+// registration. Lets parent-class Go-side methods route to whatever a
+// subclass registered without any compile-time class knowledge — the
+// foundation of `@abstract_methods` polymorphism.
+//
+// `instance` is the engine ObjectPtr (typically `wrapper.Ptr()`).
+// `methodName` is an interned StringName (use InternStringName).
+// `args` carries the per-arg Variants the caller already constructed
+// — caller still owns each one and is responsible for Destroy.
+// `ret` receives the return Variant; pass an uninitialized
+// `[VariantSize]byte` slot for it. CallError is returned for the
+// caller to surface (typical errors: method not found, arg-count
+// mismatch, bad arg type).
+func ObjectCall(instance ObjectPtr, methodName StringNamePtr, args []VariantPtr, ret VariantPtr) CallError {
+	bind := objectMethodCall()
+	if bind == nil {
+		return CallError{Type: CallErrorInvalidMethod}
+	}
+
+	var nameSlot [VariantSize]byte
+	nameVar := VariantPtr(unsafe.Pointer(&nameSlot))
+	CallVariantFromType(variantFromStringName(), nameVar, TypePtr(unsafe.Pointer(methodName)))
+	defer VariantDestroy(nameVar)
+
+	allArgs := make([]VariantPtr, 0, len(args)+1)
+	allArgs = append(allArgs, nameVar)
+	allArgs = append(allArgs, args...)
+
+	return CallMethodBindCall(bind, instance, allArgs, ret)
 }
 
 // GetSingleton looks up a global singleton by name. Returns nil if no

@@ -354,11 +354,12 @@ type MyHero struct {
 	}
 }
 
-func TestDiscoverExtendsBareIdentRejected(t *testing.T) {
-	// Bare-identifier parents (`@extends Outer` referring to a
-	// same-file sibling) are no longer supported — only one @class
-	// per file is registered, and cross-file parents take the
-	// qualified `pkg.Type` form.
+func TestDiscoverExtendsBareIdentSamePackage(t *testing.T) {
+	// Bare-identifier @extends names a same-package @class. Discovery
+	// accepts the form (parentImport stays empty); emit-time
+	// validation confirms the parent name resolves to a package
+	// @class. This is the foundation for user-class inheritance —
+	// `@abstract_methods` builds dispatchers on top of it.
 	src := `package x
 // @class
 type Lonely struct {
@@ -366,7 +367,13 @@ type Lonely struct {
 	SomeOtherType
 }
 `
-	mustFailDiscover(t, src, "must be an embedded package-qualified type")
+	d := mustDiscover(t, src)
+	if d.MainClass.Parent != "SomeOtherType" {
+		t.Errorf("Parent = %q, want SomeOtherType", d.MainClass.Parent)
+	}
+	if d.MainClass.ParentImport != "" {
+		t.Errorf("ParentImport = %q, want empty for same-package extends", d.MainClass.ParentImport)
+	}
 }
 
 func TestDiscoverSliceArg(t *testing.T) {
