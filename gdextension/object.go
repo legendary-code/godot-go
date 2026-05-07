@@ -99,14 +99,18 @@ func DestroyObject(o ObjectPtr) {
 }
 
 // objectMethodCall caches the MethodBind for Object::call so the
-// per-call lookup is amortized. Hash 3643564216 from
+// per-call lookup is amortized. Hash 3400424181 from
 // extension_api.json#classes[Object].methods[call].hash; stable
-// across Godot 4.4–4.6.
+// across Godot 4.4–4.6. (Earlier work used 3643564216, which is
+// the hash for `Callable.call` — same name, wrong class. Symptom
+// was a successful method-bind lookup that dispatched into Callable
+// instead of Object, so the receiver pointer landed in the wrong
+// signature and the call returned a NIL Variant.)
 var objectMethodCall = sync.OnceValue(func() MethodBindPtr {
 	return GetMethodBind(
 		InternStringName("Object"),
 		InternStringName("call"),
-		3643564216)
+		3400424181)
 })
 
 // ObjectCall dispatches `instance.method_name(args...)` through Godot's
