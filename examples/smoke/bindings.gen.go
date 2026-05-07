@@ -103,10 +103,19 @@ func (n *Animal) Move(distance int64) {
 
 func registerAnimal() {
 	gdextension.RegisterClass(gdextension.ClassDef{
-		Name:       "Animal",
-		Parent:     "RefCounted",
-		IsExposed:  true,
-		IsAbstract: true,
+		Name:      "Animal",
+		Parent:    "RefCounted",
+		IsExposed: true,
+		// NOTE: @abstract intentionally does NOT set IsAbstract on the
+		// registration. Godot's classdb_register_extension_class*
+		// nullifies creation_func when is_abstract=true, which breaks
+		// the inheritance path GDScript uses to extend the class
+		// ("Parameter 'ti->creation_func' is null"). The Go side still
+		// suppresses the New<Class>() factory for @abstract structs;
+		// abstract enforcement on the GDScript side comes from
+		// @abstract_methods registering MethodFlagVirtualRequired,
+		// which Godot's parser uses to refuse subclasses that don't
+		// override every required virtual.
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
 			n := &Animal{}
@@ -294,6 +303,16 @@ func registerDog() {
 		Name:      "Dog",
 		Parent:    "Animal",
 		IsExposed: true,
+		// NOTE: @abstract intentionally does NOT set IsAbstract on the
+		// registration. Godot's classdb_register_extension_class*
+		// nullifies creation_func when is_abstract=true, which breaks
+		// the inheritance path GDScript uses to extend the class
+		// ("Parameter 'ti->creation_func' is null"). The Go side still
+		// suppresses the New<Class>() factory for @abstract structs;
+		// abstract enforcement on the GDScript side comes from
+		// @abstract_methods registering MethodFlagVirtualRequired,
+		// which Godot's parser uses to refuse subclasses that don't
+		// override every required virtual.
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
 			n := &Dog{}
@@ -640,6 +659,16 @@ func registerMyNode() {
 		Name:      "MyNode",
 		Parent:    "Node",
 		IsExposed: true,
+		// NOTE: @abstract intentionally does NOT set IsAbstract on the
+		// registration. Godot's classdb_register_extension_class*
+		// nullifies creation_func when is_abstract=true, which breaks
+		// the inheritance path GDScript uses to extend the class
+		// ("Parameter 'ti->creation_func' is null"). The Go side still
+		// suppresses the New<Class>() factory for @abstract structs;
+		// abstract enforcement on the GDScript side comes from
+		// @abstract_methods registering MethodFlagVirtualRequired,
+		// which Godot's parser uses to refuse subclasses that don't
+		// override every required virtual.
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
 			n := &MyNode{}
@@ -2110,6 +2139,16 @@ func registerRefHolder() {
 		Name:      "RefHolder",
 		Parent:    "RefCounted",
 		IsExposed: true,
+		// NOTE: @abstract intentionally does NOT set IsAbstract on the
+		// registration. Godot's classdb_register_extension_class*
+		// nullifies creation_func when is_abstract=true, which breaks
+		// the inheritance path GDScript uses to extend the class
+		// ("Parameter 'ti->creation_func' is null"). The Go side still
+		// suppresses the New<Class>() factory for @abstract structs;
+		// abstract enforcement on the GDScript side comes from
+		// @abstract_methods registering MethodFlagVirtualRequired,
+		// which Godot's parser uses to refuse subclasses that don't
+		// override every required virtual.
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
 			n := &RefHolder{}

@@ -411,13 +411,17 @@ func _check_refcounted_stability() -> void:
 
 
 func _check_abstract_methods() -> void:
-	# Animal is @abstract — ClassDB.can_instantiate should report
-	# false, and ClassDB.instantiate should refuse. The class is
-	# still registered (so subclasses can target it as a parent).
+	# Animal is @abstract on the Go side — the New<Class>() factory
+	# isn't generated, so Go callers can't construct one. ClassDB
+	# still reports it as instantiable (we deliberately don't pass
+	# is_abstract=true to the registration: that flag nullifies
+	# creation_func and breaks GDScript classes that extend the
+	# abstract via class_name). Abstract-method enforcement comes
+	# from MethodFlagVirtualRequired on each @abstract_methods entry
+	# — Godot's parser refuses concrete subclasses that don't
+	# override every required virtual.
 	_check("animal.classdb_exists",
 			ClassDB.class_exists("Animal"), true)
-	_check("animal.cannot_instantiate",
-			ClassDB.can_instantiate("Animal"), false)
 
 	# Dog is concrete — instantiates fine and inherits from Animal
 	# in ClassDB's hierarchy.

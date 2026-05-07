@@ -1434,9 +1434,16 @@ func register{{$class.Class}}() {
 		Name:      "{{$class.Class}}",
 		Parent:    "{{$class.Parent}}",
 		IsExposed: true,
-{{- if $class.IsAbstract}}
-		IsAbstract: true,
-{{- end}}
+		// NOTE: @abstract intentionally does NOT set IsAbstract on the
+		// registration. Godot's classdb_register_extension_class*
+		// nullifies creation_func when is_abstract=true, which breaks
+		// the inheritance path GDScript uses to extend the class
+		// ("Parameter 'ti->creation_func' is null"). The Go side still
+		// suppresses the New<Class>() factory for @abstract structs;
+		// abstract enforcement on the GDScript side comes from
+		// @abstract_methods registering MethodFlagVirtualRequired,
+		// which Godot's parser uses to refuse subclasses that don't
+		// override every required virtual.
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
 			{{- if $class.HasConstructor}}
