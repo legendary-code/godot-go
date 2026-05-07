@@ -1035,7 +1035,10 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userCla
 // emitAbstractMethod is one method declared on a `@abstract_methods`
 // interface. Renders to a Go-side dispatcher on `*<MainClass>` that
 // builds per-arg Variants, invokes Object::call against the engine
-// pointer, and unwraps the return.
+// pointer, and unwraps the return — plus a ClassDB registration on
+// the parent class with MethodFlagVirtualRequired so Godot's editor
+// surfaces the contract in docs and the engine can warn about
+// missing subclass overrides.
 type emitAbstractMethod struct {
 	docInfo
 
@@ -1060,6 +1063,21 @@ type emitAbstractMethod struct {
 	// types (object pointers) emit multi-line statements ending with
 	// the `result :=` assignment.
 	ReturnUnwrap string
+
+	// Registration metadata — parallel to emitMethod's ArgTypes /
+	// ArgMetas / ReturnType. The parent's RegisterClassMethod call
+	// uses these to advertise the contract; the ClassDB lookup that
+	// happens at subclass-registration time matches override
+	// signatures against this metadata.
+	ArgTypes        []string
+	ArgMetas        []string
+	ArgNames        []string
+	ArgClassNames   []string
+	ArgGodotTypes   []string
+	ReturnType      string
+	ReturnMeta      string
+	ReturnClassName string
+	ReturnGodotType string
 
 	// SourceInterface is the Go name of the @abstract_methods interface
 	// this method came from. Currently informational; future work may
@@ -1110,8 +1128,10 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 			}
 			for k := 0; k < count; k++ {
 				goArgName := fmt.Sprintf("arg%d", idx)
+				registeredName := ""
 				if k < len(field.Names) && field.Names[k].Name != "" && field.Names[k].Name != "_" {
 					goArgName = field.Names[k].Name
+					registeredName = field.Names[k].Name
 				}
 				em.Args = append(em.Args, emitAbstractMethodArg{
 					Index:    idx,
@@ -1119,6 +1139,11 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 					GoType:   info.GoType,
 					BuildVar: info.BuildVariant(bindings, idx, goArgName),
 				})
+				em.ArgTypes = append(em.ArgTypes, info.VariantType)
+				em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
+				em.ArgNames = append(em.ArgNames, registeredName)
+				em.ArgClassNames = append(em.ArgClassNames, classIdentity(mainClass, info))
+				em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLType(info.VariantType))
 				idx++
 			}
 		}
@@ -1129,6 +1154,10 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 			}
 			em.HasReturn = true
 			em.ReturnGoType = info.GoType
+			em.ReturnType = info.VariantType
+			em.ReturnMeta = info.ArgMeta
+			em.ReturnClassName = classIdentity(mainClass, info)
+			em.ReturnGodotType = godotXMLType(info.VariantType)
 			// UnwrapVariant gives us a multi-statement form that ends
 			// with `result := <typed value>`. mapTypeInfo introduced this
 			// helper; primitives + enums + class pointers all populate
@@ -1632,6 +1661,63 @@ func register{{$class.Class}}() {
 		Class: "{{$class.Class}}",
 		Name:  "{{.GodotName}}",
 		{{- if .ArgTypes}}
+		ArgTypes: []gdextension.VariantType{
+			{{- range .ArgTypes}}
+			gdextension.{{.}},
+			{{- end}}
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			{{- range .ArgMetas}}
+			gdextension.{{.}},
+			{{- end}}
+		},
+		ArgNames: []string{
+			{{- range .ArgNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
+		ArgClassNames: []string{
+			{{- range .ArgClassNames}}
+			{{printf "%q" .}},
+			{{- end}}
+		},
+		{{- end}}
+	})
+{{end}}
+{{- range .AbstractMethods}}
+	// {{.GoName}} is registered on {{$class.Class}} with
+	// MethodFlagVirtualRequired so Godot's editor advertises the
+	// contract and warns when subclasses skip the override. The
+	// Call/PtrCall stubs return CallErrorInvalidMethod — direct
+	// invocation on an instance whose class hasn't overridden is a
+	// programming error and should surface clearly. Real dispatch
+	// happens through subclasses' regular method registrations
+	// (matched by name) and via the synthesized *{{$class.Class}}
+	// dispatcher's Object::call route.
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "{{$class.Class}}",
+		Name:  "{{.GodotName}}",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			_ = args
+			_ = ret
+			return gdextension.CallErrorInvalidMethod
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			_ = args
+			_ = ret
+		},
+		Flags: gdextension.MethodFlagsDefault | gdextension.MethodFlagVirtual | gdextension.MethodFlagVirtualRequired,
+		{{- if .HasReturn}}
+		HasReturn:      true,
+		ReturnType:     gdextension.{{.ReturnType}},
+		ReturnMetadata: gdextension.{{.ReturnMeta}},
+		{{- if .ReturnClassName}}
+		ReturnClassName: {{printf "%q" .ReturnClassName}},
+		{{- end}}
+		{{- end}}
+		{{- if .Args}}
 		ArgTypes: []gdextension.VariantType{
 			{{- range .ArgTypes}}
 			gdextension.{{.}},
