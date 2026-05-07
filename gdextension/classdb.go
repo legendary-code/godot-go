@@ -419,6 +419,165 @@ func RegisterClassMethod(def ClassMethodDef) {
 		returnClassName)
 }
 
+// ClassAbstractMethodDef declares a virtual method on a previously-
+// registered class without binding any implementation. Used by the
+// `@abstract_methods` codegen path: the parent @abstract class declares
+// the contract, and concrete subclasses (Go via RegisterClassMethod, or
+// GDScript via the parser) supply the implementation.
+//
+// The registration goes through classdb_register_extension_class_virtual_method
+// rather than _method, which routes the entry into the engine's
+// `virtual_methods_map` instead of the regular MethodBind table. This
+// has two practical effects vs. RegisterClassMethod with MethodFlagVirtual:
+//
+//   - GDScript's NATIVE_METHOD_OVERRIDE warning gates on
+//     `ClassDB::get_method(parent, name) != null`; virtual_methods_map
+//     entries don't surface there, so subclasses can `func name():`
+//     override without the warning being treated as an error.
+//   - With MethodFlagVirtualRequired set, GDScript refuses to load a
+//     subclass that doesn't override every required virtual.
+//
+// Mirrors ClassMethodDef's metadata fields (ArgTypes/ArgMetadata,
+// ReturnType, etc.) since the parser uses them for signature checking
+// at override time.
+type ClassAbstractMethodDef struct {
+	Class            string
+	Name             string
+	Flags            MethodFlags
+	HasReturn        bool
+	ReturnType       VariantType
+	ReturnMetadata   MethodArgumentMetadata
+	ReturnClassName  string
+	ReturnHint       PropertyHint
+	ReturnHintString string
+	ArgTypes         []VariantType
+	ArgMetadata      []MethodArgumentMetadata
+	ArgNames         []string
+	ArgClassNames    []string
+	ArgHints         []PropertyHint
+	ArgHintStrings   []string
+}
+
+// RegisterClassAbstractMethod registers def on Class as a virtual-method
+// declaration. See ClassAbstractMethodDef for semantics.
+func RegisterClassAbstractMethod(def ClassAbstractMethodDef) {
+	if def.Class == "" || def.Name == "" {
+		panic("gdextension.RegisterClassAbstractMethod: Class and Name are required")
+	}
+	if len(def.ArgTypes) != len(def.ArgMetadata) {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: ArgTypes (len %d) and ArgMetadata (len %d) must be parallel",
+			len(def.ArgTypes), len(def.ArgMetadata)))
+	}
+	if def.ArgNames != nil && len(def.ArgNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: ArgNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgNames), len(def.ArgTypes)))
+	}
+	if def.ArgClassNames != nil && len(def.ArgClassNames) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: ArgClassNames (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgClassNames), len(def.ArgTypes)))
+	}
+	if def.ArgHints != nil && len(def.ArgHints) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: ArgHints (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgHints), len(def.ArgTypes)))
+	}
+	if def.ArgHintStrings != nil && len(def.ArgHintStrings) != len(def.ArgTypes) {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: ArgHintStrings (len %d) must match ArgTypes (len %d) when supplied",
+			len(def.ArgHintStrings), len(def.ArgTypes)))
+	}
+	if len(def.ArgTypes) > maxMethodArgs {
+		panic(fmt.Sprintf("gdextension.RegisterClassAbstractMethod: too many args (%d > %d)",
+			len(def.ArgTypes), maxMethodArgs))
+	}
+
+	className := InternStringName(def.Class)
+	methodName := InternStringName(def.Name)
+	emptyName := InternStringName("")
+	emptyStr := internedEmptyString()
+
+	flags := def.Flags
+	if flags == 0 {
+		flags = MethodFlagsDefault
+	}
+
+	argCount := len(def.ArgTypes)
+	var argTypesPtr, argMetaPtr, argHintsPtr *C.uint32_t
+	var argNamesPtr, argClassNamesPtr *C.GDExtensionConstStringNamePtr
+	var argHintStringsPtr *C.GDExtensionConstStringPtr
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	if argCount > 0 {
+		argTypes := make([]C.uint32_t, argCount)
+		argMeta := make([]C.uint32_t, argCount)
+		argNames := make([]C.GDExtensionConstStringNamePtr, argCount)
+		argClassNames := make([]C.GDExtensionConstStringNamePtr, argCount)
+		argHints := make([]C.uint32_t, argCount)
+		argHintStrings := make([]C.GDExtensionConstStringPtr, argCount)
+		for i := range def.ArgTypes {
+			argTypes[i] = C.uint32_t(def.ArgTypes[i])
+			argMeta[i] = C.uint32_t(def.ArgMetadata[i])
+			if i < len(def.ArgNames) && def.ArgNames[i] != "" {
+				name := InternStringName(def.ArgNames[i])
+				pinner.Pin(name)
+				argNames[i] = C.GDExtensionConstStringNamePtr(name)
+			}
+			if i < len(def.ArgClassNames) && def.ArgClassNames[i] != "" {
+				cls := InternStringName(def.ArgClassNames[i])
+				pinner.Pin(cls)
+				argClassNames[i] = C.GDExtensionConstStringNamePtr(cls)
+			}
+			if i < len(def.ArgHints) {
+				argHints[i] = C.uint32_t(def.ArgHints[i])
+			}
+			if i < len(def.ArgHintStrings) && def.ArgHintStrings[i] != "" {
+				hs := InternString(def.ArgHintStrings[i])
+				pinner.Pin(hs)
+				argHintStrings[i] = C.GDExtensionConstStringPtr(hs)
+			}
+		}
+		argTypesPtr = &argTypes[0]
+		argMetaPtr = &argMeta[0]
+		argNamesPtr = &argNames[0]
+		argClassNamesPtr = &argClassNames[0]
+		argHintsPtr = &argHints[0]
+		argHintStringsPtr = &argHintStrings[0]
+	}
+
+	var returnClassName C.GDExtensionConstStringNamePtr
+	if def.HasReturn && def.ReturnClassName != "" {
+		rc := InternStringName(def.ReturnClassName)
+		pinner.Pin(rc)
+		returnClassName = C.GDExtensionConstStringNamePtr(rc)
+	}
+
+	var returnHintStr C.GDExtensionConstStringPtr
+	if def.HasReturn && def.ReturnHintString != "" {
+		rhs := InternString(def.ReturnHintString)
+		pinner.Pin(rhs)
+		returnHintStr = C.GDExtensionConstStringPtr(rhs)
+	}
+
+	C.godot_go_register_extension_class_virtual_method(iface.classdbRegisterExtensionClassVirtualMethod,
+		C.GDExtensionClassLibraryPtr(iface.library),
+		C.GDExtensionConstStringNamePtr(className),
+		C.GDExtensionStringNamePtr(methodName),
+		C.uint32_t(flags),
+		C.GDExtensionConstStringNamePtr(emptyName),
+		C.GDExtensionConstStringPtr(emptyStr),
+		boolToGD(def.HasReturn),
+		C.uint32_t(def.ReturnType),
+		C.uint32_t(def.ReturnMetadata),
+		C.uint32_t(def.ReturnHint),
+		returnHintStr,
+		C.uint32_t(argCount),
+		argTypesPtr,
+		argMetaPtr,
+		argNamesPtr,
+		argClassNamesPtr,
+		argHintsPtr,
+		argHintStringsPtr,
+		returnClassName)
+}
+
 // ClassPropertyDef registers a property on a previously-registered class.
 // Phase 6: properties are wired by name to existing methods — the engine's
 // classdb_register_extension_class_property API takes (class, info, setter,

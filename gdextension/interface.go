@@ -82,6 +82,7 @@ var iface struct {
 	classdbRegisterExtensionClass5              C.GDExtensionInterfaceClassdbRegisterExtensionClass5  // 4.5+
 	classdbRegisterExtensionClass4              C.GDExtensionInterfaceClassdbRegisterExtensionClass4  // 4.4 fallback (struct = info4 = info5)
 	classdbRegisterExtensionClassMethod         C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod
+	classdbRegisterExtensionClassVirtualMethod  C.GDExtensionInterfaceClassdbRegisterExtensionClassVirtualMethod
 	classdbRegisterExtensionClassProperty       C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty
 	classdbRegisterExtensionClassPropertyGroup  C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup
 	classdbRegisterExtensionClassPropertySubgroup C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup
@@ -157,6 +158,7 @@ func loadInterface(getProc C.GDExtensionInterfaceGetProcAddress, lib C.GDExtensi
 		iface.classdbRegisterExtensionClass4 = (C.GDExtensionInterfaceClassdbRegisterExtensionClass4)(unsafe.Pointer(resolveProc("classdb_register_extension_class4")))
 	}
 	iface.classdbRegisterExtensionClassMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_method")))
+	iface.classdbRegisterExtensionClassVirtualMethod = (C.GDExtensionInterfaceClassdbRegisterExtensionClassVirtualMethod)(unsafe.Pointer(resolveProc("classdb_register_extension_class_virtual_method")))
 	iface.classdbRegisterExtensionClassProperty = (C.GDExtensionInterfaceClassdbRegisterExtensionClassProperty)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property")))
 	iface.classdbRegisterExtensionClassPropertyGroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertyGroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_group")))
 	iface.classdbRegisterExtensionClassPropertySubgroup = (C.GDExtensionInterfaceClassdbRegisterExtensionClassPropertySubgroup)(unsafe.Pointer(resolveProc("classdb_register_extension_class_property_subgroup")))

@@ -357,10 +357,20 @@ Constraints:
 - Embedded interfaces inside an `@abstract_methods` interface are
   rejected — only direct method declarations become abstract methods.
 - The framework does **not** enforce at compile time that subclasses
-  implement every abstract method. If a subclass omits an
-  implementation, calling the dispatcher routes to ClassDB's
+  implement every abstract method. For Go subclasses, an omitted
+  implementation routes the dispatcher's `Object::call` to ClassDB's
   hierarchy lookup, which fails with Godot's "method not found"
   CallError at runtime.
+- For GDScript subclasses, Godot enforces the contract at parse
+  time. Each method registers via
+  `classdb_register_extension_class_virtual_method` with
+  `METHOD_FLAG_VIRTUAL_REQUIRED`, so a `class_name X extends Y`
+  script that doesn't override every required virtual fails to
+  load. Routing through the virtual-method entry point also keeps
+  the parser's `NATIVE_METHOD_OVERRIDE` warning silent on
+  legitimate overrides — that warning gates on
+  `ClassDB::get_method`, which doesn't see virtual_methods_map
+  entries.
 
 ```go
 // @class

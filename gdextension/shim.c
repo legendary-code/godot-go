@@ -538,6 +538,80 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
     fn(p_library, p_class_name, &info);
 }
 
+void godot_go_register_extension_class_virtual_method(GDExtensionInterfaceClassdbRegisterExtensionClassVirtualMethod fn,
+                                                      GDExtensionClassLibraryPtr p_library,
+                                                      GDExtensionConstStringNamePtr p_class_name,
+                                                      GDExtensionStringNamePtr p_method_name,
+                                                      uint32_t method_flags,
+                                                      GDExtensionConstStringNamePtr empty_string_name,
+                                                      GDExtensionConstStringPtr empty_string,
+                                                      GDExtensionBool has_return,
+                                                      uint32_t return_type,
+                                                      uint32_t return_metadata,
+                                                      uint32_t return_hint,
+                                                      GDExtensionConstStringPtr return_hint_string,
+                                                      uint32_t arg_count,
+                                                      const uint32_t *arg_types,
+                                                      const uint32_t *arg_metadata,
+                                                      const GDExtensionConstStringNamePtr *arg_names,
+                                                      const GDExtensionConstStringNamePtr *arg_class_names,
+                                                      const uint32_t *arg_hints,
+                                                      const GDExtensionConstStringPtr *arg_hint_strings,
+                                                      GDExtensionConstStringNamePtr return_class_name) {
+    GDExtensionPropertyInfo arg_infos[GODOT_GO_MAX_METHOD_ARGS];
+    GDExtensionClassMethodArgumentMetadata arg_meta[GODOT_GO_MAX_METHOD_ARGS];
+
+    if (fn == NULL) {
+        /* 4.3+ entry point. If the host doesn't expose it (shouldn't happen
+         * on any Godot version we support, but defensive), bail rather than
+         * call NULL. */
+        return;
+    }
+    if (arg_count > GODOT_GO_MAX_METHOD_ARGS) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < arg_count; i++) {
+        GDExtensionConstStringNamePtr name_i = (arg_names != NULL ? arg_names[i] : NULL);
+        GDExtensionConstStringNamePtr class_i = (arg_class_names != NULL ? arg_class_names[i] : NULL);
+        uint32_t hint_i = (arg_hints != NULL ? arg_hints[i] : 0);
+        GDExtensionConstStringPtr hint_str_i = (arg_hint_strings != NULL ? arg_hint_strings[i] : NULL);
+        godot_go_fill_property_info(&arg_infos[i], arg_types[i],
+                                    name_i, class_i, hint_i, hint_str_i,
+                                    empty_string_name, empty_string);
+        arg_meta[i] = (GDExtensionClassMethodArgumentMetadata)arg_metadata[i];
+    }
+
+    /* GDExtensionClassVirtualMethodInfo embeds return_value by value (not
+     * a pointer) and has no has_return flag — fill the slot unconditionally
+     * with NIL when the method returns void. The engine treats VARIANT_TYPE_NIL
+     * as "no return value" for virtual signatures. */
+    GDExtensionClassVirtualMethodInfo info;
+    memset(&info, 0, sizeof(info));
+    info.name         = p_method_name;
+    info.method_flags = method_flags;
+    if (has_return) {
+        godot_go_fill_property_info(&info.return_value, return_type,
+                                    NULL, return_class_name,
+                                    return_hint, return_hint_string,
+                                    empty_string_name, empty_string);
+        info.return_value_metadata = (GDExtensionClassMethodArgumentMetadata)return_metadata;
+    } else {
+        /* GDEXTENSION_VARIANT_TYPE_NIL == 0 so memset already covered it,
+         * but re-fill via the helper to populate hint_string with the empty
+         * String pointer (the editor dereferences it during docs render). */
+        godot_go_fill_property_info(&info.return_value, /*type=*/0,
+                                    NULL, NULL, /*hint=*/0, NULL,
+                                    empty_string_name, empty_string);
+    }
+    info.argument_count = arg_count;
+    if (arg_count > 0) {
+        info.arguments          = arg_infos;
+        info.arguments_metadata = arg_meta;
+    }
+    fn(p_library, p_class_name, &info);
+}
+
 void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegisterExtensionClassProperty fn,
                                                 GDExtensionClassLibraryPtr p_library,
                                                 GDExtensionConstStringNamePtr p_class_name,

@@ -129,58 +129,38 @@ func registerAnimal() {
 		},
 	})
 
-	// Speak is registered on Animal with
-	// MethodFlagVirtualRequired so Godot's editor advertises the
-	// contract and warns when subclasses skip the override. The
-	// Call/PtrCall stubs return CallErrorInvalidMethod — direct
-	// invocation on an instance whose class hasn't overridden is a
-	// programming error and should surface clearly. Real dispatch
-	// happens through subclasses' regular method registrations
-	// (matched by name) and via the synthesized *Animal
-	// dispatcher's Object::call route.
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
-		Class: "Animal",
-		Name:  "speak",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			_ = args
-			_ = ret
-			return gdextension.CallErrorInvalidMethod
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			_ = args
-			_ = ret
-		},
+	// Speak is registered on Animal as a virtual-method
+	// declaration (no implementation). Routing through
+	// classdb_register_extension_class_virtual_method places it in the
+	// engine's virtual_methods_map rather than the regular MethodBind
+	// table — so GDScript's NATIVE_METHOD_OVERRIDE warning stays silent
+	// when subclasses override, and MethodFlagVirtualRequired makes the
+	// parser refuse subclasses that skip the override. Real dispatch
+	// happens through subclasses' regular method registrations (matched
+	// by name) and via the synthesized *Animal dispatcher's
+	// Object::call route.
+	gdextension.RegisterClassAbstractMethod(gdextension.ClassAbstractMethodDef{
+		Class:          "Animal",
+		Name:           "speak",
 		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagVirtual | gdextension.MethodFlagVirtualRequired,
 		HasReturn:      true,
 		ReturnType:     gdextension.VariantTypeString,
 		ReturnMetadata: gdextension.ArgMetaNone,
 	})
 
-	// Move is registered on Animal with
-	// MethodFlagVirtualRequired so Godot's editor advertises the
-	// contract and warns when subclasses skip the override. The
-	// Call/PtrCall stubs return CallErrorInvalidMethod — direct
-	// invocation on an instance whose class hasn't overridden is a
-	// programming error and should surface clearly. Real dispatch
-	// happens through subclasses' regular method registrations
-	// (matched by name) and via the synthesized *Animal
-	// dispatcher's Object::call route.
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+	// Move is registered on Animal as a virtual-method
+	// declaration (no implementation). Routing through
+	// classdb_register_extension_class_virtual_method places it in the
+	// engine's virtual_methods_map rather than the regular MethodBind
+	// table — so GDScript's NATIVE_METHOD_OVERRIDE warning stays silent
+	// when subclasses override, and MethodFlagVirtualRequired makes the
+	// parser refuse subclasses that skip the override. Real dispatch
+	// happens through subclasses' regular method registrations (matched
+	// by name) and via the synthesized *Animal dispatcher's
+	// Object::call route.
+	gdextension.RegisterClassAbstractMethod(gdextension.ClassAbstractMethodDef{
 		Class: "Animal",
 		Name:  "move",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			_ = args
-			_ = ret
-			return gdextension.CallErrorInvalidMethod
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			_ = args
-			_ = ret
-		},
 		Flags: gdextension.MethodFlagsDefault | gdextension.MethodFlagVirtual | gdextension.MethodFlagVirtualRequired,
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeInt,

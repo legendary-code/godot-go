@@ -211,6 +211,38 @@ void godot_go_register_extension_class_method(GDExtensionInterfaceClassdbRegiste
                                               const GDExtensionConstStringPtr *arg_hint_strings,
                                               GDExtensionConstStringNamePtr return_class_name);
 
+/* Virtual-method declaration. Used for @abstract_methods — the parent
+ * class declares the method shape; subclasses (Go or GDScript) provide
+ * the implementation. Goes through classdb_register_extension_class_virtual_method,
+ * which routes the entry into Godot's `virtual_methods_map` instead of
+ * the regular MethodBind table. That distinction matters at parse time:
+ * GDScript's NATIVE_METHOD_OVERRIDE warning fires on
+ * `ClassDB::get_method(parent, name) != null`, so virtual-method entries
+ * are silent — exactly what we want for an interface-style declaration.
+ *
+ * Same parallel-scalar marshaling pattern as godot_go_register_extension_class_method,
+ * but no Call/PtrCall trampolines and no default arguments. */
+void godot_go_register_extension_class_virtual_method(GDExtensionInterfaceClassdbRegisterExtensionClassVirtualMethod fn,
+                                                      GDExtensionClassLibraryPtr p_library,
+                                                      GDExtensionConstStringNamePtr p_class_name,
+                                                      GDExtensionStringNamePtr p_method_name,
+                                                      uint32_t method_flags,
+                                                      GDExtensionConstStringNamePtr empty_string_name,
+                                                      GDExtensionConstStringPtr empty_string,
+                                                      GDExtensionBool has_return,
+                                                      uint32_t return_type,
+                                                      uint32_t return_metadata,
+                                                      uint32_t return_hint,
+                                                      GDExtensionConstStringPtr return_hint_string,
+                                                      uint32_t arg_count,
+                                                      const uint32_t *arg_types,
+                                                      const uint32_t *arg_metadata,
+                                                      const GDExtensionConstStringNamePtr *arg_names,
+                                                      const GDExtensionConstStringNamePtr *arg_class_names,
+                                                      const uint32_t *arg_hints,
+                                                      const GDExtensionConstStringPtr *arg_hint_strings,
+                                                      GDExtensionConstStringNamePtr return_class_name);
+
 /* Property registration. Mirrors classdb_register_extension_class_property —
  * the engine wires (class, property_name) → (setter_method, getter_method)
  * already registered through godot_go_register_extension_class_method. The

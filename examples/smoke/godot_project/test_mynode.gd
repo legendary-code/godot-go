@@ -434,6 +434,22 @@ func _check_abstract_methods() -> void:
 	_check("animal.parent_is_refcounted",
 			ClassDB.get_parent_class("Animal"), &"RefCounted")
 
+	# A GDScript class that extends Animal must (a) be instantiable —
+	# Animal's registration goes through with is_abstract=false, so
+	# the engine's creation_func resolves up the chain — and (b) be
+	# allowed to override the @abstract_methods without tripping the
+	# parser's NATIVE_METHOD_OVERRIDE warning. The override routes
+	# through Godot's virtual dispatch (script-defined override),
+	# unlike Dog where the override is bound by another extension.
+	var gd_animal: GDScriptAnimal = GDScriptAnimal.new()
+	_check("gdscript_extends_animal: instantiable",
+			gd_animal != null, true)
+	_check("gdscript_extends_animal: speak override returns",
+			gd_animal.speak(), "gdscript-speak")
+	# move() is no-op on the GDScript subclass; calling it just
+	# proves the override is callable without erroring.
+	gd_animal.move(5)
+
 	# Construct a Dog. Calling speak() / move() routes through Dog's
 	# concrete registrations; the @abstract_methods dispatcher on
 	# *Animal exists for Go-side polymorphism but isn't visible here

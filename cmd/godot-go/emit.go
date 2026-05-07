@@ -1692,29 +1692,19 @@ func register{{$class.Class}}() {
 	})
 {{end}}
 {{- range .AbstractMethods}}
-	// {{.GoName}} is registered on {{$class.Class}} with
-	// MethodFlagVirtualRequired so Godot's editor advertises the
-	// contract and warns when subclasses skip the override. The
-	// Call/PtrCall stubs return CallErrorInvalidMethod — direct
-	// invocation on an instance whose class hasn't overridden is a
-	// programming error and should surface clearly. Real dispatch
-	// happens through subclasses' regular method registrations
-	// (matched by name) and via the synthesized *{{$class.Class}}
-	// dispatcher's Object::call route.
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+	// {{.GoName}} is registered on {{$class.Class}} as a virtual-method
+	// declaration (no implementation). Routing through
+	// classdb_register_extension_class_virtual_method places it in the
+	// engine's virtual_methods_map rather than the regular MethodBind
+	// table — so GDScript's NATIVE_METHOD_OVERRIDE warning stays silent
+	// when subclasses override, and MethodFlagVirtualRequired makes the
+	// parser refuse subclasses that skip the override. Real dispatch
+	// happens through subclasses' regular method registrations (matched
+	// by name) and via the synthesized *{{$class.Class}} dispatcher's
+	// Object::call route.
+	gdextension.RegisterClassAbstractMethod(gdextension.ClassAbstractMethodDef{
 		Class: "{{$class.Class}}",
 		Name:  "{{.GodotName}}",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			_ = args
-			_ = ret
-			return gdextension.CallErrorInvalidMethod
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			_ = args
-			_ = ret
-		},
 		Flags: gdextension.MethodFlagsDefault | gdextension.MethodFlagVirtual | gdextension.MethodFlagVirtualRequired,
 		{{- if .HasReturn}}
 		HasReturn:      true,
