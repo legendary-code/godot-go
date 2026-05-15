@@ -1002,6 +1002,28 @@ func registerMyNode() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
+		Name:  "origin",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self MyNode
+			result := self.Origin()
+			godot.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self MyNode
+			result := self.Origin()
+			*(*int64)(ret) = result
+		},
+		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
 		Name:  "get_score",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			self := lookupMyNodeInstance(instance)
@@ -1176,26 +1198,6 @@ func registerMyNode() {
 		ArgClassNames: []string{
 			"",
 		},
-	})
-
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
-		Class: "MyNode",
-		Name:  "origin",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			result := Origin()
-			godot.VariantSetInt64(ret, result)
-			return gdextension.CallErrorOK
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			result := Origin()
-			*(*int64)(ret) = result
-		},
-		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeInt,
-		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -1865,6 +1867,10 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <param index="0" name="others" type="Array" enum="Node"></param>
             <description>Exercises Phase 6c []*&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. Wire form is Array[Node] — TypedArray of OBJECT with&#xA;class_name = &#34;Node&#34;.</description>
         </method>
+        <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
+            <return type="int"></return>
+            <description>Is a class-level method — ` + "`" + `@static` + "`" + ` registers it with&#xA;MethodFlagStatic so GDScript callers reach it as ` + "`" + `MyNode.origin()` + "`" + `&#xA;without an instance.</description>
+        </method>
         <method name="get_score">
             <return type="int"></return>
             <description>Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</description>
@@ -1888,10 +1894,6 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="_process">
             <param index="0" name="delta" type="float"></param>
             <description>Is a Phase 5e/6 virtual override — ` + "`" + `@override` + "`" + ` opts into&#xA;virtual binding so codegen routes through RegisterClassVirtual and&#xA;adds the leading underscore Godot expects on engine virtuals&#xA;(` + "`" + `Process` + "`" + ` → ` + "`" + `_process` + "`" + `). The engine calls this on every frame for&#xA;live nodes; the smoke test just invokes it directly from GDScript to&#xA;keep the run deterministic without spinning up a scene tree.</description>
-        </method>
-        <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
-            <return type="int"></return>
-            <description>Is a class-level method — ` + "`" + `@static` + "`" + ` on a free function in the&#xA;same file as the @class struct registers it with MethodFlagStatic&#xA;on MyNode so GDScript callers reach it as ` + "`" + `MyNode.origin()` + "`" + ` without&#xA;an instance.</description>
         </method>
         <method name="get_health">
             <return type=""></return>
@@ -2110,6 +2112,51 @@ func registerRefHolder() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "RefHolder",
+		Name:  "new_ref_holder_tagged",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			var self RefHolder
+			arg0 := godot.VariantAsString(args[0])
+			result := self.NewRefHolderTagged(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			godot.VariantSetObject(ret, result_ptr)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			var self RefHolder
+			arg0 := godot.PtrCallArgString(args, 0)
+			result := self.NewRefHolderTagged(arg0)
+			var result_ptr gdextension.ObjectPtr
+			if result != nil {
+				result_ptr = result.Ptr()
+			}
+			*(*gdextension.ObjectPtr)(ret) = result_ptr
+		},
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeObject,
+		ReturnMetadata:  gdextension.ArgMetaNone,
+		ReturnClassName: "RefHolder",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"tag",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "RefHolder",
 		Name:  "tag",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			self := lookupRefHolderInstance(instance)
@@ -2192,49 +2239,6 @@ func registerRefHolder() {
 		},
 	})
 
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
-		Class: "RefHolder",
-		Name:  "new_ref_holder_tagged",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			arg0 := godot.VariantAsString(args[0])
-			result := NewRefHolderTagged(arg0)
-			var result_ptr gdextension.ObjectPtr
-			if result != nil {
-				result_ptr = result.Ptr()
-			}
-			godot.VariantSetObject(ret, result_ptr)
-			return gdextension.CallErrorOK
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			arg0 := godot.PtrCallArgString(args, 0)
-			result := NewRefHolderTagged(arg0)
-			var result_ptr gdextension.ObjectPtr
-			if result != nil {
-				result_ptr = result.Ptr()
-			}
-			*(*gdextension.ObjectPtr)(ret) = result_ptr
-		},
-		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypeObject,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "RefHolder",
-		ArgTypes: []gdextension.VariantType{
-			gdextension.VariantTypeString,
-		},
-		ArgMetadata: []gdextension.MethodArgumentMetadata{
-			gdextension.ArgMetaNone,
-		},
-		ArgNames: []string{
-			"tag",
-		},
-		ArgClassNames: []string{
-			"",
-		},
-	})
-
 	gdextension.RegisterClassSignal(gdextension.ClassSignalDef{
 		Class: "RefHolder",
 		Name:  "touched",
@@ -2264,6 +2268,11 @@ const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <brief_description>Reproduces the typed-Variant property-storage scenario for user-extension RefCounted classes: a static factory mints a fresh instance and returns it through the @class boundary, GDScript stores it on a typed property of a Node, and later user code emits signals on the held instance.</brief_description>
     <description>Reproduces the typed-Variant property-storage scenario&#xA;for user-extension RefCounted classes: a static factory mints a&#xA;fresh instance and returns it through the @class boundary, GDScript&#xA;stores it on a typed property of a Node, and later user code emits&#xA;signals on the held instance. With the Construct-hook signal&#xA;warmup, the first user-emitted signal is rc-stable; without it,&#xA;the property would null-out a few accesses later.</description>
     <methods>
+        <method name="new_ref_holder_tagged" qualifiers="static">
+            <return type="Object" enum="RefHolder"></return>
+            <param index="0" name="tag" type="String"></param>
+            <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls, signal emits).</description>
+        </method>
         <method name="tag">
             <return type="String"></return>
             <description>Exposes the stamped value so GDScript can verify identity on&#xA;each access — if the engine pointer was freed mid-flight, the&#xA;method-bind dispatch would crash or return stale memory.</description>
@@ -2275,11 +2284,6 @@ const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <method name="touch">
             <param index="0" name="n" type="int"></param>
             <description>Fires the Touched signal so the GDScript test can verify the&#xA;first emit doesn&#39;t drain the engine refcount. Without the framework&#39;s&#xA;Construct-hook warmup, this first emit would drop one ref from the&#xA;underlying RefCounted (Godot&#39;s per-instance signal lazy init) and&#xA;the property storage would shortly null-out.</description>
-        </method>
-        <method name="new_ref_holder_tagged" qualifiers="static">
-            <return type="Object" enum="RefHolder"></return>
-            <param index="0" name="tag" type="String"></param>
-            <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls, signal emits).</description>
         </method>
     </methods>
     <signals>

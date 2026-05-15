@@ -41,7 +41,7 @@ type RefHolder struct {
 // (property assignment, getter reads, method calls, signal emits).
 //
 // @static
-func NewRefHolderTagged(tag string) *RefHolder {
+func (*RefHolder) NewRefHolderTagged(tag string) *RefHolder {
 	r := NewRefHolder()
 	r.tag = tag
 	return r

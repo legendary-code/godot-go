@@ -69,7 +69,7 @@ func (g *Greeter) Hello() string {
 // pair, and rebuilds a fresh Dictionary on the way out.
 //
 // @static
-func CountLetters(words []string) map[string]int64 {
+func (Greeter) CountLetters(words []string) map[string]int64 {
 	out := map[string]int64{}
 	for _, w := range words {
 		for _, r := range w {
@@ -83,7 +83,7 @@ func CountLetters(words []string) map[string]int64 {
 // Go map → Variant path with the same shape on both sides.
 //
 // @static
-func Echo(in map[string]int64) map[string]int64 {
+func (Greeter) Echo(in map[string]int64) map[string]int64 {
 	return in
 }
 
@@ -94,7 +94,7 @@ func Echo(in map[string]int64) map[string]int64 {
 // unwraps it via a typed cast.
 //
 // @static
-func LangCodes() map[string]Language {
+func (Greeter) LangCodes() map[string]Language {
 	return map[string]Language{
 		"en": LanguageEnglish,
 		"de": LanguageGerman,
@@ -106,7 +106,7 @@ func LangCodes() map[string]Language {
 // inline by the codegen.
 //
 // @static
-func CharsByLang() map[string][]string {
+func (Greeter) CharsByLang() map[string][]string {
 	return map[string][]string{
 		"en": {"a", "b", "c"},
 		"de": {"ä", "ö", "ü"},
@@ -118,7 +118,7 @@ func CharsByLang() map[string][]string {
 // Language is declared alongside LocaleLanguage but used here.
 //
 // @static
-func GreetIn(lang Language) string {
+func (Greeter) GreetIn(lang Language) string {
 	switch lang {
 	case LanguageEnglish:
 		return "hello"

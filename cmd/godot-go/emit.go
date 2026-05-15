@@ -1534,6 +1534,7 @@ func register{{$class.Class}}() {
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			{{- if .IsStatic}}
 			_ = instance
+			var self {{$class.Class}}
 			{{- else}}
 			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
@@ -1543,26 +1544,18 @@ func register{{$class.Class}}() {
 			{{- range .CallArgReads}}
 			{{.}}
 			{{- end}}
-			{{- if .IsStatic}}
-				{{- if .HasReturn}}
-			result := {{.GoName}}({{.DispatchArgs}})
-			{{.CallReturn}}
-				{{- else}}
-			{{.GoName}}({{.DispatchArgs}})
-				{{- end}}
-			{{- else}}
-				{{- if .HasReturn}}
+			{{- if .HasReturn}}
 			result := self.{{.GoName}}({{.DispatchArgs}})
 			{{.CallReturn}}
-				{{- else}}
+			{{- else}}
 			self.{{.GoName}}({{.DispatchArgs}})
-				{{- end}}
 			{{- end}}
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			{{- if .IsStatic}}
 			_ = instance
+			var self {{$class.Class}}
 			{{- else}}
 			self := lookup{{$class.Class}}Instance(instance)
 			if self == nil {
@@ -1572,20 +1565,11 @@ func register{{$class.Class}}() {
 			{{- range .PtrCallArgReads}}
 			{{.}}
 			{{- end}}
-			{{- if .IsStatic}}
-				{{- if .HasReturn}}
-			result := {{.GoName}}({{.DispatchArgs}})
-			{{.PtrCallReturn}}
-				{{- else}}
-			{{.GoName}}({{.DispatchArgs}})
-				{{- end}}
-			{{- else}}
-				{{- if .HasReturn}}
+			{{- if .HasReturn}}
 			result := self.{{.GoName}}({{.DispatchArgs}})
 			{{.PtrCallReturn}}
-				{{- else}}
+			{{- else}}
 			self.{{.GoName}}({{.DispatchArgs}})
-				{{- end}}
 			{{- end}}
 		},
 		{{- if .IsStatic}}
