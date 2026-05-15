@@ -438,12 +438,15 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 	// cases where @name already supplies a leading underscore
 	// explicitly).
 	//
-	// Receiver shape: a method tagged @static may have either an
-	// unnamed receiver (`func (T) Foo()` — clearer about not using
-	// the instance) or a named one (`func (t *T) Foo()` — fine, the
-	// argument is just unused). An unnamed receiver WITHOUT @static
-	// errors out — silently treating it as static was the old
-	// implicit behavior the explicit tag replaces.
+	// Receiver shape:
+	//   - @static method MUST use an unnamed receiver (`func (T) Foo()`
+	//     or `func (*T) Foo()`). A named receiver on a @static method
+	//     is rejected — without a name there's no in-scope handle on
+	//     the instance, which makes accidental state mutation
+	//     syntactically impossible.
+	//   - Unnamed receiver without @static is rejected too — silently
+	//     treating it as static was the old implicit behavior the
+	//     explicit tag replaces.
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 {
@@ -460,6 +463,10 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 		if recvUnnamed && !hasStatic {
 			return nil, fmt.Errorf("%s: %s.%s has an unnamed receiver but no @static — add @static to register the method as a class method, or name the receiver to register an instance method",
 				posStr(fset, fn.Pos()), recvType, fn.Name.Name)
+		}
+		if hasStatic && !recvUnnamed {
+			return nil, fmt.Errorf("%s: %s.%s carries @static but the receiver is named — @static requires an unnamed receiver (`func (%s) %s(...)` or `func (*%s) %s(...)`) so there's no in-scope handle that could accidentally mutate instance state",
+				posStr(fset, fn.Pos()), recvType, fn.Name.Name, recvType, fn.Name.Name, recvType, fn.Name.Name)
 		}
 		if hasStatic && hasOverride {
 			return nil, fmt.Errorf("%s: %s.%s carries both @static and @override — pick one (statics aren't dispatched virtually)",

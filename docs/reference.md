@@ -219,7 +219,7 @@ type Combatant struct {
 | Tag | Argument | Where valid | What it does |
 |---|---|---|---|
 | `@property` | none | on `Get<Name>` and `Set<Name>` methods | Registers the pair as a property (method form). Both halves must carry the tag — tagging only `Get<X>` makes the property read-only; tagging `Set<X>` without a matching tagged `Get<X>` is rejected as an orphan setter. The user owns the backing storage. Method form does NOT accept export hints. |
-| `@static` | none | on a method | Registers the method with `MethodFlagStatic` so GDScript callers reach it as `ClassName.method()` without an instance. The receiver may be unnamed (`func (T) Foo()` — clearer about not using the instance) or named (`func (t *T) Foo()` — fine, the argument is just unused). Mutually exclusive with `@override`. |
+| `@static` | none | on a method with an **unnamed receiver** | Registers the method with `MethodFlagStatic` so GDScript callers reach it as `ClassName.method()` without an instance. The receiver must be unnamed (`func (T) Foo()` or `func (*T) Foo()`) — naming it (`func (t *T) Foo()`) is rejected because the in-scope handle could silently mutate instance state the registration is supposed to ignore. Mutually exclusive with `@override`. |
 | `@override` | none | on a method | Registers the method as a Godot virtual (e.g., `_process`, `_ready`, `_input`). Codegen routes through `RegisterClassVirtual` and prepends a leading underscore to the Godot name unless the user supplied one with `@name`. |
 | `@name` | string | on a method | Overrides the Godot-side name for the method. Default is `snake_case(GoName)`; with `@name`, the literal value is used. |
 
@@ -275,12 +275,12 @@ Method classification rules at a glance:
 |---|---|---|
 | `func (p *T) Foo()` | none | regular instance method (Godot name `foo`) |
 | `func (p *T) Foo()` | `@override` | virtual override (Godot name `_foo`) |
-| `func (p *T) Foo()` | `@static` | static method (Godot name `foo`, registered with `MethodFlagStatic`) |
+| `func (p *T) Foo()` | `@static` | **rejected** — `@static` requires an unnamed receiver; drop the parameter name |
 | `func (T) Foo()` | none | **rejected** — unnamed receiver requires `@static` |
-| `func (T) Foo()` | `@static` | static method (same as above; the unnamed-receiver form documents the intent) |
+| `func (T) Foo()` | `@static` | static method (Godot name `foo`, registered with `MethodFlagStatic`) |
+| `func (*T) Foo()` | `@static` | static method (same — unnamed pointer-receiver form) |
 | `func (p *T) foo()` | none | NOT registered — Go-private helper |
 | `func (p *T) foo()` | `@override` | virtual override (Godot name `_foo`) |
-| `func (p *T) foo()` | `@static` | static method (Godot name `foo`) |
 
 ### On an interface
 
@@ -604,10 +604,12 @@ Three kinds, distinguished by tags:
 - **Instance methods** — no special tag. `func (p *Player) Foo()`
   is the common shape; registered with the snake-cased Go name.
 - **Static methods** — `@static` on the doc comment. The receiver
-  may be unnamed (`func (Player) Foo()`) or named — Godot sees
-  the method as static either way, registered with
-  `MethodFlagStatic` so GDScript callers reach it as
-  `Player.foo()` without an instance.
+  must be **unnamed** (`func (Player) Foo()` or `func (*Player) Foo()`);
+  naming it (`func (p *Player) Foo()`) is rejected because the
+  in-scope handle could silently mutate instance state the
+  registration is supposed to ignore. Godot sees the method as
+  static, registered with `MethodFlagStatic` so GDScript callers
+  reach it as `Player.foo()` without an instance.
 - **Virtual overrides** — `@override` on the doc comment.
   Registered via `RegisterClassVirtual` + `_`-prefixed Godot name.
   Used for Godot-defined virtuals like `_process`, `_ready`,
@@ -624,6 +626,13 @@ Methods with an unnamed receiver (`func (T) Foo()`) require
 `@static` explicitly. The codegen used to silently classify them
 as static; the explicit tag avoids surprising readers and keeps
 intent visible in the source.
+
+The inverse also holds: `@static` requires the receiver to be
+unnamed. A named receiver (`func (p *Player) Foo()`) with `@static`
+is rejected — naming the receiver puts a handle in scope that
+could mutate instance state, even though Godot dispatches the
+call statically. Dropping the name makes accidental mutation
+syntactically impossible.
 
 Method args and returns must be from the
 [supported types list](#supported-types). At most one return value

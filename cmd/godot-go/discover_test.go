@@ -119,15 +119,16 @@ type MyNode struct {
 }
 // @static
 // @override
-func (n *MyNode) Helper() {}
+func (MyNode) Helper() {}
 `
 	mustFailDiscover(t, src, "both @static and @override")
 }
 
-func TestDiscoverStaticWithNamedReceiver(t *testing.T) {
-	// Named receiver + @static is allowed — the method's body just
-	// doesn't use the receiver, but Godot still sees it as static
-	// (registered with MethodFlagStatic).
+func TestDiscoverStaticWithNamedReceiverRejected(t *testing.T) {
+	// @static must use an unnamed receiver — naming the receiver puts
+	// a handle in scope that could accidentally mutate instance state
+	// even though the registration is static-only. Rejected at
+	// discovery so the rule is visible at the call site.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -137,6 +138,22 @@ type MyNode struct {
 }
 // @static
 func (n *MyNode) Helper() int64 { return 42 }
+`
+	mustFailDiscover(t, src, "@static but the receiver is named")
+}
+
+func TestDiscoverStaticWithUnnamedPointerReceiver(t *testing.T) {
+	// `func (*T) Foo()` is the unnamed pointer-receiver form — still
+	// fine because the receiver has no parameter name in scope.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+// @static
+func (*MyNode) Helper() int64 { return 42 }
 `
 	d := mustDiscover(t, src)
 	if d.MainClass.Methods[0].Kind != methodStatic {
