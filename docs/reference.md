@@ -148,8 +148,11 @@ inspector polish.
 
 | Tag | Required? | Argument | What it does |
 |---|---|---|---|
-| `@property` | yes (to be exposed) | none | Exposes the field to GDScript as a property of the class. Codegen synthesizes `Get<Name>` and `Set<Name>` Go methods that read/write the field; both register through the standard method-binding path so GDScript sees them as a property pair. The field must be exported (capitalized). |
-| `@readonly` | optional | none | Only valid alongside `@property`. Drops the synthesized setter so the property is read-only from GDScript. The Go side can still write the field directly. |
+| `@property` | yes (to be exposed) | none | Exposes the field to GDScript as a property of the class, registered with `PROPERTY_USAGE_DEFAULT` (`STORAGE | EDITOR`) — visible in the inspector. Codegen synthesizes `Get<Name>` and `Set<Name>` Go methods that read/write the field; both register through the standard method-binding path so GDScript sees them as a property pair. The field must be exported (capitalized). |
+| `@var` | yes (to be exposed) | none | Sibling to `@property` for fields you want GDScript-accessible but NOT in the inspector. Registers with `PROPERTY_USAGE_STORAGE` only (no `EDITOR` flag) — the value is saved with the scene, GDScript can read/write `obj.field_name`, but the inspector doesn't render it. Synthesizes the same `Get<Name>` / `Set<Name>` pair as `@property` field-form. Rejects inspector-only tags (`@export_*`, `@group`, `@subgroup`); `@readonly` is still accepted. Mutually exclusive with `@property` on the same field. |
+| `@readonly` | optional | none | Only valid alongside `@property` or `@var`. Drops the synthesized setter so the field is read-only from GDScript. The Go side can still write the field directly. |
+
+Fields without `@property` or `@var` are NOT exposed to Godot, regardless of casing — Go-exported (`PascalCase`) fields stay invisible unless explicitly tagged.
 
 ```go
 // @class
@@ -163,6 +166,10 @@ type Player struct {
     // @property
     // @readonly
     MaxHealth int64
+
+    // @var — script-visible (`p.score = ...` works) but hidden
+    // from the inspector. Saved with the scene because STORAGE is set.
+    Score int64
 }
 ```
 
@@ -642,21 +649,30 @@ vararg engine methods, but you can't expose your own).
 
 ### Properties
 
-Two surface forms, equivalent at the GDScript layer:
+Three surface forms, all reaching GDScript as `obj.field_name`:
 
-- **Field form**: an exported field tagged `@property` (and
-  optionally `@readonly`). The codegen synthesizes `Get<Name>` /
-  `Set<Name>` methods that read/write the field, then registers
-  them. `@readonly` drops the synthesized setter. Field form is
-  the only one that accepts inspector hints (`@group`,
+- **Field form (`@property`)**: an exported field tagged
+  `@property` (and optionally `@readonly`). The codegen synthesizes
+  `Get<Name>` / `Set<Name>` methods that read/write the field, then
+  registers them with `PROPERTY_USAGE_DEFAULT` (`STORAGE | EDITOR`).
+  Visible in the inspector. Accepts inspector hints (`@group`,
   `@subgroup`, `@export_*`).
+- **Field form (`@var`)**: same shape as `@property` field-form,
+  but registered with `PROPERTY_USAGE_STORAGE` only — saved with
+  the scene, accessible from GDScript, hidden from the inspector.
+  Rejects inspector hints + grouping (no point, you don't see it
+  there). Accepts `@readonly`. Mutually exclusive with `@property`
+  on the same field.
 - **Method form**: the user writes `Get<Name>` (and optionally
   `Set<Name>`), tagging both halves with `@property`. The user
   owns the storage — useful when the property is computed,
   validated on write, or backed by something other than a struct
   field. Method form doesn't accept export hints.
 
-A property name appearing in both forms (an exported field
+Untagged fields are NOT exposed, regardless of Go casing. The rule
+is opt-in via `@property` / `@var` on every exposed field.
+
+A property name appearing in multiple forms (e.g. an exported field
 `Foo` AND a `GetFoo` method) is rejected at codegen time.
 
 ### Signals

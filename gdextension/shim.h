@@ -266,7 +266,8 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionConstStringNamePtr p_getter,
                                                 GDExtensionConstStringPtr hint_string,
                                                 uint32_t property_type,
-                                                uint32_t property_hint);
+                                                uint32_t property_hint,
+                                                uint32_t property_usage);
 
 /* Property group / subgroup registration. Calls must come BEFORE the
  * properties they apply to — Godot's inspector treats subsequent

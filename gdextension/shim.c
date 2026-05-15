@@ -622,7 +622,8 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
                                                 GDExtensionConstStringNamePtr p_getter,
                                                 GDExtensionConstStringPtr hint_string,
                                                 uint32_t property_type,
-                                                uint32_t property_hint) {
+                                                uint32_t property_hint,
+                                                uint32_t property_usage) {
     /* PropertyInfo lives on the C stack so the Go caller doesn't pass a Go-
      * allocated struct containing pointers. The interned StringName/String
      * pointers come in directly as args (cgo permits one Go pointer per arg
@@ -640,8 +641,12 @@ void godot_go_register_extension_class_property(GDExtensionInterfaceClassdbRegis
     info.class_name  = (GDExtensionStringNamePtr)(p_value_class_name != NULL ? p_value_class_name : p_empty_string_name);
     info.hint        = property_hint;
     info.hint_string = (GDExtensionStringPtr)hint_string;
-    /* PROPERTY_USAGE_DEFAULT: STORAGE | EDITOR. */
-    info.usage       = 6;
+    /* property_usage is passed through verbatim — Go callers choose
+     * PROPERTY_USAGE_DEFAULT (STORAGE|EDITOR, the @property case) or
+     * PROPERTY_USAGE_STORAGE alone (the @var case, script-visible but
+     * hidden from the inspector). The shim doesn't validate; Godot
+     * tolerates any bitmask the engine recognizes. */
+    info.usage       = property_usage;
     fn(p_library, p_class_name, &info, p_setter, p_getter);
 }
 

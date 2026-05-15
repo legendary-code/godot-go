@@ -449,6 +449,13 @@ type emitProperty struct {
 	Hint       string
 	HintString string
 
+	// Usage is the bare PropertyUsage const name (e.g. "PropertyUsageStorage").
+	// Empty means "fall through to ClassPropertyDef's zero-value default"
+	// (PropertyUsageDefault = STORAGE | EDITOR). @var properties set
+	// this to "PropertyUsageStorage" to hide the registration from
+	// the inspector.
+	Usage string
+
 	// BeginGroup / BeginSubgroup carry the group / subgroup name when
 	// THIS property is the first one of that group/subgroup. Codegen
 	// emits the corresponding RegisterClassPropertyGroup /
@@ -922,6 +929,13 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 			Getter:     getterGodotName,
 			Hint:       p.Hint,
 			HintString: p.HintString,
+		}
+		if p.IsVar {
+			// @var: script-visible only, no editor flag. The
+			// PropertyUsageStorage constant covers STORAGE without
+			// EDITOR; @property keeps the zero-default which falls
+			// through to PropertyUsageDefault (STORAGE | EDITOR).
+			entry.Usage = "PropertyUsageStorage"
 		}
 		if !p.ReadOnly {
 			entry.Setter = setterGodotName
@@ -1660,6 +1674,9 @@ func register{{$class.Class}}() {
 		{{- end}}
 		{{- if .HintString}}
 		HintString: {{printf "%q" .HintString}},
+		{{- end}}
+		{{- if .Usage}}
+		Usage:      gdextension.{{.Usage}},
 		{{- end}}
 	})
 {{end}}

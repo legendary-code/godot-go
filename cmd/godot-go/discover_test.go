@@ -1475,6 +1475,108 @@ type MyNode struct {
 	}
 }
 
+func TestDiscoverVarField(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @var
+	Stash int64
+}
+`
+	d := mustDiscover(t, src)
+	if len(d.MainClass.Properties) != 1 {
+		t.Fatalf("expected 1 property, got %d", len(d.MainClass.Properties))
+	}
+	p := d.MainClass.Properties[0]
+	if !p.IsVar {
+		t.Errorf("IsVar = false, want true")
+	}
+	if p.ReadOnly {
+		t.Errorf("ReadOnly = true, want false")
+	}
+}
+
+func TestDiscoverVarReadOnly(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @readonly
+	// @var
+	Stash int64
+}
+`
+	d := mustDiscover(t, src)
+	p := d.MainClass.Properties[0]
+	if !p.IsVar || !p.ReadOnly {
+		t.Errorf("IsVar=%v ReadOnly=%v, want both true", p.IsVar, p.ReadOnly)
+	}
+}
+
+func TestDiscoverVarAndPropertyRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @var
+	// @property
+	Stash int64
+}
+`
+	mustFailDiscover(t, src, "both @property and @var")
+}
+
+func TestDiscoverVarWithExportHintRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @export_range(0, 10)
+	// @var
+	Stash int64
+}
+`
+	mustFailDiscover(t, src, "@var")
+}
+
+func TestDiscoverVarWithGroupRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @group("Combat")
+	// @var
+	Stash int64
+}
+`
+	mustFailDiscover(t, src, "@var")
+}
+
+func TestDiscoverVarUnexportedRejected(t *testing.T) {
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+	// @var
+	stash int64
+}
+`
+	mustFailDiscover(t, src, "unexported")
+}
+
 func TestDiscoverPropertyMethodForm(t *testing.T) {
 	// Read-write method form: BOTH GetX and SetX must carry @property.
 	src := `package x

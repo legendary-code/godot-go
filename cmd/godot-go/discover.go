@@ -212,6 +212,13 @@ type propertyInfo struct {
 	// Default is "PropertyHintNone" + empty.
 	Hint       string
 	HintString string
+
+	// IsVar marks a field declared with `@var` instead of `@property`.
+	// @var registers a script-visible field hidden from the inspector
+	// (PROPERTY_USAGE_STORAGE only, no EDITOR flag). It rejects
+	// inspector-only metadata (export hints, group/subgroup); @readonly
+	// is still accepted. Field form only — there is no method-form @var.
+	IsVar bool
 }
 
 type propertySource int
@@ -991,31 +998,59 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 
 	// Field form. Each ast.Field can declare multiple names sharing one
 	// type; iterate names so each property has its own propertyInfo.
+	// @property and @var are the two opt-in tags; fields without either
+	// are NOT registered, regardless of casing — Go-exported fields
+	// stay invisible to Godot unless explicitly tagged.
 	for _, f := range st.Fields.List {
 		if f.Doc == nil || len(f.Names) == 0 {
 			continue
 		}
 		tags := doctag.Parse(f.Doc)
 		hasProperty := doctag.Has(tags, "property")
+		hasVar := doctag.Has(tags, "var")
 		hasReadOnly := doctag.Has(tags, "readonly")
-		if hasReadOnly && !hasProperty {
-			return fmt.Errorf("%s: @readonly without @property — the @readonly tag only applies to fields also tagged @property",
+		if hasProperty && hasVar {
+			return fmt.Errorf("%s: field carries both @property and @var — pick one (@property = inspector-visible, @var = script-visible only)",
 				posStr(fset, f.Pos()))
 		}
-		if !hasProperty {
+		if hasReadOnly && !hasProperty && !hasVar {
+			return fmt.Errorf("%s: @readonly without @property or @var — the @readonly tag only applies to fields also tagged @property or @var",
+				posStr(fset, f.Pos()))
+		}
+		if !hasProperty && !hasVar {
 			continue
 		}
-		group, subgroup, hint, hintString, perr := parsePropertyHints(fset, tags, f.Pos())
-		if perr != nil {
-			return perr
+		var (
+			group, subgroup, hint, hintString string
+			perr                              error
+		)
+		if hasProperty {
+			group, subgroup, hint, hintString, perr = parsePropertyHints(fset, tags, f.Pos())
+			if perr != nil {
+				return perr
+			}
+		} else {
+			// @var rejects inspector-only metadata. Hidden from the
+			// inspector means none of those tags would have an effect —
+			// reject so the user doesn't silently expect inspector UI.
+			for _, banned := range append([]string{"group", "subgroup"}, hintTagNames...) {
+				if doctag.Has(tags, banned) {
+					return fmt.Errorf("%s: @%s on @var field — inspector hints and grouping are @property-only (@var is hidden from the inspector)",
+						posStr(fset, f.Pos()), banned)
+				}
+			}
 		}
 		for _, name := range f.Names {
 			if !name.IsExported() {
-				return fmt.Errorf("%s: field %q has @property but is unexported — properties must be on exported fields (capitalize) or on a Get<Name> method",
-					posStr(fset, name.Pos()), name.Name)
+				tagName := "property"
+				if hasVar {
+					tagName = "var"
+				}
+				return fmt.Errorf("%s: field %q has @%s but is unexported — must be on an exported field (capitalize the first letter)",
+					posStr(fset, name.Pos()), name.Name, tagName)
 			}
 			if existing, dup := byName[name.Name]; dup {
-				return fmt.Errorf("%s: duplicate @property %q (also at %s)",
+				return fmt.Errorf("%s: duplicate field-form property %q (also at %s)",
 					posStr(fset, name.Pos()), name.Name, posStr(fset, existing.Pos))
 			}
 			byName[name.Name] = &propertyInfo{
@@ -1029,6 +1064,7 @@ func collectProperties(fset *token.FileSet, ci *classInfo) error {
 				Subgroup:   subgroup,
 				Hint:       hint,
 				HintString: hintString,
+				IsVar:      hasVar,
 			}
 		}
 	}

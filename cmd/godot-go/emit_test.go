@@ -305,6 +305,54 @@ type N struct {
 	}
 }
 
+func TestEmitVarField(t *testing.T) {
+	// @var should emit the same Get/Set + RegisterClassProperty wiring
+	// as @property field-form, except the registration carries
+	// Usage: gdextension.PropertyUsageStorage so the property is
+	// stored with the scene but hidden from the inspector.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type N struct {
+	// @extends
+	core.Node
+	// @var
+	Stash int64
+}
+`
+	out := emitFor(t, src)
+
+	mustContain(t, out, "func (n *N) GetStash() int64 { return n.Stash }")
+	mustContain(t, out, "func (n *N) SetStash(v int64) { n.Stash = v }")
+	mustContain(t, out, `Name:   "stash",`)
+	mustContain(t, out, `Setter: "set_stash",`)
+	mustContain(t, out, `Getter: "get_stash",`)
+	// gofmt may align the field column to a different width; check
+	// the value, not the column.
+	mustContain(t, out, "gdextension.PropertyUsageStorage,")
+}
+
+func TestEmitPropertyOmitsUsage(t *testing.T) {
+	// @property field-form should NOT emit a Usage field — the
+	// ClassPropertyDef default falls through to PropertyUsageDefault
+	// (STORAGE | EDITOR), which is what we want for inspector-visible
+	// properties.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type N struct {
+	// @extends
+	core.Node
+	// @property
+	Health int64
+}
+`
+	out := emitFor(t, src)
+	if strings.Contains(out, "Usage:") {
+		t.Errorf("@property field-form should rely on ClassPropertyDef default; emit must not write Usage:\n%s", out)
+	}
+}
+
 func TestEmitPropertyMethodForm(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"

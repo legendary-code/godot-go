@@ -613,6 +613,13 @@ type ClassPropertyDef struct {
 	// the inspector renders the typed enum. Empty for plain primitive
 	// properties (Godot ignores it then).
 	ClassName string
+	// Usage is the PROPERTY_USAGE_* bitmask passed through to Godot's
+	// PropertyInfo. Zero (the default) maps to PropertyUsageDefault
+	// (STORAGE | EDITOR) — the standard @export-style property.
+	// PropertyUsageStorage alone produces a script-visible field that's
+	// saved with the scene but hidden from the inspector (the @var
+	// shape).
+	Usage PropertyUsage
 }
 
 // RegisterClassProperty wires a property on an extension class to its
@@ -648,6 +655,11 @@ func RegisterClassProperty(def ClassPropertyDef) {
 		valueClassName = C.GDExtensionConstStringNamePtr(cn)
 	}
 
+	usage := def.Usage
+	if usage == 0 {
+		usage = PropertyUsageDefault
+	}
+
 	C.godot_go_register_extension_class_property(iface.classdbRegisterExtensionClassProperty,
 		C.GDExtensionClassLibraryPtr(iface.library),
 		C.GDExtensionConstStringNamePtr(className),
@@ -658,7 +670,8 @@ func RegisterClassProperty(def ClassPropertyDef) {
 		C.GDExtensionConstStringNamePtr(getterName),
 		C.GDExtensionConstStringPtr(hintStr),
 		C.uint32_t(def.Type),
-		C.uint32_t(def.Hint))
+		C.uint32_t(def.Hint),
+		C.uint32_t(usage))
 }
 
 // ClassPropertyGroupDef registers a property group / subgroup header on

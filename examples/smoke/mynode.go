@@ -93,6 +93,13 @@ type MyNode struct {
 	// @property
 	Notes string
 
+	// Stash exercises the @var doctag. Registered with
+	// PROPERTY_USAGE_STORAGE only — GDScript can read/write
+	// `n.stash = 7`, but the field is hidden from the inspector.
+	//
+	// @var
+	Stash int64
+
 	// score / tag are private backings that the user-written getters
 	// dispatch on. Lowercase = invisible to Godot; visible only to the
 	// package itself.

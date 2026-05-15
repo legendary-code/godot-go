@@ -204,6 +204,27 @@ const (
 	PropertyHintDictionaryType PropertyHint = 38
 )
 
+// PropertyUsage mirrors the global PropertyUsageFlags enum from
+// `core/object/object.h`. The values are stable across Godot 4.x —
+// the framework hardcodes a small subset (DEFAULT for @property,
+// STORAGE for @var) but exposes the constants for users who need
+// finer control on hand-rolled RegisterClassProperty calls.
+type PropertyUsage uint32
+
+const (
+	PropertyUsageNone           PropertyUsage = 0
+	PropertyUsageStorage        PropertyUsage = 2
+	PropertyUsageEditor         PropertyUsage = 4
+	PropertyUsageInternal       PropertyUsage = 8
+	PropertyUsageScriptVariable PropertyUsage = 4096
+
+	// PropertyUsageDefault = STORAGE | EDITOR. Matches the engine's
+	// PROPERTY_USAGE_DEFAULT and is what GDScript's `@export var x`
+	// produces. Properties serialize with the scene AND appear in
+	// the inspector.
+	PropertyUsageDefault PropertyUsage = PropertyUsageStorage | PropertyUsageEditor
+)
+
 // Opaque pointer aliases. They carry no compile-time type safety on the C side
 // (Godot's API is in C), but on the Go side they document intent and let us
 // catch mix-ups (e.g. passing a Variant where a String is expected).

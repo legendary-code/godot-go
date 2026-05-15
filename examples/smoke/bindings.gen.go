@@ -567,6 +567,10 @@ func (n *MyNode) SetHealth(v int64) { n.Health = v }
 
 func (n *MyNode) GetMaxHealth() int64 { return n.MaxHealth }
 
+func (n *MyNode) GetStash() int64 { return n.Stash }
+
+func (n *MyNode) SetStash(v int64) { n.Stash = v }
+
 func (n *MyNode) GetDamageRange() int64 { return n.DamageRange }
 
 func (n *MyNode) SetDamageRange(v int64) { n.DamageRange = v }
@@ -1286,6 +1290,65 @@ func registerMyNode() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
+		Name:  "get_stash",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetStash()
+			godot.VariantSetInt64(ret, result)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetStash()
+			*(*int64)(ret) = result
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeInt,
+		ReturnMetadata: gdextension.ArgMetaIntIsInt64,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_stash",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0 := godot.VariantAsInt64(args[0])
+			self.SetStash(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0 := *(*int64)(gdextension.PtrCallArg(args, 0))
+			self.SetStash(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeInt,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaIntIsInt64,
+		},
+		ArgNames: []string{
+			"value",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
 		Name:  "get_damage_range",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			self := lookupMyNodeInstance(instance)
@@ -1655,6 +1718,15 @@ func registerMyNode() {
 
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
 		Class:  "MyNode",
+		Name:   "stash",
+		Type:   gdextension.VariantTypeInt,
+		Setter: "set_stash",
+		Getter: "get_stash",
+		Usage:  gdextension.PropertyUsageStorage,
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
 		Name:   "score",
 		Type:   gdextension.VariantTypeInt,
 		Getter: "get_score",
@@ -1778,25 +1850,6 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "NEUTRAL",
-		Value: 0,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "OFFENSIVE",
-		Value: 1,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "DEFENSIVE",
-		Value: 2,
-	})
-
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
 		Class:      "MyNode",
 		Enum:       "AbilityFlags",
 		Name:       "FLY",
@@ -1816,6 +1869,25 @@ func registerMyNode() {
 		Name:       "CLIMB",
 		Value:      4,
 		IsBitfield: true,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
 	})
 
 	godotruntime.LoadEditorDocXML(myNodeDocXML)
@@ -1907,6 +1979,14 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <return type=""></return>
             <description></description>
         </method>
+        <method name="get_stash">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_stash">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
         <method name="get_damage_range">
             <return type=""></return>
             <description></description>
@@ -1959,6 +2039,7 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <members>
         <member name="health" type="int" setter="set_health" getter="get_health"></member>
         <member name="max_health" type="int" getter="get_max_health"></member>
+        <member name="stash" type="int" setter="set_stash" getter="get_stash">Exercises the @var doctag. Registered with&#xA;PROPERTY_USAGE_STORAGE only — GDScript can read/write&#xA;` + "`" + `n.stash = 7` + "`" + `, but the field is hidden from the inspector.</member>
         <member name="score" type="int" getter="get_score">Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</member>
         <member name="tag" type="String" setter="set_tag" getter="get_tag">/ SetTag demonstrate the method form of @property, read-write&#xA;branch: both methods exist in source AND both carry @property. The&#xA;rule is symmetric — codegen requires the tag on each side so the&#xA;user&#39;s intent is explicit on both halves of the property.</member>
         <member name="damage_range" type="int" setter="set_damage_range" getter="get_damage_range"></member>
@@ -1982,12 +2063,12 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </signal>
     </signals>
     <constants>
-        <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
-        <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
-        <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
         <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
+        <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
+        <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
     </constants>
 </class>`
 

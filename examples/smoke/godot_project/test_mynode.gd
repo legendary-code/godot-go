@@ -82,6 +82,23 @@ func _initialize() -> void:
 	_check("method rw: n.tag after set_tag('beta')",        n.tag,        "beta")
 	_check("method rw: get_tag() after set_tag('beta')",    n.get_tag(),  "beta")
 
+	# @var field — exposed as a property registered with
+	# PROPERTY_USAGE_STORAGE only (no EDITOR flag). GDScript can
+	# read/write it by name, get_stash() / set_stash() still work,
+	# but the property doesn't show up in the inspector usage flags.
+	n.stash = 7
+	_check("var rw: n.stash after `n.stash = 7`",   n.stash,       7)
+	_check("var rw: get_stash() after property write", n.get_stash(), 7)
+	n.set_stash(9)
+	_check("var rw: n.stash after set_stash(9)",    n.stash,       9)
+	# Confirm the property's usage flag — STORAGE (=2) only, no EDITOR (=4).
+	var stash_usage := 0
+	for prop in n.get_property_list():
+		if prop["name"] == "stash":
+			stash_usage = prop["usage"]
+			break
+	_check("var: stash usage == PROPERTY_USAGE_STORAGE",   stash_usage,   PROPERTY_USAGE_STORAGE)
+
 	# Phase 6 signals — connect a Callable to each registered signal,
 	# trigger emission from Go via a regular ClassDB method, and verify
 	# the callback received the args we expect. Each closure mutates a
