@@ -196,13 +196,14 @@ func (n *MyNode) EchoNodes(others []*godot.Node) []*godot.Node {
 	return others
 }
 
-// Origin is a class-level method — `@static` registers it with
-// MethodFlagStatic so GDScript callers reach it as `MyNode.origin()`
-// without an instance.
+// Origin is a class-level method — `@static` on a free function in the
+// same file as the @class struct registers it with MethodFlagStatic
+// on MyNode so GDScript callers reach it as `MyNode.origin()` without
+// an instance.
 //
 // @static
 // @experimental Behavior may shift once the static-method ABI moves out of beta.
-func (MyNode) Origin() int64 {
+func Origin() int64 {
 	return 42
 }
 

@@ -52,12 +52,12 @@ const (
 )
 
 // Parse is registered as a class-level static via the `@static`
-// doctag — Godot exposes it as `LocaleLanguage.parse(value)` with
-// no instance lookup. The receiver stays unnamed since the body
-// doesn't need one.
+// doctag. The framework associates @static-tagged free functions
+// with the @class struct declared in the same file — Godot exposes
+// this one as `LocaleLanguage.parse(value)` with no instance lookup.
 //
 // @static
-func (LocaleLanguage) Parse(value string) Language {
+func Parse(value string) Language {
 	switch value {
 	case "en":
 		return LanguageEnglish
@@ -91,7 +91,7 @@ func (l *LocaleLanguage) Process(_ float32) {
 // scalar int64 return path.
 //
 // @static
-func (LocaleLanguage) Sum(values []int64) int64 {
+func Sum(values []int64) int64 {
 	var total int64
 	for _, v := range values {
 		total += v
@@ -104,7 +104,7 @@ func (LocaleLanguage) Sum(values []int64) int64 {
 // handing the value back to Godot.
 //
 // @static
-func (LocaleLanguage) Names() []string {
+func Names() []string {
 	return []string{"unknown", "english", "german"}
 }
 
@@ -113,7 +113,7 @@ func (LocaleLanguage) Names() []string {
 // each element as a typed Language value, not a bare int.
 //
 // @static
-func (LocaleLanguage) Languages() []Language {
+func Languages() []Language {
 	return []Language{LanguageUnknown, LanguageEnglish, LanguageGerman}
 }
 
@@ -124,7 +124,7 @@ func (LocaleLanguage) Languages() []Language {
 // known set.
 //
 // @static
-func (LocaleLanguage) FilterLanguages(values ...Language) []Language {
+func FilterLanguages(values ...Language) []Language {
 	out := make([]Language, 0, len(values))
 	for _, v := range values {
 		if v == LanguageEnglish || v == LanguageGerman {
@@ -139,7 +139,7 @@ func (LocaleLanguage) FilterLanguages(values ...Language) []Language {
 // spread back into the user method via Go's call-site `parts...` form.
 //
 // @static
-func (LocaleLanguage) ConcatNames(parts ...string) string {
+func ConcatNames(parts ...string) string {
 	out := ""
 	for i, p := range parts {
 		if i > 0 {

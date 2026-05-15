@@ -172,7 +172,6 @@ func registerGreeter() {
 		Name:  "count_letters",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self Greeter
 			arg0_arr := godot.VariantAsPackedStringArray(args[0])
 			defer arg0_arr.Destroy()
 			arg0_n := arg0_arr.Size()
@@ -180,7 +179,7 @@ func registerGreeter() {
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.CountLetters(arg0)
+			result := CountLetters(arg0)
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -195,14 +194,13 @@ func registerGreeter() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self Greeter
 			arg0_arr := *(*godot.PackedStringArray)(gdextension.PtrCallArg(args, 0))
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]string, arg0_n)
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.CountLetters(arg0)
+			result := CountLetters(arg0)
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -238,7 +236,6 @@ func registerGreeter() {
 		Name:  "echo",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self Greeter
 			arg0_dict := godot.VariantAsDictionary(args[0])
 			defer arg0_dict.Destroy()
 			arg0_keys := arg0_dict.Keys()
@@ -255,7 +252,7 @@ func registerGreeter() {
 				arg0_kv.Destroy()
 				arg0_vv.Destroy()
 			}
-			result := self.Echo(arg0)
+			result := Echo(arg0)
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -270,7 +267,6 @@ func registerGreeter() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self Greeter
 			arg0_dict := *(*godot.Dictionary)(gdextension.PtrCallArg(args, 0))
 			arg0_keys := arg0_dict.Keys()
 			defer arg0_keys.Destroy()
@@ -286,7 +282,7 @@ func registerGreeter() {
 				arg0_kv.Destroy()
 				arg0_vv.Destroy()
 			}
-			result := self.Echo(arg0)
+			result := Echo(arg0)
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -328,8 +324,7 @@ func registerGreeter() {
 		Name:  "lang_codes",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self Greeter
-			result := self.LangCodes()
+			result := LangCodes()
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -344,8 +339,7 @@ func registerGreeter() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self Greeter
-			result := self.LangCodes()
+			result := LangCodes()
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -369,8 +363,7 @@ func registerGreeter() {
 		Name:  "chars_by_lang",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self Greeter
-			result := self.CharsByLang()
+			result := CharsByLang()
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -390,8 +383,7 @@ func registerGreeter() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self Greeter
-			result := self.CharsByLang()
+			result := CharsByLang()
 			result_dict := godot.NewDictionary()
 			for kIn_, vIn_ := range result {
 				k_v := godot.NewVariantString(kIn_)
@@ -420,17 +412,15 @@ func registerGreeter() {
 		Name:  "greet_in",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self Greeter
 			arg0 := Language(godot.VariantAsInt64(args[0]))
-			result := self.GreetIn(arg0)
+			result := GreetIn(arg0)
 			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self Greeter
 			arg0 := Language(*(*int64)(gdextension.PtrCallArg(args, 0)))
-			result := self.GreetIn(arg0)
+			result := GreetIn(arg0)
 			godot.PtrCallStoreString(ret, result)
 		},
 		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
@@ -551,9 +541,16 @@ func releaseLocaleLanguageInstance(handle unsafe.Pointer) {
 
 func registerLocaleLanguage() {
 	gdextension.RegisterClass(gdextension.ClassDef{
-		Name:       "LocaleLanguage",
-		Parent:     "Node",
-		IsExposed:  true,
+		Name:      "LocaleLanguage",
+		Parent:    "Node",
+		IsExposed: true,
+		// godot-cpp parity: GDREGISTER_ABSTRACT_CLASS sets is_abstract=true,
+		// which leaves the registration's creation_func null. Godot's
+		// _instantiate_internal then refuses to construct the class —
+		// MyAbstract.new() errors out, AND "class_name X extends
+		// MyAbstract; X.new()" errors out (Godot has no engine flag that
+		// separates the two paths). If you need GDScript subclasses, drop
+		// @abstract and rely on the New<Class>() suppression alone.
 		IsAbstract: true,
 
 		Construct: func() (gdextension.ObjectPtr, unsafe.Pointer) {
@@ -565,43 +562,6 @@ func registerLocaleLanguage() {
 
 		Free: func(instance unsafe.Pointer) {
 			releaseLocaleLanguageInstance(instance)
-		},
-	})
-
-	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
-		Class: "LocaleLanguage",
-		Name:  "parse",
-		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
-			_ = instance
-			var self LocaleLanguage
-			arg0 := godot.VariantAsString(args[0])
-			result := self.Parse(arg0)
-			godot.VariantSetInt64(ret, int64(result))
-			return gdextension.CallErrorOK
-		},
-		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
-			_ = instance
-			var self LocaleLanguage
-			arg0 := godot.PtrCallArgString(args, 0)
-			result := self.Parse(arg0)
-			*(*int64)(ret) = int64(result)
-		},
-		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypeInt,
-		ReturnMetadata:  gdextension.ArgMetaIntIsInt64,
-		ReturnClassName: "LocaleLanguage.Language",
-		ArgTypes: []gdextension.VariantType{
-			gdextension.VariantTypeString,
-		},
-		ArgMetadata: []gdextension.MethodArgumentMetadata{
-			gdextension.ArgMetaNone,
-		},
-		ArgNames: []string{
-			"value",
-		},
-		ArgClassNames: []string{
-			"",
 		},
 	})
 
@@ -661,10 +621,44 @@ func registerLocaleLanguage() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "LocaleLanguage",
+		Name:  "parse",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			_ = instance
+			arg0 := godot.VariantAsString(args[0])
+			result := Parse(arg0)
+			godot.VariantSetInt64(ret, int64(result))
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			_ = instance
+			arg0 := godot.PtrCallArgString(args, 0)
+			result := Parse(arg0)
+			*(*int64)(ret) = int64(result)
+		},
+		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:       true,
+		ReturnType:      gdextension.VariantTypeInt,
+		ReturnMetadata:  gdextension.ArgMetaIntIsInt64,
+		ReturnClassName: "LocaleLanguage.Language",
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeString,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"value",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "LocaleLanguage",
 		Name:  "sum",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := godot.VariantAsPackedInt64Array(args[0])
 			defer arg0_arr.Destroy()
 			arg0_n := arg0_arr.Size()
@@ -672,20 +666,19 @@ func registerLocaleLanguage() {
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.Sum(arg0)
+			result := Sum(arg0)
 			godot.VariantSetInt64(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := *(*godot.PackedInt64Array)(gdextension.PtrCallArg(args, 0))
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]int64, arg0_n)
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.Sum(arg0)
+			result := Sum(arg0)
 			*(*int64)(ret) = result
 		},
 		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
@@ -711,8 +704,7 @@ func registerLocaleLanguage() {
 		Name:  "names",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self LocaleLanguage
-			result := self.Names()
+			result := Names()
 			result_arr := godot.NewPackedStringArray()
 			defer result_arr.Destroy()
 			for _, v := range result {
@@ -723,8 +715,7 @@ func registerLocaleLanguage() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self LocaleLanguage
-			result := self.Names()
+			result := Names()
 			result_arr := godot.NewPackedStringArray()
 			for _, v := range result {
 				result_arr.PushBack(v)
@@ -742,8 +733,7 @@ func registerLocaleLanguage() {
 		Name:  "languages",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self LocaleLanguage
-			result := self.Languages()
+			result := Languages()
 			result_i64 := make([]int64, len(result))
 			for i, v := range result {
 				result_i64[i] = int64(v)
@@ -755,8 +745,7 @@ func registerLocaleLanguage() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self LocaleLanguage
-			result := self.Languages()
+			result := Languages()
 			result_i64 := make([]int64, len(result))
 			for i, v := range result {
 				result_i64[i] = int64(v)
@@ -777,7 +766,6 @@ func registerLocaleLanguage() {
 		Name:  "filter_languages",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := godot.VariantAsArray(args[0])
 			defer arg0_arr.Destroy()
 			arg0_n := arg0_arr.Size()
@@ -787,7 +775,7 @@ func registerLocaleLanguage() {
 				arg0[i] = Language(v.AsInt())
 				v.Destroy()
 			}
-			result := self.FilterLanguages(arg0...)
+			result := FilterLanguages(arg0...)
 			result_i64 := make([]int64, len(result))
 			for i, v := range result {
 				result_i64[i] = int64(v)
@@ -799,7 +787,6 @@ func registerLocaleLanguage() {
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := *(*godot.Array)(gdextension.PtrCallArg(args, 0))
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]Language, arg0_n)
@@ -808,7 +795,7 @@ func registerLocaleLanguage() {
 				arg0[i] = Language(v.AsInt())
 				v.Destroy()
 			}
-			result := self.FilterLanguages(arg0...)
+			result := FilterLanguages(arg0...)
 			result_i64 := make([]int64, len(result))
 			for i, v := range result {
 				result_i64[i] = int64(v)
@@ -847,7 +834,6 @@ func registerLocaleLanguage() {
 		Name:  "concat_names",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := godot.VariantAsPackedStringArray(args[0])
 			defer arg0_arr.Destroy()
 			arg0_n := arg0_arr.Size()
@@ -855,20 +841,19 @@ func registerLocaleLanguage() {
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.ConcatNames(arg0...)
+			result := ConcatNames(arg0...)
 			godot.VariantSetString(ret, result)
 			return gdextension.CallErrorOK
 		},
 		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
 			_ = instance
-			var self LocaleLanguage
 			arg0_arr := *(*godot.PackedStringArray)(gdextension.PtrCallArg(args, 0))
 			arg0_n := arg0_arr.Size()
 			arg0 := make([]string, arg0_n)
 			for i := int64(0); i < arg0_n; i++ {
 				arg0[i] = arg0_arr.Get(i)
 			}
-			result := self.ConcatNames(arg0...)
+			result := ConcatNames(arg0...)
 			godot.PtrCallStoreString(ret, result)
 		},
 		Flags:          gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
@@ -920,17 +905,17 @@ const localeLanguageDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <brief_description>here overrides the</brief_description>
     <description>here overrides the</description>
     <methods>
-        <method name="parse" qualifiers="static">
-            <return type="int" enum="LocaleLanguage.Language"></return>
-            <param index="0" name="value" type="String"></param>
-            <description>Is registered as a class-level static via the ` + "`" + `@static` + "`" + `&#xA;doctag — Godot exposes it as ` + "`" + `LocaleLanguage.parse(value)` + "`" + ` with&#xA;no instance lookup. The receiver stays unnamed since the body&#xA;doesn&#39;t need one.</description>
-        </method>
         <method name="do_something_alt_name">
             <description>Demonstrates a regular member function of LocaleLanguage.  Because the receiver has an assigned name,&#xA;this is an instance function rather than a static function.  Exported methods will be bound to their snake case&#xA;equivalent, unless a @name doc comment is provided as shown below.</description>
         </method>
         <method name="_process">
             <param index="0" name="" type="float"></param>
             <description>Here demonstrates implementing virtual methods that exist on the parent class — in this case,&#xA;overriding Node._process. The ` + "`" + `@override` + "`" + ` doctag opts into virtual binding; codegen routes through&#xA;RegisterClassVirtual and prepends the leading underscore Godot expects on engine virtuals.</description>
+        </method>
+        <method name="parse" qualifiers="static">
+            <return type="int" enum="LocaleLanguage.Language"></return>
+            <param index="0" name="value" type="String"></param>
+            <description>Is registered as a class-level static via the ` + "`" + `@static` + "`" + `&#xA;doctag. The framework associates @static-tagged free functions&#xA;with the @class struct declared in the same file — Godot exposes&#xA;this one as ` + "`" + `LocaleLanguage.parse(value)` + "`" + ` with no instance lookup.</description>
         </method>
         <method name="sum" qualifiers="static">
             <return type="int"></return>

@@ -422,28 +422,25 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			posStr(fset, file.Pos()))
 	}
 
-	// Methods: walk all FuncDecls with receivers matching one of the
-	// discovered struct types. The classification rule is explicit-tag-
-	// driven, no implicit behavior keyed off receiver shape:
+	// Methods: walk FuncDecls with a receiver matching the @class
+	// struct. Classification is explicit-tag-driven; receiver shape
+	// no longer participates:
 	//
-	//   - @static doctag             → static (registered with MethodFlagStatic)
-	//   - @override doctag           → override (registered as a Godot virtual)
-	//   - else                       → regular instance method
+	//   - @override doctag → register as a Godot virtual
+	//   - @static  doctag → REJECTED on methods. Statics now live as
+	//                        free functions in the same file as the
+	//                        @class (one Godot class per file, so file-
+	//                        level association is unambiguous). See the
+	//                        free-function loop below.
+	//   - else             → regular instance method
 	//
-	// Lowercase-first methods with no @override / @static are treated
-	// as Go-private helpers and skipped — they belong to the user's
-	// package, not to Godot's ClassDB. The @name doctag overrides the
-	// derived Godot name verbatim; otherwise the name is
-	// snake_case(GoName) with a leading `_` for overrides (or for
-	// cases where @name already supplies a leading underscore
-	// explicitly).
-	//
-	// Receiver shape: a method tagged @static may have either an
-	// unnamed receiver (`func (T) Foo()` — clearer about not using
-	// the instance) or a named one (`func (t *T) Foo()` — fine, the
-	// argument is just unused). An unnamed receiver WITHOUT @static
-	// errors out — silently treating it as static was the old
-	// implicit behavior the explicit tag replaces.
+	// Lowercase-first methods with no @override are treated as Go-
+	// private helpers and skipped. An explicit @name overrides the
+	// skip (the user is supplying the Godot-side name verbatim — handy
+	// for engine constructor `_init` methods that need plain-method
+	// registration, since registering _init through @override bakes in
+	// MethodFlagVirtual and GDScript's `Class.new(args...)` parser
+	// treats the signature as fixed-zero).
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 {
@@ -454,29 +451,17 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			continue
 		}
 		tags := doctag.Parse(fn.Doc)
-		hasStatic := doctag.Has(tags, "static")
 		hasOverride := doctag.Has(tags, "override")
-		recvUnnamed := len(fn.Recv.List[0].Names) == 0
-		if recvUnnamed && !hasStatic {
-			return nil, fmt.Errorf("%s: %s.%s has an unnamed receiver but no @static — add @static to register the method as a class method, or name the receiver to register an instance method",
+		if doctag.Has(tags, "static") {
+			return nil, fmt.Errorf("%s: %s.%s carries @static on a method — statics are now declared as free functions in the same file as the @class struct. Drop the receiver: `// @static\\nfunc %s(...) {...}` at the top level of this file",
+				posStr(fset, fn.Pos()), recvType, fn.Name.Name, fn.Name.Name)
+		}
+		if len(fn.Recv.List[0].Names) == 0 {
+			return nil, fmt.Errorf("%s: %s.%s has an unnamed receiver — name it to register an instance method, or hoist the function to file scope with @static to register a class method",
 				posStr(fset, fn.Pos()), recvType, fn.Name.Name)
 		}
-		if hasStatic && hasOverride {
-			return nil, fmt.Errorf("%s: %s.%s carries both @static and @override — pick one (statics aren't dispatched virtually)",
-				posStr(fset, fn.Pos()), recvType, fn.Name.Name)
-		}
-		// Skip Go-private methods that aren't explicit overrides or
-		// statics — they belong to the user's package, not to Godot's
-		// ClassDB. An explicit `@name` overrides the skip: the user is
-		// supplying the Godot-side name verbatim, which is the
-		// declarative way to opt a lowercase-first method into
-		// registration (handy for engine constructor `_init` methods
-		// that need plain-method registration, since registering
-		// _init through the @override virtual path bakes in
-		// MethodFlagVirtual and GDScript's `Class.new(args...)` parser
-		// treats the signature as fixed-zero).
 		_, hasName := doctag.Find(tags, "name")
-		if !hasStatic && !hasOverride && !hasName && isLowerFirst(fn.Name.Name) {
+		if !hasOverride && !hasName && isLowerFirst(fn.Name.Name) {
 			continue
 		}
 		mi := &methodInfo{
@@ -487,12 +472,9 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			Doc:          tags,
 			IsPointerRcv: isPtr,
 		}
-		switch {
-		case hasStatic:
-			mi.Kind = methodStatic
-		case hasOverride:
+		if hasOverride {
 			mi.Kind = methodOverride
-		default:
+		} else {
 			mi.Kind = methodInstance
 		}
 		if name, ok := doctag.Find(mi.Doc, "name"); ok {
@@ -502,6 +484,40 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 			if mi.Kind == methodOverride && !strings.HasPrefix(mi.GodotName, "_") {
 				mi.GodotName = "_" + mi.GodotName
 			}
+		}
+		d.MainClass.Methods = append(d.MainClass.Methods, mi)
+	}
+
+	// Static methods: walk top-level FuncDecls (Recv == nil) in the
+	// same file as the @class struct. A @static tag promotes the free
+	// function into a static ClassDB method on the file's @class.
+	// File-level association is unambiguous because the framework
+	// enforces one @class per file.
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil {
+			continue
+		}
+		tags := doctag.Parse(fn.Doc)
+		if !doctag.Has(tags, "static") {
+			continue
+		}
+		if doctag.Has(tags, "override") {
+			return nil, fmt.Errorf("%s: free function %s carries @static and @override — @override is meaningless on a class method (statics aren't dispatched virtually); drop one",
+				posStr(fset, fn.Pos()), fn.Name.Name)
+		}
+		mi := &methodInfo{
+			docInfo: parseDocInfo(fn.Doc, tags, fn.Name.Name),
+			GoName:  fn.Name.Name,
+			Pos:     fn.Pos(),
+			Decl:    fn,
+			Doc:     tags,
+			Kind:    methodStatic,
+		}
+		if name, ok := doctag.Find(mi.Doc, "name"); ok {
+			mi.GodotName = name
+		} else {
+			mi.GodotName = naming.PascalToSnake(fn.Name.Name)
 		}
 		d.MainClass.Methods = append(d.MainClass.Methods, mi)
 	}

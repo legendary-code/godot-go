@@ -77,7 +77,10 @@ func (n *MyNode) Hello() {}
 	}
 }
 
-func TestDiscoverStaticMethod(t *testing.T) {
+func TestDiscoverStaticFreeFunc(t *testing.T) {
+	// @static now attaches to a top-level free function in the same
+	// file as a @class struct. The free function becomes a static
+	// method on that class via MethodFlagStatic.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -86,17 +89,42 @@ type MyNode struct {
 	core.Node
 }
 // @static
-func (MyNode) Helper() {}
+func Helper() int64 { return 42 }
 `
 	d := mustDiscover(t, src)
-	if d.MainClass.Methods[0].Kind != methodStatic {
-		t.Errorf("Kind = %v, want static (@static-tagged)", d.MainClass.Methods[0].Kind)
+	if len(d.MainClass.Methods) != 1 {
+		t.Fatalf("Methods = %d, want 1", len(d.MainClass.Methods))
+	}
+	mi := d.MainClass.Methods[0]
+	if mi.Kind != methodStatic {
+		t.Errorf("Kind = %v, want static", mi.Kind)
+	}
+	if mi.GoName != "Helper" || mi.GodotName != "helper" {
+		t.Errorf("GoName/GodotName = %q/%q, want Helper/helper", mi.GoName, mi.GodotName)
 	}
 }
 
-func TestDiscoverUnnamedReceiverWithoutStaticRejected(t *testing.T) {
-	// `func (T) Foo()` used to silently classify as static — now
-	// requires explicit @static so the user's intent is visible.
+func TestDiscoverStaticOnMethodRejected(t *testing.T) {
+	// @static is no longer accepted on methods (any receiver shape).
+	// The migration error tells the user to hoist to file scope.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+// @class
+type MyNode struct {
+	// @extends
+	core.Node
+}
+// @static
+func (n *MyNode) Helper() {}
+`
+	mustFailDiscover(t, src, "@static on a method")
+}
+
+func TestDiscoverUnnamedReceiverRejected(t *testing.T) {
+	// Unnamed receivers used to opt into "static" implicitly; once
+	// @static was made explicit they remained allowed alongside
+	// @static. Now that @static moves to free functions entirely,
+	// unnamed receivers on methods are unconditionally invalid.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -106,10 +134,10 @@ type MyNode struct {
 }
 func (MyNode) Helper() {}
 `
-	mustFailDiscover(t, src, "unnamed receiver but no @static")
+	mustFailDiscover(t, src, "unnamed receiver")
 }
 
-func TestDiscoverStaticAndOverrideRejected(t *testing.T) {
+func TestDiscoverStaticAndOverrideOnFreeFuncRejected(t *testing.T) {
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -119,29 +147,9 @@ type MyNode struct {
 }
 // @static
 // @override
-func (n *MyNode) Helper() {}
+func Helper() {}
 `
-	mustFailDiscover(t, src, "both @static and @override")
-}
-
-func TestDiscoverStaticWithNamedReceiver(t *testing.T) {
-	// Named receiver + @static is allowed — the method's body just
-	// doesn't use the receiver, but Godot still sees it as static
-	// (registered with MethodFlagStatic).
-	src := `package x
-import "github.com/legendary-code/godot-go/core"
-// @class
-type MyNode struct {
-	// @extends
-	core.Node
-}
-// @static
-func (n *MyNode) Helper() int64 { return 42 }
-`
-	d := mustDiscover(t, src)
-	if d.MainClass.Methods[0].Kind != methodStatic {
-		t.Errorf("Kind = %v, want static", d.MainClass.Methods[0].Kind)
-	}
+	mustFailDiscover(t, src, "@static and @override")
 }
 
 func TestDiscoverOverrideLowercase(t *testing.T) {

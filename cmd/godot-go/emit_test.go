@@ -64,6 +64,10 @@ type Lonely struct {
 }
 
 func TestEmitStaticMethod(t *testing.T) {
+	// @static is now applied to a top-level free function in the same
+	// file as the @class struct. The codegen registers it with
+	// MethodFlagStatic and dispatches without a receiver — the
+	// generated body invokes the free function by bare name.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 // @class
@@ -72,19 +76,21 @@ type N struct {
 	core.Node
 }
 // @static
-func (N) Origin() int64 { return 42 }
+func Origin() int64 { return 42 }
 `
 	out := emitFor(t, src)
 
-	// Static methods skip the per-instance side-table lookup and call on a
-	// zero value — and must register MethodFlagStatic so GDScript can use
-	// `N.origin()` syntax.
 	mustContain(t, out, "_ = instance")
-	mustContain(t, out, "var self N")
-	mustContain(t, out, "self.Origin()")
-	// gofmt may pad the field column; check the value, not the column.
+	mustContain(t, out, "result := Origin()")
 	mustContain(t, out, "gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,")
-	// The instance-handle lookup pattern must NOT appear for a static-only class.
+	// No `var self N`, no `self.Origin()`, no instance lookup —
+	// statics are receiver-free now.
+	if strings.Contains(out, "var self N") {
+		t.Errorf("static method body should not declare `var self N`:\n%s", out)
+	}
+	if strings.Contains(out, "self.Origin()") {
+		t.Errorf("static method body should not call via self:\n%s", out)
+	}
 	if strings.Contains(out, "lookupNInstance(instance)") {
 		t.Errorf("static method body should not perform instance lookup:\n%s", out)
 	}

@@ -219,7 +219,7 @@ type Combatant struct {
 | Tag | Argument | Where valid | What it does |
 |---|---|---|---|
 | `@property` | none | on `Get<Name>` and `Set<Name>` methods | Registers the pair as a property (method form). Both halves must carry the tag — tagging only `Get<X>` makes the property read-only; tagging `Set<X>` without a matching tagged `Get<X>` is rejected as an orphan setter. The user owns the backing storage. Method form does NOT accept export hints. |
-| `@static` | none | on a method | Registers the method with `MethodFlagStatic` so GDScript callers reach it as `ClassName.method()` without an instance. The receiver may be unnamed (`func (T) Foo()` — clearer about not using the instance) or named (`func (t *T) Foo()` — fine, the argument is just unused). Mutually exclusive with `@override`. |
+| `@static` | none | on a top-level free function in the same `*.go` file as a `@class` struct | Registers the free function as a static method on that class with `MethodFlagStatic`, so GDScript callers reach it as `ClassName.func_name()` without an instance. Since each file declares exactly one `@class`, the file-level association is unambiguous. **Not valid on methods** — any `@static`-tagged method is a hard error pointing to the free-function form. Mutually exclusive with `@override`. |
 | `@override` | none | on a method | Registers the method as a Godot virtual (e.g., `_process`, `_ready`, `_input`). Codegen routes through `RegisterClassVirtual` and prepends a leading underscore to the Godot name unless the user supplied one with `@name`. |
 | `@name` | string | on a method | Overrides the Godot-side name for the method. Default is `snake_case(GoName)`; with `@name`, the literal value is used. |
 
@@ -262,25 +262,26 @@ func (p *Player) Damage(amount int64) {
     p.score -= amount
 }
 
-// Origin is a class-level method — GDScript callers write
+// Origin is registered as a class-level static on Player via the
+// @static-on-free-function form: GDScript callers write
 // `Player.origin()` without an instance.
 //
 // @static
-func (Player) Origin() int64 { return 42 }
+func Origin() int64 { return 42 }
 ```
 
 Method classification rules at a glance:
 
-| Receiver | Tag | Outcome |
+| Declaration | Tag | Outcome |
 |---|---|---|
 | `func (p *T) Foo()` | none | regular instance method (Godot name `foo`) |
 | `func (p *T) Foo()` | `@override` | virtual override (Godot name `_foo`) |
-| `func (p *T) Foo()` | `@static` | static method (Godot name `foo`, registered with `MethodFlagStatic`) |
-| `func (T) Foo()` | none | **rejected** — unnamed receiver requires `@static` |
-| `func (T) Foo()` | `@static` | static method (same as above; the unnamed-receiver form documents the intent) |
+| `func (p *T) Foo()` | `@static` | **rejected** — hoist to a top-level free function and re-apply `@static` |
+| `func (T) Foo()` | any | **rejected** — unnamed receivers aren't allowed on registered methods |
 | `func (p *T) foo()` | none | NOT registered — Go-private helper |
 | `func (p *T) foo()` | `@override` | virtual override (Godot name `_foo`) |
-| `func (p *T) foo()` | `@static` | static method (Godot name `foo`) |
+| `func Foo()` | `@static` (in a file with a `@class`) | static method on the file's `@class` (Godot name `foo`, registered with `MethodFlagStatic`) |
+| `func Foo()` | `@static` (in a file with no `@class`) | **rejected** — no class to attach to |
 
 ### On an interface
 
@@ -603,11 +604,17 @@ Three kinds, distinguished by tags:
 
 - **Instance methods** — no special tag. `func (p *Player) Foo()`
   is the common shape; registered with the snake-cased Go name.
-- **Static methods** — `@static` on the doc comment. The receiver
-  may be unnamed (`func (Player) Foo()`) or named — Godot sees
-  the method as static either way, registered with
-  `MethodFlagStatic` so GDScript callers reach it as
-  `Player.foo()` without an instance.
+  The receiver must be named — unnamed receivers (`func (T) Foo()`)
+  are rejected; use the static form below if you don't need the
+  instance.
+- **Static methods** — `@static` on a top-level free function in
+  the same `*.go` file as the `@class` struct. The framework
+  associates the function with that file's class and registers it
+  with `MethodFlagStatic`, so GDScript callers reach it as
+  `ClassName.func_name()` without an instance. `@static` on a
+  method (any receiver) is rejected with a migration hint —
+  hoist the body to file scope, drop the receiver, re-apply
+  `@static`.
 - **Virtual overrides** — `@override` on the doc comment.
   Registered via `RegisterClassVirtual` + `_`-prefixed Godot name.
   Used for Godot-defined virtuals like `_process`, `_ready`,
@@ -616,14 +623,9 @@ Three kinds, distinguished by tags:
 `@static` and `@override` are mutually exclusive — statics aren't
 dispatched virtually.
 
-Lowercase-first methods without `@override` or `@static` are
-treated as Go-private helpers and not registered at all —
-matching Go's own export conventions.
-
-Methods with an unnamed receiver (`func (T) Foo()`) require
-`@static` explicitly. The codegen used to silently classify them
-as static; the explicit tag avoids surprising readers and keeps
-intent visible in the source.
+Lowercase-first methods without `@override` are treated as
+Go-private helpers and not registered at all — matching Go's own
+export conventions.
 
 Method args and returns must be from the
 [supported types list](#supported-types). At most one return value
