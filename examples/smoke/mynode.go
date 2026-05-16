@@ -109,6 +109,14 @@ type MyNode struct {
 	// @var
 	Graph DialogGraph
 
+	// Text exercises the alias-with-user-enum-key shape that
+	// surfaced the bug. Synthesized accessors must carry DialogText
+	// (the alias) rather than map[Stance][]string (the underlying)
+	// or Go's type checker rejects the field assignment in SetText.
+	//
+	// @var
+	Text DialogText
+
 	// score / tag are private backings that the user-written getters
 	// dispatch on. Lowercase = invisible to Godot; visible only to the
 	// package itself.
@@ -122,6 +130,13 @@ type MyNode struct {
 // a `@var Graph DialogGraph` field registers as Dictionary[String, int]
 // just like a directly-declared `map[string]int64` would.
 type DialogGraph map[string]int64
+
+// DialogText mirrors the user-reported pattern that surfaced the
+// alias-vs-underlying assignment bug — a named map whose key is a
+// user enum and whose value is a slice. The synthesized accessors
+// must carry DialogText (not map[Stance][]string), otherwise Go's
+// type-checker rejects `return n.Text` / `n.Text = v`.
+type DialogText map[Stance][]string
 
 // Stance is a typed enum exposed to Godot via @enum. Values register
 // as class-scoped integer constants (Stance.NEUTRAL / OFFENSIVE /

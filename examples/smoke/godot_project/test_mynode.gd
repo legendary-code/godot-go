@@ -108,6 +108,14 @@ func _initialize() -> void:
 	n.set_graph({"x": 9})
 	_check("alias: n.get_graph()['x'] after setter",   int(n.get_graph()["x"]),   9)
 
+	# Alias whose underlying form has a user-enum key: the synthesized
+	# accessors must carry the alias name (DialogText) so Go's type-
+	# checker accepts `return n.Text` / `n.Text = v`. The wire form
+	# is still Dictionary; key marshals as int (enum value).
+	n.text = {MyNode.OFFENSIVE: ["go!", "attack!"]}
+	_check("alias: n.text[OFFENSIVE].size()",   n.text[MyNode.OFFENSIVE].size(),   2)
+	_check("alias: n.text[OFFENSIVE][0]",       n.text[MyNode.OFFENSIVE][0],       "go!")
+
 	# Phase 6 signals — connect a Callable to each registered signal,
 	# trigger emission from Go via a regular ClassDB method, and verify
 	# the callback received the args we expect. Each closure mutates a

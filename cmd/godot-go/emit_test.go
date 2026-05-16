@@ -319,8 +319,11 @@ type N struct {
 func TestEmitTypeAliasMapField(t *testing.T) {
 	// A field declared with a named-type alias of a supported
 	// composite (`type StashMap map[string]int64` here) should
-	// resolve through the alias and register the same way as if
-	// the field had been declared `map[string]int64` directly.
+	// register at the Variant boundary as if it were the underlying
+	// map[string]int64 (Dictionary wire form), but the synthesized
+	// Go accessors must carry the alias name — `n.Stash` is typed
+	// `StashMap`, and Go won't let `return n.Stash` flow into a
+	// `map[string]int64` slot without an explicit conversion.
 	src := `package x
 import "github.com/legendary-code/godot-go/core"
 type StashMap map[string]int64
@@ -334,10 +337,8 @@ type N struct {
 `
 	out := emitFor(t, src)
 
-	mustContain(t, out, "func (n *N) GetStash() map[string]int64 { return n.Stash }")
-	mustContain(t, out, "func (n *N) SetStash(v map[string]int64) { n.Stash = v }")
-	// The property registration uses the Dictionary variant type
-	// because the alias resolves to map[string]int64.
+	mustContain(t, out, "func (n *N) GetStash() StashMap { return n.Stash }")
+	mustContain(t, out, "func (n *N) SetStash(v StashMap) { n.Stash = v }")
 	mustContain(t, out, `Name:   "stash",`)
 	mustContain(t, out, "VariantTypeDictionary,")
 }

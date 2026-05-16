@@ -361,6 +361,16 @@ func resolveTypeImpl(expr ast.Expr, enums map[string]*enumInfo, userClasses map[
 		// source type at the @class boundary. A self-referential alias
 		// chain trips the cycle check; the chain terminates when we hit
 		// a primitive, enum, @class, or supported composite.
+		//
+		// IMPORTANT: we override the resolved info's GoType to the
+		// alias identifier so synthesized accessors (`func (n *T)
+		// Get<Name>() <AliasName>`) and method signatures preserve
+		// the user's declared name. Without this, the generated
+		// `return n.Text` would fail to type-check — Go treats
+		// `DialogText` and `map[Language][]string` as distinct
+		// named types even though they share an underlying form.
+		// Shallow-copy the resolved typeInfo before mutating because
+		// primitive typeInfos in typeTable are shared singletons.
 		if underlying, ok := aliases[t.Name]; ok {
 			if visited[t.Name] {
 				return nil, fmt.Errorf("type alias %q forms a cycle — chains must terminate at a supported type", t.Name)
@@ -370,7 +380,9 @@ func resolveTypeImpl(expr ast.Expr, enums map[string]*enumInfo, userClasses map[
 			if err != nil {
 				return nil, fmt.Errorf("type alias %q: %w", t.Name, err)
 			}
-			return info, nil
+			clone := *info
+			clone.GoType = t.Name
+			return &clone, nil
 		}
 		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, a user @enum-int type, or a named alias of a supported composite — all declared in this package)", t.Name)
 	case *ast.StarExpr:
