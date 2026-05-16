@@ -666,7 +666,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[
 			em.CallArgReads = append(em.CallArgReads, info.CallReadArg(bindings, idx))
 			em.ArgTypes = append(em.ArgTypes, info.VariantType)
 			em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
-			em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLType(info.VariantType))
+			em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLDisplayType(info))
 			// Arg names: take the source identifier when available so
 			// the editor renders `take_damage(amount: int)` instead of
 			// `take_damage(arg0: int)`. Unnamed params (`func F(int)`)
@@ -720,7 +720,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[
 		em.HasReturn = true
 		em.ReturnType = info.VariantType
 		em.ReturnMeta = info.ArgMeta
-		em.ReturnGodotType = godotXMLType(info.VariantType)
+		em.ReturnGodotType = godotXMLDisplayType(info)
 		em.ReturnClassName = classIdentity(mainClass, info)
 		em.ReturnHint, em.ReturnHintString = hintForTypeInfo(info, enums)
 		em.PtrCallReturn = info.PtrCallWriteReturn(bindings, "result")
@@ -843,6 +843,37 @@ func godotXMLType(variantType string) string {
 	return variantType
 }
 
+// godotXMLDisplayType produces the bracketed typed form Godot's
+// class XML uses for typed containers — `Dictionary[K, V]` for
+// typed dictionaries, `Array[Element]` for typed arrays. Both the
+// docs panel AND GDScript's analyzer key off these strings for
+// hover, autocomplete, and signature display. When the typeInfo
+// doesn't carry typed-container identity, falls through to the
+// bare type name produced by godotXMLType.
+func godotXMLDisplayType(info *typeInfo) string {
+	base := godotXMLType(info.VariantType)
+	// Typed-Dictionary: DictHintString is "K_name;V_name". Godot's
+	// own engine XML renders typed-dict members as
+	// `type="Dictionary[K, V]"`; the editor's class.xsd consumer +
+	// GDScript analyzer parse the bracketed form directly.
+	if info.DictHintString != "" {
+		if i := strings.Index(info.DictHintString, ";"); i >= 0 {
+			return base + "[" + info.DictHintString[:i] + ", " + info.DictHintString[i+1:] + "]"
+		}
+	}
+	// Typed-Array: VariantTypeArray + ClassName names the element
+	// class. Packed<X>Array variants don't take element identity —
+	// they're already typed by the variant. Slice-of-tagged-enum
+	// (HintEnum) wires identity via PROPERTY_HINT_TYPE_STRING at
+	// the registration; the XML still says `Array` because Godot's
+	// XML schema has no enum-array form (a real engine limitation,
+	// not a framework one).
+	if info.VariantType == "VariantTypeArray" && info.ClassName != "" {
+		return base + "[" + info.ClassName + "]"
+	}
+	return base
+}
+
 // godotEnumValueName converts a Go enum-constant identifier to the
 // SCREAMING_SNAKE form Godot expects on registered class-scoped enum
 // values. When the Go constant carries the enum's type as a prefix
@@ -958,7 +989,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 			docInfo:    p.docInfo,
 			GodotName:  propGodotName,
 			Type:       info.VariantType,
-			GodotType:  godotXMLType(info.VariantType),
+			GodotType:  godotXMLDisplayType(info),
 			ClassName:  classIdentity(mainClass, info),
 			Getter:     getterGodotName,
 			Hint:       propHint,
@@ -1071,7 +1102,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userCla
 				es.ArgMetas = append(es.ArgMetas, info.ArgMeta)
 				es.ArgNames = append(es.ArgNames, registeredName)
 				es.ArgClassNames = append(es.ArgClassNames, classIdentity(mainClass, info))
-				es.ArgGodotTypes = append(es.ArgGodotTypes, godotXMLType(info.VariantType))
+				es.ArgGodotTypes = append(es.ArgGodotTypes, godotXMLDisplayType(info))
 				idx++
 			}
 		}
@@ -1191,7 +1222,7 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 				em.ArgMetas = append(em.ArgMetas, info.ArgMeta)
 				em.ArgNames = append(em.ArgNames, registeredName)
 				em.ArgClassNames = append(em.ArgClassNames, classIdentity(mainClass, info))
-				em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLType(info.VariantType))
+				em.ArgGodotTypes = append(em.ArgGodotTypes, godotXMLDisplayType(info))
 				idx++
 			}
 		}
@@ -1205,7 +1236,7 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 			em.ReturnType = info.VariantType
 			em.ReturnMeta = info.ArgMeta
 			em.ReturnClassName = classIdentity(mainClass, info)
-			em.ReturnGodotType = godotXMLType(info.VariantType)
+			em.ReturnGodotType = godotXMLDisplayType(info)
 			// UnwrapVariant gives us a multi-statement form that ends
 			// with `result := <typed value>`. mapTypeInfo introduced this
 			// helper; primitives + enums + class pointers all populate

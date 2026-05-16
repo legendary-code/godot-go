@@ -471,21 +471,21 @@ const greeterDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Returns the greeting in the instance&#39;s defaultLang —&#xA;exercises the newGreeter() factory&#39;s seeded state reaching a&#xA;regular ClassDB-bound method.</description>
         </method>
         <method name="count_letters" qualifiers="static">
-            <return type="Dictionary"></return>
+            <return type="Dictionary[String, int]"></return>
             <param index="0" name="words" type="PackedStringArray"></param>
             <description>Demonstrates a map[K]V at the @class boundary. Wire&#xA;form is Godot&#39;s untyped Dictionary in both directions; the&#xA;codegen iterates the dictionary&#39;s keys, unwraps each k/v Variant&#xA;pair, and rebuilds a fresh Dictionary on the way out.</description>
         </method>
         <method name="echo" qualifiers="static">
-            <return type="Dictionary"></return>
-            <param index="0" name="in" type="Dictionary"></param>
+            <return type="Dictionary[String, int]"></return>
+            <param index="0" name="in" type="Dictionary[String, int]"></param>
             <description>Round-trips a Dictionary unchanged — exercises the Variant →&#xA;Go map → Variant path with the same shape on both sides.</description>
         </method>
         <method name="lang_codes" qualifiers="static">
-            <return type="Dictionary"></return>
+            <return type="Dictionary[String, LocaleLanguage.Language]"></return>
             <description>Demonstrates a map with a user-enum value type&#xA;(Phase 2a) — Godot sees Dictionary; Go sees map[string]Language&#xA;with the typed enum identity round-tripping through the int64 wire&#xA;form. The codegen wraps each Language value as Variant::INT and&#xA;unwraps it via a typed cast.</description>
         </method>
         <method name="chars_by_lang" qualifiers="static">
-            <return type="Dictionary"></return>
+            <return type="Dictionary[String, PackedStringArray]"></return>
             <description>Demonstrates a map with a slice value (Phase 2a) — wire&#xA;form is Dictionary[string, PackedStringArray], each entry built&#xA;inline by the codegen.</description>
         </method>
         <method name="greet_in" qualifiers="static">

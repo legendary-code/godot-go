@@ -2187,8 +2187,8 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Exercises Phase 6a *&lt;MainClass&gt; arg + return marshalling. Godot&#xA;passes other as the engine ObjectPtr for the MyNode instance the&#xA;caller constructed; the codegen looks it up in our parallel side&#xA;table and hands back the *MyNode wrapper. Returning other lets the&#xA;GDScript driver verify object identity round-tripped.&#xA;&#xA;Foreign-instance behavior (decision B from .claude/ARRAYS.md): if&#xA;the caller passes a *MyNode instance not registered with this&#xA;extension, the lookup returns nil and codegen returns&#xA;CallErrorInvalidArgument. The user method body never sees a nil&#xA;arg.</description>
         </method>
         <method name="echo_many">
-            <return type="Array" enum="MyNode"></return>
-            <param index="0" name="others" type="Array" enum="MyNode"></param>
+            <return type="Array[MyNode]" enum="MyNode"></return>
+            <param index="0" name="others" type="Array[MyNode]" enum="MyNode"></param>
             <description>Exercises Phase 6b []*&lt;MainClass&gt; arg + return marshalling.&#xA;Godot passes an Array[MyNode] (TypedArray of OBJECT with class_name&#xA;= &#34;MyNode&#34;); the codegen unpacks it into a Go slice via per-element&#xA;engine-pointer lookup, then re-packs the return value into a fresh&#xA;Array[MyNode]. Per-element foreign-instance handling matches Echo&#39;s:&#xA;any nil lookup short-circuits the call.</description>
         </method>
         <method name="echo_node">
@@ -2197,8 +2197,8 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Exercises Phase 6c *&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. The codegen wraps the borrowed engine ObjectPtr inline&#xA;(` + "`" + `&amp;godot.Node{}` + "`" + ` + BindPtr); no refcount management. Returning the&#xA;same pointer round-trips the underlying engine identity.&#xA;&#xA;Lifecycle caveat for RefCounted classes: the wrapper is a borrowed&#xA;view. Callers retaining it past the method scope must call&#xA;Reference() themselves. Plain Node isn&#39;t RefCounted, so this method&#xA;is safe to use without lifecycle care.</description>
         </method>
         <method name="echo_nodes">
-            <return type="Array" enum="Node"></return>
-            <param index="0" name="others" type="Array" enum="Node"></param>
+            <return type="Array[Node]" enum="Node"></return>
+            <param index="0" name="others" type="Array[Node]" enum="Node"></param>
             <description>Exercises Phase 6c []*&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. Wire form is Array[Node] — TypedArray of OBJECT with&#xA;class_name = &#34;Node&#34;.</description>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
@@ -2318,8 +2318,8 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <member name="health" type="int" setter="set_health" getter="get_health"></member>
         <member name="max_health" type="int" getter="get_max_health"></member>
         <member name="stash" type="int" setter="set_stash" getter="get_stash">Exercises the @var doctag. Registered with&#xA;PROPERTY_USAGE_STORAGE only — GDScript can read/write&#xA;` + "`" + `n.stash = 7` + "`" + `, but the field is hidden from the inspector.</member>
-        <member name="graph" type="Dictionary" setter="set_graph" getter="get_graph">Exercises type-alias resolution at the @class boundary:&#xA;` + "`" + `type DialogGraph map[string]int64` + "`" + ` is a named type whose&#xA;underlying form is map[string]int64. resolveType walks through&#xA;the alias so this field registers as Dictionary[String, int] —&#xA;identical to declaring the field ` + "`" + `map[string]int64` + "`" + ` directly.</member>
-        <member name="text" type="Dictionary" setter="set_text" getter="get_text">Exercises the alias-with-user-enum-key shape that&#xA;surfaced the bug. Synthesized accessors must carry DialogText&#xA;(the alias) rather than map[Stance][]string (the underlying)&#xA;or Go&#39;s type checker rejects the field assignment in SetText.</member>
+        <member name="graph" type="Dictionary[String, int]" setter="set_graph" getter="get_graph">Exercises type-alias resolution at the @class boundary:&#xA;` + "`" + `type DialogGraph map[string]int64` + "`" + ` is a named type whose&#xA;underlying form is map[string]int64. resolveType walks through&#xA;the alias so this field registers as Dictionary[String, int] —&#xA;identical to declaring the field ` + "`" + `map[string]int64` + "`" + ` directly.</member>
+        <member name="text" type="Dictionary[MyNode.Stance, PackedStringArray]" setter="set_text" getter="get_text">Exercises the alias-with-user-enum-key shape that&#xA;surfaced the bug. Synthesized accessors must carry DialogText&#xA;(the alias) rather than map[Stance][]string (the underlying)&#xA;or Go&#39;s type checker rejects the field assignment in SetText.</member>
         <member name="score" type="int" getter="get_score">Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</member>
         <member name="tag" type="String" setter="set_tag" getter="get_tag">/ SetTag demonstrate the method form of @property, read-write&#xA;branch: both methods exist in source AND both carry @property. The&#xA;rule is symmetric — codegen requires the tag on each side so the&#xA;user&#39;s intent is explicit on both halves of the property.</member>
         <member name="damage_range" type="int" setter="set_damage_range" getter="get_damage_range"></member>
