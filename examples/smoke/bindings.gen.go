@@ -1966,21 +1966,25 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
-		Class:  "MyNode",
-		Name:   "graph",
-		Type:   gdextension.VariantTypeDictionary,
-		Setter: "set_graph",
-		Getter: "get_graph",
-		Usage:  gdextension.PropertyUsageStorage,
+		Class:      "MyNode",
+		Name:       "graph",
+		Type:       gdextension.VariantTypeDictionary,
+		Setter:     "set_graph",
+		Getter:     "get_graph",
+		Hint:       gdextension.PropertyHintDictionaryType,
+		HintString: "String;int",
+		Usage:      gdextension.PropertyUsageStorage,
 	})
 
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
-		Class:  "MyNode",
-		Name:   "text",
-		Type:   gdextension.VariantTypeDictionary,
-		Setter: "set_text",
-		Getter: "get_text",
-		Usage:  gdextension.PropertyUsageStorage,
+		Class:      "MyNode",
+		Name:       "text",
+		Type:       gdextension.VariantTypeDictionary,
+		Setter:     "set_text",
+		Getter:     "get_text",
+		Hint:       gdextension.PropertyHintDictionaryType,
+		HintString: "MyNode.Stance;PackedStringArray",
+		Usage:      gdextension.PropertyUsageStorage,
 	})
 
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{

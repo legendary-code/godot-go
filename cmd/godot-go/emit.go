@@ -940,6 +940,20 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 		setterGodotName := naming.PascalToSnake(setterGoName)
 		propGodotName := naming.PascalToSnake(p.Name)
 
+		// Property hint resolution. User-supplied export hints (parsed
+		// from `@export_*` doctags into p.Hint / p.HintString) win when
+		// present. Otherwise we fall back to the typeInfo-derived hint
+		// from hintForTypeInfo — that surfaces typed-Dictionary K/V
+		// identity (PROPERTY_HINT_DICTIONARY_TYPE) and typed-array enum
+		// element identity (PROPERTY_HINT_TYPE_STRING). Without this
+		// fallback, a `@var Graph DialogGraph` field where DialogGraph
+		// is `map[string]*DialogData` would register as plain Dictionary,
+		// losing the [String, DialogData] typed-dict identity.
+		propHint, propHintStr := p.Hint, p.HintString
+		if propHint == "" {
+			propHint, propHintStr = hintForTypeInfo(info, enums)
+		}
+
 		entry := emitProperty{
 			docInfo:    p.docInfo,
 			GodotName:  propGodotName,
@@ -947,8 +961,8 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 			GodotType:  godotXMLType(info.VariantType),
 			ClassName:  classIdentity(mainClass, info),
 			Getter:     getterGodotName,
-			Hint:       p.Hint,
-			HintString: p.HintString,
+			Hint:       propHint,
+			HintString: propHintStr,
 		}
 		if p.IsVar {
 			// @var: script-visible only, no editor flag. The

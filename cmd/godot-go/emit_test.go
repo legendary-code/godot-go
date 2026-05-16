@@ -339,8 +339,15 @@ type N struct {
 
 	mustContain(t, out, "func (n *N) GetStash() StashMap { return n.Stash }")
 	mustContain(t, out, "func (n *N) SetStash(v StashMap) { n.Stash = v }")
-	mustContain(t, out, `Name:   "stash",`)
+	// gofmt may shift column alignment when the registration grows
+	// extra fields (Hint / HintString) — check values, not columns.
+	mustContain(t, out, `"stash",`)
 	mustContain(t, out, "VariantTypeDictionary,")
+	// Typed-Dictionary identity must flow through to the property
+	// registration: PROPERTY_HINT_DICTIONARY_TYPE with the K/V
+	// encoding "String;int" (per v0.3.1's bare-type-name format).
+	mustContain(t, out, "PropertyHintDictionaryType")
+	mustContain(t, out, `"String;int"`)
 }
 
 func TestEmitTypeAliasChain(t *testing.T) {
