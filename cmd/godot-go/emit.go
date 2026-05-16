@@ -1034,7 +1034,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 			Field:  p.Name,
 			GoType: info.GoType,
 		})
-		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info, bindings, mainClass))
+		methods = append(methods, syntheticGetterMethod(getterGoName, getterGodotName, info, bindings, mainClass, enums))
 
 		if p.ReadOnly {
 			continue
@@ -1045,7 +1045,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 			GoType:   info.GoType,
 			IsSetter: true,
 		})
-		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info, bindings, mainClass))
+		methods = append(methods, syntheticSetterMethod(setterGoName, setterGodotName, info, bindings, mainClass, enums))
 	}
 	return accessors, methods, out, nil
 }
@@ -1258,22 +1258,35 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 // Dispatch uses the same `result := self.<GoName>()` shape the template
 // already emits — the synthesized Go method we render alongside is what
 // closes the loop.
-func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string) emitMethod {
-	return emitMethod{
+//
+// The XML-facing fields (ReturnGodotType, ReturnHint, ReturnHintString)
+// have to match what a hand-written method would carry: without them
+// the generated <method> XML shows `<return type="">` and GDScript's
+// analyzer treats obj.get_x() as untyped, breaking autocomplete and
+// hover.
+func syntheticGetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string, enums map[string]*enumInfo) emitMethod {
+	em := emitMethod{
 		GoName:          goName,
 		GodotName:       godotName,
 		HasReturn:       true,
 		ReturnType:      info.VariantType,
 		ReturnMeta:      info.ArgMeta,
 		ReturnClassName: classIdentity(mainClass, info),
+		ReturnGodotType: godotXMLDisplayType(info),
 		PtrCallReturn:   info.PtrCallWriteReturn(bindings, "result"),
 		CallReturn:      info.CallWriteReturn(bindings, "result"),
 	}
+	em.ReturnHint, em.ReturnHintString = hintForTypeInfo(info, enums)
+	return em
 }
 
 // syntheticSetterMethod hand-builds an emitMethod equivalent to
-// `func (n *T) Set<Name>(v <Type>)` — one arg, no return.
-func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string) emitMethod {
+// `func (n *T) Set<Name>(v <Type>)` — one arg, no return. Same XML-
+// fidelity concern as syntheticGetterMethod above: without typed
+// param metadata the setter's <param type=""> attribute is empty
+// and GDScript's analyzer treats the arg as untyped.
+func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings, mainClass string, enums map[string]*enumInfo) emitMethod {
+	argHint, argHintStr := hintForTypeInfo(info, enums)
 	return emitMethod{
 		GoName:          goName,
 		GodotName:       godotName,
@@ -1286,8 +1299,11 @@ func syntheticSetterMethod(goName, godotName string, info *typeInfo, bindings, m
 		// Synthesized field-form setters take a single argument; "value"
 		// is the conventional name and matches how Godot's own
 		// PropertyInfo entries label property setter parameters in docs.
-		ArgNames:      []string{"value"},
-		ArgClassNames: []string{classIdentity(mainClass, info)},
+		ArgNames:       []string{"value"},
+		ArgClassNames:  []string{classIdentity(mainClass, info)},
+		ArgGodotTypes:  []string{godotXMLDisplayType(info)},
+		ArgHints:       []string{argHint},
+		ArgHintStrings: []string{argHintStr},
 	}
 }
 

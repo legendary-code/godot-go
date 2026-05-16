@@ -1392,9 +1392,11 @@ func registerMyNode() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "String;int",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -1458,6 +1460,12 @@ func registerMyNode() {
 		ArgClassNames: []string{
 			"",
 		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintDictionaryType,
+		},
+		ArgHintStrings: []string{
+			"String;int",
+		},
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -1507,9 +1515,11 @@ func registerMyNode() {
 			}
 			*(*godot.Dictionary)(ret) = result_dict
 		},
-		HasReturn:      true,
-		ReturnType:     gdextension.VariantTypeDictionary,
-		ReturnMetadata: gdextension.ArgMetaNone,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeDictionary,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnHint:       gdextension.PropertyHintDictionaryType,
+		ReturnHintString: "MyNode.Stance;PackedStringArray",
 	})
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
@@ -1584,6 +1594,12 @@ func registerMyNode() {
 		},
 		ArgClassNames: []string{
 			"",
+		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintDictionaryType,
+		},
+		ArgHintStrings: []string{
+			"MyNode.Stance;PackedStringArray",
 		},
 	})
 
@@ -2112,25 +2128,6 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "NEUTRAL",
-		Value: 0,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "OFFENSIVE",
-		Value: 1,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "DEFENSIVE",
-		Value: 2,
-	})
-
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
 		Class:      "MyNode",
 		Enum:       "AbilityFlags",
 		Name:       "FLY",
@@ -2150,6 +2147,25 @@ func registerMyNode() {
 		Name:       "CLIMB",
 		Value:      4,
 		IsBitfield: true,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
 	})
 
 	godotruntime.LoadEditorDocXML(myNodeDocXML)
@@ -2230,87 +2246,87 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Is a Phase 5e/6 virtual override — ` + "`" + `@override` + "`" + ` opts into&#xA;virtual binding so codegen routes through RegisterClassVirtual and&#xA;adds the leading underscore Godot expects on engine virtuals&#xA;(` + "`" + `Process` + "`" + ` → ` + "`" + `_process` + "`" + `). The engine calls this on every frame for&#xA;live nodes; the smoke test just invokes it directly from GDScript to&#xA;keep the run deterministic without spinning up a scene tree.</description>
         </method>
         <method name="get_health">
-            <return type=""></return>
+            <return type="int"></return>
             <description></description>
         </method>
         <method name="set_health">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="int"></param>
             <description></description>
         </method>
         <method name="get_max_health">
-            <return type=""></return>
+            <return type="int"></return>
             <description></description>
         </method>
         <method name="get_stash">
-            <return type=""></return>
+            <return type="int"></return>
             <description></description>
         </method>
         <method name="set_stash">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="int"></param>
             <description></description>
         </method>
         <method name="get_graph">
-            <return type=""></return>
+            <return type="Dictionary[String, int]"></return>
             <description></description>
         </method>
         <method name="set_graph">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="Dictionary[String, int]"></param>
             <description></description>
         </method>
         <method name="get_text">
-            <return type=""></return>
+            <return type="Dictionary[MyNode.Stance, PackedStringArray]"></return>
             <description></description>
         </method>
         <method name="set_text">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="Dictionary[MyNode.Stance, PackedStringArray]"></param>
             <description></description>
         </method>
         <method name="get_damage_range">
-            <return type=""></return>
+            <return type="int"></return>
             <description></description>
         </method>
         <method name="set_damage_range">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="int"></param>
             <description></description>
         </method>
         <method name="get_mode">
-            <return type=""></return>
+            <return type="int"></return>
             <description></description>
         </method>
         <method name="set_mode">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="int"></param>
             <description></description>
         </method>
         <method name="get_skin">
-            <return type=""></return>
+            <return type="String"></return>
             <description></description>
         </method>
         <method name="set_skin">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="String"></param>
             <description></description>
         </method>
         <method name="get_display_name">
-            <return type=""></return>
+            <return type="String"></return>
             <description></description>
         </method>
         <method name="set_display_name">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="String"></param>
             <description></description>
         </method>
         <method name="get_save_dir">
-            <return type=""></return>
+            <return type="String"></return>
             <description></description>
         </method>
         <method name="set_save_dir">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="String"></param>
             <description></description>
         </method>
         <method name="get_notes">
-            <return type=""></return>
+            <return type="String"></return>
             <description></description>
         </method>
         <method name="set_notes">
-            <param index="0" name="value" type=""></param>
+            <param index="0" name="value" type="String"></param>
             <description></description>
         </method>
     </methods>
@@ -2343,12 +2359,12 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </signal>
     </signals>
     <constants>
-        <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
-        <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
-        <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
         <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
+        <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
+        <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
     </constants>
 </class>`
 
