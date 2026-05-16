@@ -571,6 +571,10 @@ func (n *MyNode) GetStash() int64 { return n.Stash }
 
 func (n *MyNode) SetStash(v int64) { n.Stash = v }
 
+func (n *MyNode) GetGraph() map[string]int64 { return n.Graph }
+
+func (n *MyNode) SetGraph(v map[string]int64) { n.Graph = v }
+
 func (n *MyNode) GetDamageRange() int64 { return n.DamageRange }
 
 func (n *MyNode) SetDamageRange(v int64) { n.DamageRange = v }
@@ -1349,6 +1353,111 @@ func registerMyNode() {
 
 	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
 		Class: "MyNode",
+		Name:  "get_graph",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			result := self.GetGraph()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			godot.VariantSetDictionary(ret, result_dict)
+			result_dict.Destroy()
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			result := self.GetGraph()
+			result_dict := godot.NewDictionary()
+			for kIn_, vIn_ := range result {
+				k_v := godot.NewVariantString(kIn_)
+				v_v := godot.NewVariantInt(vIn_)
+				result_dict.Set(k_v, v_v)
+				k_v.Destroy()
+				v_v.Destroy()
+			}
+			*(*godot.Dictionary)(ret) = result_dict
+		},
+		HasReturn:      true,
+		ReturnType:     gdextension.VariantTypeDictionary,
+		ReturnMetadata: gdextension.ArgMetaNone,
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
+		Name:  "set_graph",
+		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return gdextension.CallErrorInstanceIsNull
+			}
+			arg0_dict := godot.VariantAsDictionary(args[0])
+			defer arg0_dict.Destroy()
+			arg0_keys := arg0_dict.Keys()
+			defer arg0_keys.Destroy()
+			arg0_n := arg0_keys.Size()
+			arg0 := make(map[string]int64, arg0_n)
+			var arg0_def godot.Variant
+			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
+				arg0_kv := arg0_keys.Get(arg0_i)
+				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
+				k_ := godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))
+				v_ := godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0[k_] = v_
+				arg0_kv.Destroy()
+				arg0_vv.Destroy()
+			}
+			self.SetGraph(arg0)
+			return gdextension.CallErrorOK
+		},
+		PtrCall: func(instance unsafe.Pointer, args unsafe.Pointer, ret unsafe.Pointer) {
+			self := lookupMyNodeInstance(instance)
+			if self == nil {
+				return
+			}
+			arg0_dict := *(*godot.Dictionary)(gdextension.PtrCallArg(args, 0))
+			arg0_keys := arg0_dict.Keys()
+			defer arg0_keys.Destroy()
+			arg0_n := arg0_keys.Size()
+			arg0 := make(map[string]int64, arg0_n)
+			var arg0_def godot.Variant
+			for arg0_i := int64(0); arg0_i < arg0_n; arg0_i++ {
+				arg0_kv := arg0_keys.Get(arg0_i)
+				arg0_vv := arg0_dict.Get(arg0_kv, arg0_def)
+				k_ := godot.VariantAsString(gdextension.VariantPtr(unsafe.Pointer(&arg0_kv)))
+				v_ := godot.VariantAsInt64(gdextension.VariantPtr(unsafe.Pointer(&arg0_vv)))
+				arg0[k_] = v_
+				arg0_kv.Destroy()
+				arg0_vv.Destroy()
+			}
+			self.SetGraph(arg0)
+		},
+		ArgTypes: []gdextension.VariantType{
+			gdextension.VariantTypeDictionary,
+		},
+		ArgMetadata: []gdextension.MethodArgumentMetadata{
+			gdextension.ArgMetaNone,
+		},
+		ArgNames: []string{
+			"value",
+		},
+		ArgClassNames: []string{
+			"",
+		},
+	})
+
+	gdextension.RegisterClassMethod(gdextension.ClassMethodDef{
+		Class: "MyNode",
 		Name:  "get_damage_range",
 		Call: func(instance unsafe.Pointer, args []gdextension.VariantPtr, ret gdextension.VariantPtr) gdextension.CallErrorType {
 			self := lookupMyNodeInstance(instance)
@@ -1727,6 +1836,15 @@ func registerMyNode() {
 
 	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
 		Class:  "MyNode",
+		Name:   "graph",
+		Type:   gdextension.VariantTypeDictionary,
+		Setter: "set_graph",
+		Getter: "get_graph",
+		Usage:  gdextension.PropertyUsageStorage,
+	})
+
+	gdextension.RegisterClassProperty(gdextension.ClassPropertyDef{
+		Class:  "MyNode",
 		Name:   "score",
 		Type:   gdextension.VariantTypeInt,
 		Getter: "get_score",
@@ -1850,6 +1968,25 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
 		Class:      "MyNode",
 		Enum:       "AbilityFlags",
 		Name:       "FLY",
@@ -1869,25 +2006,6 @@ func registerMyNode() {
 		Name:       "CLIMB",
 		Value:      4,
 		IsBitfield: true,
-	})
-
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "NEUTRAL",
-		Value: 0,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "OFFENSIVE",
-		Value: 1,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "DEFENSIVE",
-		Value: 2,
 	})
 
 	godotruntime.LoadEditorDocXML(myNodeDocXML)
@@ -1987,6 +2105,14 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <param index="0" name="value" type=""></param>
             <description></description>
         </method>
+        <method name="get_graph">
+            <return type=""></return>
+            <description></description>
+        </method>
+        <method name="set_graph">
+            <param index="0" name="value" type=""></param>
+            <description></description>
+        </method>
         <method name="get_damage_range">
             <return type=""></return>
             <description></description>
@@ -2040,6 +2166,7 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         <member name="health" type="int" setter="set_health" getter="get_health"></member>
         <member name="max_health" type="int" getter="get_max_health"></member>
         <member name="stash" type="int" setter="set_stash" getter="get_stash">Exercises the @var doctag. Registered with&#xA;PROPERTY_USAGE_STORAGE only — GDScript can read/write&#xA;` + "`" + `n.stash = 7` + "`" + `, but the field is hidden from the inspector.</member>
+        <member name="graph" type="Dictionary" setter="set_graph" getter="get_graph">Exercises type-alias resolution at the @class boundary:&#xA;` + "`" + `type DialogGraph map[string]int64` + "`" + ` is a named type whose&#xA;underlying form is map[string]int64. resolveType walks through&#xA;the alias so this field registers as Dictionary[String, int] —&#xA;identical to declaring the field ` + "`" + `map[string]int64` + "`" + ` directly.</member>
         <member name="score" type="int" getter="get_score">Demonstrates the method form of @property, read-only branch:&#xA;the user owns the getter, no SetScore exists, so codegen registers&#xA;` + "`" + `score` + "`" + ` with no setter. Read-only is inferred — there&#39;s no @readonly&#xA;tag here because there&#39;s nothing to disambiguate.</member>
         <member name="tag" type="String" setter="set_tag" getter="get_tag">/ SetTag demonstrate the method form of @property, read-write&#xA;branch: both methods exist in source AND both carry @property. The&#xA;rule is symmetric — codegen requires the tag on each side so the&#xA;user&#39;s intent is explicit on both halves of the property.</member>
         <member name="damage_range" type="int" setter="set_damage_range" getter="get_damage_range"></member>
@@ -2063,12 +2190,12 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </signal>
     </signals>
     <constants>
-        <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
-        <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
-        <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
         <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
         <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
+        <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
     </constants>
 </class>`
 

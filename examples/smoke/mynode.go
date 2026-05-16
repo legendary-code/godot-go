@@ -100,12 +100,28 @@ type MyNode struct {
 	// @var
 	Stash int64
 
+	// Graph exercises type-alias resolution at the @class boundary:
+	// `type DialogGraph map[string]int64` is a named type whose
+	// underlying form is map[string]int64. resolveType walks through
+	// the alias so this field registers as Dictionary[String, int] —
+	// identical to declaring the field `map[string]int64` directly.
+	//
+	// @var
+	Graph DialogGraph
+
 	// score / tag are private backings that the user-written getters
 	// dispatch on. Lowercase = invisible to Godot; visible only to the
 	// package itself.
 	score int64
 	tag   string
 }
+
+// DialogGraph is a named-type alias of map[string]int64 used to
+// exercise type-alias resolution at the @class boundary. The
+// codegen walks through the alias to the underlying composite, so
+// a `@var Graph DialogGraph` field registers as Dictionary[String, int]
+// just like a directly-declared `map[string]int64` would.
+type DialogGraph map[string]int64
 
 // Stance is a typed enum exposed to Godot via @enum. Values register
 // as class-scoped integer constants (Stance.NEUTRAL / OFFENSIVE /

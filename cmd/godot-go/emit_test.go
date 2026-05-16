@@ -20,6 +20,17 @@ func emitFor(t *testing.T, src string) string {
 	return buf.String()
 }
 
+// emitForErr runs the same pipeline as emitFor but returns the emit
+// error instead of failing the test. Used by tests that assert on
+// validation errors raised inside emit / resolveType.
+func emitForErr(t *testing.T, src string) (string, error) {
+	t.Helper()
+	d, fset := mustDiscoverWithFset(t, src)
+	var buf bytes.Buffer
+	err := emit(&buf, fset, []*discovered{d})
+	return buf.String(), err
+}
+
 func TestEmitMainClassWithMethod(t *testing.T) {
 	src := `package mypkg
 import "github.com/legendary-code/godot-go/core"
@@ -302,6 +313,73 @@ type N struct {
 	mustContain(t, out, `Getter: "get_health",`)
 	if strings.Contains(out, "Setter:") {
 		t.Errorf("read-only property registration must omit Setter field:\n%s", out)
+	}
+}
+
+func TestEmitTypeAliasMapField(t *testing.T) {
+	// A field declared with a named-type alias of a supported
+	// composite (`type StashMap map[string]int64` here) should
+	// resolve through the alias and register the same way as if
+	// the field had been declared `map[string]int64` directly.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type StashMap map[string]int64
+// @class
+type N struct {
+	// @extends
+	core.Node
+	// @var
+	Stash StashMap
+}
+`
+	out := emitFor(t, src)
+
+	mustContain(t, out, "func (n *N) GetStash() map[string]int64 { return n.Stash }")
+	mustContain(t, out, "func (n *N) SetStash(v map[string]int64) { n.Stash = v }")
+	// The property registration uses the Dictionary variant type
+	// because the alias resolves to map[string]int64.
+	mustContain(t, out, `Name:   "stash",`)
+	mustContain(t, out, "VariantTypeDictionary,")
+}
+
+func TestEmitTypeAliasChain(t *testing.T) {
+	// Aliases that chain through one or more intermediate names
+	// resolve recursively to the underlying composite.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type Inner map[string]int64
+type Outer Inner
+// @class
+type N struct {
+	// @extends
+	core.Node
+	// @var
+	Stash Outer
+}
+`
+	out := emitFor(t, src)
+	mustContain(t, out, "VariantTypeDictionary,")
+}
+
+func TestEmitTypeAliasCycle(t *testing.T) {
+	// `type A B; type B A` forms a cycle. resolveType must surface a
+	// clear error rather than stack-overflowing.
+	src := `package x
+import "github.com/legendary-code/godot-go/core"
+type A B
+type B A
+// @class
+type N struct {
+	// @extends
+	core.Node
+	// @var
+	Stash A
+}
+`
+	if _, err := emitForErr(t, src); err == nil {
+		t.Fatalf("expected cycle error, got nil")
+	} else if !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("expected cycle error, got: %v", err)
 	}
 }
 

@@ -116,6 +116,26 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 		packageClasses[d.MainClass.Name] = true
 	}
 
+	// Package-level type-alias map: every `type X <expr>` named-type
+	// declaration in any @class file feeds into resolveType so an
+	// alias used at the @class boundary (a @var field of type
+	// DialogGraph where `type DialogGraph map[string]*DialogData`,
+	// a method arg of an aliased slice type, etc.) walks through to
+	// the underlying composite. Same-package only — cross-package
+	// aliases stay unsupported.
+	packageAliases := map[string]ast.Expr{}
+	aliasOrigin := map[string]string{}
+	for _, d := range classes {
+		for name, expr := range d.TypeAliases {
+			if prev, ok := aliasOrigin[name]; ok {
+				return fmt.Errorf("duplicate type alias %q (declared in %s and %s) — package-level type names must be unique",
+					name, prev, d.FilePath)
+			}
+			packageAliases[name] = expr
+			aliasOrigin[name] = d.FilePath
+		}
+	}
+
 	// Same-package @extends validation. discover.go accepts a bare
 	// ident on @extends without confirming the name exists; we close
 	// that loop here, where we have the package-wide class set built
@@ -171,7 +191,7 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 	emitClasses := make([]emitClass, 0, len(classes))
 	needsVariant := false
 	for _, d := range classes {
-		ec, classNeedsVariant, err := buildEmitClass(fset, d, packageEnums, packageClasses, bindingsAlias)
+		ec, classNeedsVariant, err := buildEmitClass(fset, d, packageEnums, packageClasses, packageAliases, bindingsAlias)
 		if err != nil {
 			return err
 		}
@@ -223,7 +243,7 @@ func emit(w io.Writer, fset *token.FileSet, classes []*discovered) error {
 // resolveType so cross-file enum and user-class references at this
 // class's @class boundary resolve to the correct registration
 // metadata and the side-table lookup of the right sibling class.
-func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]*enumInfo, packageClasses map[string]bool, bindingsAlias string) (emitClass, bool, error) {
+func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]*enumInfo, packageClasses map[string]bool, packageAliases map[string]ast.Expr, bindingsAlias string) (emitClass, bool, error) {
 	ci := d.MainClass
 
 	initLevel := "InitLevelScene"
@@ -231,12 +251,12 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		initLevel = "InitLevelEditor"
 	}
 
-	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, packageEnums, packageClasses, bindingsAlias, ci.Name)
+	supported, needsVariant, err := classifyForEmit(fset, ci.Methods, packageEnums, packageClasses, packageAliases, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
 
-	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, packageEnums, packageClasses, bindingsAlias, ci.Name)
+	accessors, propMethods, properties, err := buildEmitProperties(ci.Properties, packageEnums, packageClasses, packageAliases, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -245,7 +265,7 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		needsVariant = true
 	}
 
-	signals, err := buildEmitSignals(ci.Signals, packageEnums, packageClasses, bindingsAlias, ci.Name)
+	signals, err := buildEmitSignals(ci.Signals, packageEnums, packageClasses, packageAliases, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -253,7 +273,7 @@ func buildEmitClass(fset *token.FileSet, d *discovered, packageEnums map[string]
 		needsVariant = true
 	}
 
-	abstractMethods, err := buildEmitAbstractMethods(ci.AbstractMethods, packageEnums, packageClasses, bindingsAlias, ci.Name)
+	abstractMethods, err := buildEmitAbstractMethods(ci.AbstractMethods, packageEnums, packageClasses, packageAliases, bindingsAlias, ci.Name)
 	if err != nil {
 		return emitClass{}, false, err
 	}
@@ -590,11 +610,11 @@ func (m emitMethod) HasAnyArgHint() bool {
 // types declared in the same file. `bindings` is the local alias the
 // user's source uses for the bindings package; it qualifies every
 // VariantAs* / VariantSet* call in the rendered fragments.
-func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitMethod, bool, error) {
+func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, bindings, mainClass string) ([]emitMethod, bool, error) {
 	var out []emitMethod
 	needsVariant := false
 	for _, m := range methods {
-		em, err := buildEmitMethod(m, enums, userClasses, bindings, mainClass)
+		em, err := buildEmitMethod(m, enums, userClasses, aliases, bindings, mainClass)
 		if err != nil {
 			return nil, false, fmt.Errorf("%s: %s: %w", posStr(fset, m.Pos), m.GoName, err)
 		}
@@ -609,7 +629,7 @@ func classifyForEmit(fset *token.FileSet, methods []*methodInfo, enums map[strin
 // buildEmitMethod resolves arg / return types via the type table and
 // pre-renders the marshalling fragments. The caller is responsible for
 // rejecting non-instance method kinds before calling.
-func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) (emitMethod, error) {
+func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, bindings, mainClass string) (emitMethod, error) {
 	em := emitMethod{
 		docInfo:   m.docInfo,
 		GoName:    m.GoName,
@@ -626,7 +646,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[
 	idx := 0
 	paramFields := fieldsOf(m.Decl.Type.Params)
 	for fIdx, field := range paramFields {
-		info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
+		info, err := resolveType(field.Type, enums, userClasses, aliases, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("arg %d: %w", idx, err)
 		}
@@ -693,7 +713,7 @@ func buildEmitMethod(m *methodInfo, enums map[string]*enumInfo, userClasses map[
 		if len(ret.Names) > 1 {
 			return em, fmt.Errorf("multi-name return field unsupported")
 		}
-		info, err := resolveType(ret.Type, enums, userClasses, mainClass, bindings)
+		info, err := resolveType(ret.Type, enums, userClasses, aliases, mainClass, bindings)
 		if err != nil {
 			return em, fmt.Errorf("return: %w", err)
 		}
@@ -895,7 +915,7 @@ func localNameFor(imports map[string]string, path string) string {
 // Method-form properties contribute a property entry only — the user's
 // Get/Set methods already live in the source file and were classified by
 // classifyForEmit upstream.
-func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) (
+func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, bindings, mainClass string) (
 	accessors []emitAccessor,
 	methods []emitMethod,
 	out []emitProperty,
@@ -910,7 +930,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 	curGroup := ""
 	curSubgroup := ""
 	for _, p := range props {
-		info, terr := resolveType(p.GoType, enums, userClasses, mainClass, bindings)
+		info, terr := resolveType(p.GoType, enums, userClasses, aliases, mainClass, bindings)
 		if terr != nil {
 			return nil, nil, nil, fmt.Errorf("@property %s: %w", p.Name, terr)
 		}
@@ -999,7 +1019,7 @@ func buildEmitProperties(props []*propertyInfo, enums map[string]*enumInfo, user
 // methods. We do NOT register it with ClassDB; GDScript callers use the
 // standard `emit_signal("name", args...)` to trigger emission from
 // outside the class, matching Godot's idiomatic model.
-func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitSignal, error) {
+func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, bindings, mainClass string) ([]emitSignal, error) {
 	if len(signals) == 0 {
 		return nil, nil
 	}
@@ -1012,7 +1032,7 @@ func buildEmitSignals(signals []*signalInfo, enums map[string]*enumInfo, userCla
 		}
 		idx := 0
 		for _, field := range s.Args {
-			info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
+			info, err := resolveType(field.Type, enums, userClasses, aliases, mainClass, bindings)
 			if err != nil {
 				return nil, fmt.Errorf("@signals %s arg %d: %w", s.Name, idx, err)
 			}
@@ -1118,7 +1138,7 @@ type emitAbstractMethodArg struct {
 // return types resolve through the same resolveType path as regular
 // methods, so abstract method type support tracks method arg/return
 // type support.
-func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]*enumInfo, userClasses map[string]bool, bindings, mainClass string) ([]emitAbstractMethod, error) {
+func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, bindings, mainClass string) ([]emitAbstractMethod, error) {
 	if len(abstracts) == 0 {
 		return nil, nil
 	}
@@ -1132,7 +1152,7 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 		}
 		idx := 0
 		for _, field := range a.Args {
-			info, err := resolveType(field.Type, enums, userClasses, mainClass, bindings)
+			info, err := resolveType(field.Type, enums, userClasses, aliases, mainClass, bindings)
 			if err != nil {
 				return nil, fmt.Errorf("@abstract_methods %s arg %d: %w", a.Name, idx, err)
 			}
@@ -1162,7 +1182,7 @@ func buildEmitAbstractMethods(abstracts []*abstractMethodInfo, enums map[string]
 			}
 		}
 		if a.Result != nil {
-			info, err := resolveType(a.Result.Type, enums, userClasses, mainClass, bindings)
+			info, err := resolveType(a.Result.Type, enums, userClasses, aliases, mainClass, bindings)
 			if err != nil {
 				return nil, fmt.Errorf("@abstract_methods %s return: %w", a.Name, err)
 			}

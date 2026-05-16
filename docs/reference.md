@@ -675,6 +675,33 @@ is opt-in via `@property` / `@var` on every exposed field.
 A property name appearing in multiple forms (e.g. an exported field
 `Foo` AND a `GetFoo` method) is rejected at codegen time.
 
+#### Named-type aliases
+
+Field, method-arg, return, and signal types can be named-type
+aliases declared in the same Go package — the codegen walks through
+the alias to the underlying composite. So:
+
+```go
+type DialogGraph map[string]*DialogData
+
+// @class
+type Controller struct {
+    // @extends
+    godot.RefCounted
+
+    // @var
+    Graph DialogGraph
+}
+```
+
+…registers `graph` as `Dictionary[String, DialogData]` exactly as
+if the field had been declared `map[string]*DialogData` directly.
+
+The resolver walks chains (`type A B; type B map[string]int`) and
+trips a clear cycle error on self-referential aliases (`type A B;
+type B A`). Cross-package aliases stay unsupported — wrap or
+re-declare the type in the same package.
+
 ### Signals
 
 `@signals`-tagged interfaces are signal contracts. Each interface

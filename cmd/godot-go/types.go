@@ -316,7 +316,21 @@ var typeTable = map[string]*typeInfo{
 // in the package. Cross-package user classes are still out of scope
 // (the side table only exists in the file each class is generated
 // alongside, which today is the same package's bindings.gen.go).
-func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[string]bool, mainClass, bindings string) (*typeInfo, error) {
+func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, mainClass, bindings string) (*typeInfo, error) {
+	return resolveTypeImpl(expr, enums, userClasses, aliases, mainClass, bindings, map[string]bool{})
+}
+
+// resolveTypeImpl is the recursion-aware body of resolveType. The
+// `visited` set tracks named-type aliases currently being expanded
+// along this resolution path so that a self-referential alias chain
+// (`type A map[string]A`, `type A B; type B A`, etc.) surfaces as a
+// clear cycle error instead of stack-overflowing the resolver.
+//
+// Public callers go through resolveType, which seeds visited with an
+// empty map; the recursive cases (slice element, map key/value,
+// pointer base, variadic element) forward the same map so the cycle
+// check spans the full sub-tree, not just same-level recursion.
+func resolveTypeImpl(expr ast.Expr, enums map[string]*enumInfo, userClasses map[string]bool, aliases map[string]ast.Expr, mainClass, bindings string, visited map[string]bool) (*typeInfo, error) {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		if info, ok := typeTable[t.Name]; ok {
@@ -341,7 +355,24 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[stri
 			}
 			return info, nil
 		}
-		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, or a user @enum-int type declared in this package)", t.Name)
+		// Named-type alias declared in this package — `type DialogGraph
+		// map[string]*DialogData` and the like. Walk through the
+		// underlying expression so the alias is interchangeable with its
+		// source type at the @class boundary. A self-referential alias
+		// chain trips the cycle check; the chain terminates when we hit
+		// a primitive, enum, @class, or supported composite.
+		if underlying, ok := aliases[t.Name]; ok {
+			if visited[t.Name] {
+				return nil, fmt.Errorf("type alias %q forms a cycle — chains must terminate at a supported type", t.Name)
+			}
+			visited[t.Name] = true
+			info, err := resolveTypeImpl(underlying, enums, userClasses, aliases, mainClass, bindings, visited)
+			if err != nil {
+				return nil, fmt.Errorf("type alias %q: %w", t.Name, err)
+			}
+			return info, nil
+		}
+		return nil, fmt.Errorf("unsupported type %q (supported: bool, int, int32, int64, float32, float64, string, a user @enum-int type, or a named alias of a supported composite — all declared in this package)", t.Name)
 	case *ast.StarExpr:
 		// `*T` — three cases:
 		//   - *ast.Ident naming the file's @class or any @class declared
@@ -377,7 +408,7 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[stri
 		if _, nested := t.Elt.(*ast.ArrayType); nested {
 			return nil, fmt.Errorf("nested slices `[][]T` are not supported at the @class boundary")
 		}
-		elem, err := resolveType(t.Elt, enums, userClasses, mainClass, bindings)
+		elem, err := resolveTypeImpl(t.Elt, enums, userClasses, aliases, mainClass, bindings, visited)
 		if err != nil {
 			return nil, fmt.Errorf("slice element: %w", err)
 		}
@@ -391,17 +422,17 @@ func resolveType(expr ast.Expr, enums map[string]*enumInfo, userClasses map[stri
 		if _, nested := t.Elt.(*ast.ArrayType); nested {
 			return nil, fmt.Errorf("nested slices `...[]T` are not supported at the @class boundary")
 		}
-		elem, err := resolveType(t.Elt, enums, userClasses, mainClass, bindings)
+		elem, err := resolveTypeImpl(t.Elt, enums, userClasses, aliases, mainClass, bindings, visited)
 		if err != nil {
 			return nil, fmt.Errorf("variadic element: %w", err)
 		}
 		return sliceTypeInfo(elem)
 	case *ast.MapType:
-		key, err := resolveType(t.Key, enums, userClasses, mainClass, bindings)
+		key, err := resolveTypeImpl(t.Key, enums, userClasses, aliases, mainClass, bindings, visited)
 		if err != nil {
 			return nil, fmt.Errorf("map key: %w", err)
 		}
-		value, err := resolveType(t.Value, enums, userClasses, mainClass, bindings)
+		value, err := resolveTypeImpl(t.Value, enums, userClasses, aliases, mainClass, bindings, visited)
 		if err != nil {
 			return nil, fmt.Errorf("map value: %w", err)
 		}

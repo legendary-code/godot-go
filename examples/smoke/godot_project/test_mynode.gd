@@ -99,6 +99,15 @@ func _initialize() -> void:
 			break
 	_check("var: stash usage == PROPERTY_USAGE_STORAGE",   stash_usage,   PROPERTY_USAGE_STORAGE)
 
+	# Type-alias resolution: `type DialogGraph map[string]int64` used
+	# as a @var field type. The codegen walks through the alias to the
+	# underlying map, so n.graph behaves as a Dictionary[String, int].
+	n.graph = {"a": 1, "b": 2}
+	_check("alias: n.graph['a'] after dict write",   int(n.graph["a"]),   1)
+	_check("alias: n.graph['b'] after dict write",   int(n.graph["b"]),   2)
+	n.set_graph({"x": 9})
+	_check("alias: n.get_graph()['x'] after setter",   int(n.get_graph()["x"]),   9)
+
 	# Phase 6 signals — connect a Callable to each registered signal,
 	# trigger emission from Go via a regular ClassDB method, and verify
 	# the callback received the args we expect. Each closure mutates a

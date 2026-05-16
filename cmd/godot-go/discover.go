@@ -22,6 +22,15 @@ type discovered struct {
 
 	MainClass *classInfo
 	Enums     []*enumInfo
+
+	// TypeAliases records `type X <expr>` declarations whose underlying
+	// type isn't already captured by another collector (it isn't a
+	// struct, interface, or int / int32 / int64 — those land in
+	// MainClass, signal / abstract-method interfaces, or Enums
+	// respectively). Used by resolveType to walk through named-type
+	// definitions like `type DialogGraph map[string]*DialogData` —
+	// resolveType recurses on the recorded ast.Expr.
+	TypeAliases map[string]ast.Expr
 }
 
 // docInfo carries the documentation metadata captured from a Go doc
@@ -412,6 +421,17 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 						IsExposed:  hasEnum || hasBitfield,
 						IsBitfield: hasBitfield,
 					}
+				} else {
+					// Named alias of another ident (e.g. `type X Y` where Y
+					// is another named type, possibly a primitive). Stash
+					// the underlying expression so resolveType can recurse
+					// through the chain when this ident appears in a
+					// supported position (method args, returns, fields,
+					// signal args).
+					if d.TypeAliases == nil {
+						d.TypeAliases = map[string]ast.Expr{}
+					}
+					d.TypeAliases[ts.Name.Name] = ts.Type
 				}
 			case *ast.InterfaceType:
 				if doctag.Has(tags, "signals") {
@@ -420,6 +440,19 @@ func discover(fset *token.FileSet, file *ast.File, pkgName string) (*discovered,
 				if doctag.Has(tags, "abstract_methods") {
 					abstractIfaces = append(abstractIfaces, ts)
 				}
+			case *ast.MapType, *ast.ArrayType, *ast.StarExpr, *ast.SelectorExpr:
+				// Named type whose underlying form is a supported
+				// composite — `type DialogGraph map[string]*DialogData`,
+				// `type Names []string`, `type RefHolderPtr *RefHolder`,
+				// etc. Recorded as a type alias; resolveType walks
+				// through the recorded expression when an instance of
+				// this named type shows up in a supported position.
+				// (Struct, interface, and int cases are handled by the
+				// branches above and don't need to land here.)
+				if d.TypeAliases == nil {
+					d.TypeAliases = map[string]ast.Expr{}
+				}
+				d.TypeAliases[ts.Name.Name] = ts.Type
 			}
 		}
 	}
