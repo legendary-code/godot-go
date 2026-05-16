@@ -223,10 +223,8 @@ func methodToXML(em emitMethod) xmlMethod {
 		Description:  composeDescription(em.docInfo),
 	}
 	if em.HasReturn {
-		out.Return = &xmlReturn{
-			Type: em.ReturnGodotType,
-			Enum: em.ReturnClassName,
-		}
+		t, e := xmlTypeAndEnum(em.ReturnType, em.ReturnGodotType, em.ReturnClassName)
+		out.Return = &xmlReturn{Type: t, Enum: e}
 	}
 	for i := 0; i < len(em.ArgTypes); i++ {
 		name := ""
@@ -237,18 +235,50 @@ func methodToXML(em emitMethod) xmlMethod {
 		if i < len(em.ArgGodotTypes) {
 			gType = em.ArgGodotTypes[i]
 		}
-		enum := ""
+		className := ""
 		if i < len(em.ArgClassNames) {
-			enum = em.ArgClassNames[i]
+			className = em.ArgClassNames[i]
 		}
+		t, e := xmlTypeAndEnum(em.ArgTypes[i], gType, className)
 		out.Params = append(out.Params, xmlParam{
 			Index: i,
 			Name:  name,
-			Type:  gType,
-			Enum:  enum,
+			Type:  t,
+			Enum:  e,
 		})
 	}
 	return out
+}
+
+// xmlTypeAndEnum picks the right (type, enum) attribute pair for a
+// Godot class XML <param> / <return> / <member>. Godot's schema uses
+// the pair differently depending on the underlying variant:
+//
+//   - Object returns/args: type=<ClassName>, no enum. The class
+//     identity is the type. The analyzer reads this directly to type
+//     the receiver — without it, `dc.dialog` on `dc = Foo.load()`
+//     resolves through Object and loses the typed return identity.
+//   - Typed-int enum returns/args: type="int", enum=<MainClass.EnumName>.
+//     The variant wire form is int; the enum attribute carries the
+//     typed-enum docs identity.
+//   - Primitives / typed Dictionary / typed Array: type=<godot type
+//     name>, no enum. ClassName never participates.
+//
+// variantType is the bare const name (e.g. "VariantTypeObject") used
+// to detect the object-vs-enum split; godotType is the rendered XML
+// type from godotXMLDisplayType; className is from classIdentity.
+func xmlTypeAndEnum(variantType, godotType, className string) (typeAttr, enumAttr string) {
+	if variantType == "VariantTypeObject" && className != "" {
+		return className, ""
+	}
+	// Typed-Array (`Array[Element]`) already carries the element
+	// identity inside the type attribute via godotXMLDisplayType.
+	// The enum attribute would be redundant — and engine XML for
+	// typed-array returns (e.g. Node._get_children) doesn't set it.
+	if variantType == "VariantTypeArray" && className != "" {
+		return godotType, ""
+	}
+	return godotType, className
 }
 
 // methodQualifiers builds Godot's `qualifiers` attribute (a
@@ -267,12 +297,13 @@ func methodQualifiers(em emitMethod) string {
 }
 
 func propertyToXML(ep emitProperty) xmlMember {
+	t, e := xmlTypeAndEnum(ep.Type, ep.GodotType, ep.ClassName)
 	return xmlMember{
 		Name:         ep.GodotName,
-		Type:         ep.GodotType,
+		Type:         t,
 		Setter:       ep.Setter,
 		Getter:       ep.Getter,
-		Enum:         ep.ClassName,
+		Enum:         e,
 		Deprecated:   ep.Deprecated,
 		Experimental: ep.Experimental,
 		Description:  composeDescription(ep.docInfo),
@@ -295,15 +326,16 @@ func signalToXML(es emitSignal) xmlSignal {
 		if i < len(es.ArgGodotTypes) {
 			gType = es.ArgGodotTypes[i]
 		}
-		enum := ""
+		className := ""
 		if i < len(es.ArgClassNames) {
-			enum = es.ArgClassNames[i]
+			className = es.ArgClassNames[i]
 		}
+		t, e := xmlTypeAndEnum(es.ArgTypes[i], gType, className)
 		out.Params = append(out.Params, xmlParam{
 			Index: i,
 			Name:  name,
-			Type:  gType,
-			Enum:  enum,
+			Type:  t,
+			Enum:  e,
 		})
 	}
 	return out

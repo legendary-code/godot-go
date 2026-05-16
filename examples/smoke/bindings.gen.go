@@ -2198,23 +2198,23 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
             <description>Exercises Phase 5d string marshalling in both directions.</description>
         </method>
         <method name="echo">
-            <return type="Object" enum="MyNode"></return>
-            <param index="0" name="other" type="Object" enum="MyNode"></param>
+            <return type="MyNode"></return>
+            <param index="0" name="other" type="MyNode"></param>
             <description>Exercises Phase 6a *&lt;MainClass&gt; arg + return marshalling. Godot&#xA;passes other as the engine ObjectPtr for the MyNode instance the&#xA;caller constructed; the codegen looks it up in our parallel side&#xA;table and hands back the *MyNode wrapper. Returning other lets the&#xA;GDScript driver verify object identity round-tripped.&#xA;&#xA;Foreign-instance behavior (decision B from .claude/ARRAYS.md): if&#xA;the caller passes a *MyNode instance not registered with this&#xA;extension, the lookup returns nil and codegen returns&#xA;CallErrorInvalidArgument. The user method body never sees a nil&#xA;arg.</description>
         </method>
         <method name="echo_many">
-            <return type="Array[MyNode]" enum="MyNode"></return>
-            <param index="0" name="others" type="Array[MyNode]" enum="MyNode"></param>
+            <return type="Array[MyNode]"></return>
+            <param index="0" name="others" type="Array[MyNode]"></param>
             <description>Exercises Phase 6b []*&lt;MainClass&gt; arg + return marshalling.&#xA;Godot passes an Array[MyNode] (TypedArray of OBJECT with class_name&#xA;= &#34;MyNode&#34;); the codegen unpacks it into a Go slice via per-element&#xA;engine-pointer lookup, then re-packs the return value into a fresh&#xA;Array[MyNode]. Per-element foreign-instance handling matches Echo&#39;s:&#xA;any nil lookup short-circuits the call.</description>
         </method>
         <method name="echo_node">
-            <return type="Object" enum="Node"></return>
-            <param index="0" name="other" type="Object" enum="Node"></param>
+            <return type="Node"></return>
+            <param index="0" name="other" type="Node"></param>
             <description>Exercises Phase 6c *&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. The codegen wraps the borrowed engine ObjectPtr inline&#xA;(` + "`" + `&amp;godot.Node{}` + "`" + ` + BindPtr); no refcount management. Returning the&#xA;same pointer round-trips the underlying engine identity.&#xA;&#xA;Lifecycle caveat for RefCounted classes: the wrapper is a borrowed&#xA;view. Callers retaining it past the method scope must call&#xA;Reference() themselves. Plain Node isn&#39;t RefCounted, so this method&#xA;is safe to use without lifecycle care.</description>
         </method>
         <method name="echo_nodes">
-            <return type="Array[Node]" enum="Node"></return>
-            <param index="0" name="others" type="Array[Node]" enum="Node"></param>
+            <return type="Array[Node]"></return>
+            <param index="0" name="others" type="Array[Node]"></param>
             <description>Exercises Phase 6c []*&lt;bindings&gt;.&lt;EngineClass&gt; arg + return&#xA;marshalling. Wire form is Array[Node] — TypedArray of OBJECT with&#xA;class_name = &#34;Node&#34;.</description>
         </method>
         <method name="origin" qualifiers="static" experimental="Behavior may shift once the static-method ABI moves out of beta.">
@@ -2646,7 +2646,7 @@ const refHolderDocXML = `<?xml version="1.0" encoding="UTF-8"?>
     <description>Reproduces the typed-Variant property-storage scenario&#xA;for user-extension RefCounted classes: a static factory mints a&#xA;fresh instance and returns it through the @class boundary, GDScript&#xA;stores it on a typed property of a Node, and later user code emits&#xA;signals on the held instance. With the Construct-hook signal&#xA;warmup, the first user-emitted signal is rc-stable; without it,&#xA;the property would null-out a few accesses later.</description>
     <methods>
         <method name="new_ref_holder_tagged" qualifiers="static">
-            <return type="Object" enum="RefHolder"></return>
+            <return type="RefHolder"></return>
             <param index="0" name="tag" type="String"></param>
             <description>Is a static factory mirroring the user-reported&#xA;pattern (DialogController.LoadDialog) — constructs a fresh instance,&#xA;stamps a tag on it, returns it through the @class boundary as&#xA;` + "`" + `*RefHolder` + "`" + `. The boundary marshalling needs to keep the engine&#xA;pointer alive through any number of subsequent variant operations&#xA;(property assignment, getter reads, method calls, signal emits).</description>
         </method>
