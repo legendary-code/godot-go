@@ -177,6 +177,12 @@ const (
 	PropertyHintEnum            PropertyHint = 2
 	PropertyHintFile            PropertyHint = 13
 	PropertyHintDir             PropertyHint = 14
+	// PropertyHintResourceType marks an Object-typed slot whose value
+	// is constrained to a specific class. The hint_string carries the
+	// class name. GDScript's analyzer keys on this hint (NOT just on
+	// PropertyInfo.class_name) to narrow a typed-Object return — without
+	// it, `var x = ClassName.static_method()` lands as Variant.
+	PropertyHintResourceType    PropertyHint = 17
 	PropertyHintMultilineText   PropertyHint = 18
 	PropertyHintPlaceholderText PropertyHint = 20
 	// PropertyHintTypeString is Godot's catch-all for "this Variant slot

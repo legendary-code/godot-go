@@ -792,10 +792,12 @@ func registerMyNode() {
 			}
 			*(*gdextension.ObjectPtr)(ret) = result_ptr
 		},
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypeObject,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "MyNode",
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeObject,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnClassName:  "MyNode",
+		ReturnHint:       gdextension.PropertyHintResourceType,
+		ReturnHintString: "MyNode",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeObject,
 		},
@@ -806,6 +808,12 @@ func registerMyNode() {
 			"other",
 		},
 		ArgClassNames: []string{
+			"MyNode",
+		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintResourceType,
+		},
+		ArgHintStrings: []string{
 			"MyNode",
 		},
 	})
@@ -922,10 +930,12 @@ func registerMyNode() {
 			}
 			*(*gdextension.ObjectPtr)(ret) = result_ptr
 		},
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypeObject,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "Node",
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeObject,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnClassName:  "Node",
+		ReturnHint:       gdextension.PropertyHintResourceType,
+		ReturnHintString: "Node",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeObject,
 		},
@@ -936,6 +946,12 @@ func registerMyNode() {
 			"other",
 		},
 		ArgClassNames: []string{
+			"Node",
+		},
+		ArgHints: []gdextension.PropertyHint{
+			gdextension.PropertyHintResourceType,
+		},
+		ArgHintStrings: []string{
 			"Node",
 		},
 	})
@@ -2128,6 +2144,25 @@ func registerMyNode() {
 	})
 
 	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "NEUTRAL",
+		Value: 0,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "OFFENSIVE",
+		Value: 1,
+	})
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
+		Class: "MyNode",
+		Enum:  "Stance",
+		Name:  "DEFENSIVE",
+		Value: 2,
+	})
+
+	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
 		Class:      "MyNode",
 		Enum:       "AbilityFlags",
 		Name:       "FLY",
@@ -2147,25 +2182,6 @@ func registerMyNode() {
 		Name:       "CLIMB",
 		Value:      4,
 		IsBitfield: true,
-	})
-
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "NEUTRAL",
-		Value: 0,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "OFFENSIVE",
-		Value: 1,
-	})
-	gdextension.RegisterClassIntegerConstant(gdextension.ClassIntegerConstantDef{
-		Class: "MyNode",
-		Enum:  "Stance",
-		Name:  "DEFENSIVE",
-		Value: 2,
 	})
 
 	godotruntime.LoadEditorDocXML(myNodeDocXML)
@@ -2359,12 +2375,12 @@ const myNodeDocXML = `<?xml version="1.0" encoding="UTF-8"?>
         </signal>
     </signals>
     <constants>
-        <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
-        <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
-        <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
         <constant name="NEUTRAL" value="0" enum="Stance">Is the default — neither attacking nor defending.</constant>
         <constant name="OFFENSIVE" value="1" enum="Stance">Prioritizes damage output over survivability.</constant>
         <constant name="DEFENSIVE" value="2" enum="Stance" deprecated="Use StanceNeutral with a defensive item instead.">Prioritizes survivability — extra armor, less damage.</constant>
+        <constant name="FLY" value="1" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="SWIM" value="2" enum="AbilityFlags" is_bitfield="true"></constant>
+        <constant name="CLIMB" value="4" enum="AbilityFlags" is_bitfield="true"></constant>
     </constants>
 </class>`
 
@@ -2513,11 +2529,13 @@ func registerRefHolder() {
 			}
 			*(*gdextension.ObjectPtr)(ret) = result_ptr
 		},
-		Flags:           gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
-		HasReturn:       true,
-		ReturnType:      gdextension.VariantTypeObject,
-		ReturnMetadata:  gdextension.ArgMetaNone,
-		ReturnClassName: "RefHolder",
+		Flags:            gdextension.MethodFlagsDefault | gdextension.MethodFlagStatic,
+		HasReturn:        true,
+		ReturnType:       gdextension.VariantTypeObject,
+		ReturnMetadata:   gdextension.ArgMetaNone,
+		ReturnClassName:  "RefHolder",
+		ReturnHint:       gdextension.PropertyHintResourceType,
+		ReturnHintString: "RefHolder",
 		ArgTypes: []gdextension.VariantType{
 			gdextension.VariantTypeString,
 		},

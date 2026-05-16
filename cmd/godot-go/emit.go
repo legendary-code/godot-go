@@ -780,6 +780,16 @@ func hintForTypeInfo(info *typeInfo, enums map[string]*enumInfo) (hint, hintStri
 	if info.DictHintString != "" {
 		return "PropertyHintDictionaryType", info.DictHintString
 	}
+	// Object-typed slot (user-class or engine-class pointer). godot-cpp
+	// emits PropertyHintResourceType + ClassName as hint_string for
+	// every Object* return / arg via make_property_info. GDScript's
+	// analyzer reads the hint (not just PropertyInfo.class_name) to
+	// narrow a typed-Object return — without this, expressions like
+	// `var x = ClassName.static_method()` land as Variant. Matches
+	// godot-cpp's surface byte-for-byte.
+	if info.VariantType == "VariantTypeObject" && info.ClassName != "" {
+		return "PropertyHintResourceType", info.ClassName
+	}
 	if info.HintEnum == "" {
 		return "", ""
 	}
